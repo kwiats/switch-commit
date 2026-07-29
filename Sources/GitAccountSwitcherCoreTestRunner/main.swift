@@ -453,6 +453,25 @@ let tests: [(String, () throws -> Void)] = [
             "delete confirmation should explain manual reconfiguration is required"
         )
     }),
+    ("menu content rebuild signal sees added profile immediately", {
+        try MainActor.assumeIsolated {
+            let viewModel = AppViewModel(profiles: [])
+            var profileCountAtRebuild: Int?
+            let cancellable = viewModel.$menuContentRevision
+                .dropFirst()
+                .sink { _ in
+                    profileCountAtRebuild = viewModel.profiles.count
+                }
+
+            viewModel.addProfile()
+            cancellable.cancel()
+
+            try expect(
+                profileCountAtRebuild == 1,
+                "menu rebuild observer should see the newly added profile immediately"
+            )
+        }
+    }),
     ("profile git binding status is available for menu icons", {
         try MainActor.assumeIsolated {
             let profile = try GitProfile(
