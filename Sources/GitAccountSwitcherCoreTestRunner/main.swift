@@ -120,6 +120,23 @@ let tests: [(String, () throws -> Void)] = [
         let rulesConfig = generator.rulesConfig(rules: [rule], profilesDirectory: "~/.config/git-account-switcher/profiles")
         try expect(rulesConfig.contains("[includeIf \"gitdir:/Users/me/Work/**\"]"), "folder tree rule should match children")
         try expect(rulesConfig.contains("path = ~/.config/git-account-switcher/profiles/work.gitconfig"), "rule should include profile config")
+    }),
+    ("ssh config generator emits managed identity blocks", {
+        let profile = try GitProfile(
+            id: "work",
+            displayName: "Work",
+            gitUserName: "Work User",
+            gitUserEmail: "work@example.com",
+            sshKeyPath: "~/.ssh/id_work",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: false
+        )
+        let config = SSHConfigGenerator().managedConfig(for: [profile])
+        try expect(config.contains("# Profile: Work"), "config should name owning profile")
+        try expect(config.contains("Host github.com"), "config should contain host")
+        try expect(config.contains("IdentityFile ~/.ssh/id_work"), "config should contain identity file")
+        try expect(config.contains("IdentitiesOnly yes"), "config should force selected identity")
     })
 ]
 
