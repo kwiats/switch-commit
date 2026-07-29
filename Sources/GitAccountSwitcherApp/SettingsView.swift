@@ -101,8 +101,9 @@ struct SettingsView: View {
                 Button {
                     viewModel.refreshDetectedAccounts()
                 } label: {
-                    Label("Detect", systemImage: "magnifyingglass")
+                    Image(systemName: "magnifyingglass")
                 }
+                .help("Detect local GitHub accounts")
                 Button {
                     let panel = NSOpenPanel()
                     panel.canChooseFiles = false
@@ -112,8 +113,9 @@ struct SettingsView: View {
                         viewModel.scanSelectedFolderForGitHubAccounts(url)
                     }
                 } label: {
-                    Label("Scan Folder", systemImage: "folder.badge.gearshape")
+                    Image(systemName: "folder.badge.gearshape")
                 }
+                .help("Scan a folder for GitHub accounts")
             }
 
             if viewModel.detectedAccounts.isEmpty {
@@ -121,32 +123,37 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
-                ForEach(viewModel.detectedAccounts) { account in
-                    HStack(alignment: .center, spacing: 10) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(account.username ?? account.gitUserName ?? "GitHub Account")
-                                .lineLimit(1)
-                            Text(detectedAccountSubtitle(account))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 6) {
+                        ForEach(viewModel.detectedAccounts) { account in
+                            HStack(alignment: .center, spacing: 10) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(account.username ?? account.gitUserName ?? "GitHub Account")
+                                        .lineLimit(1)
+                                    Text(detectedAccountSubtitle(account))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(1)
+                                }
+                                Spacer()
+                                Text(account.confidence.rawValue.capitalized)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Button {
+                                    viewModel.importDetectedAccount(id: account.id)
+                                } label: {
+                                    Label("Add", systemImage: "plus.circle")
+                                }
+                                .disabled(account.gitUserEmail == nil)
+                                .help(account.gitUserEmail == nil ? "Add an email before importing this account" : "Add detected account")
+                            }
+                            .padding(8)
+                            .background(Color(nsColor: .controlBackgroundColor))
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
                         }
-                        Spacer()
-                        Text(account.confidence.rawValue.capitalized)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Button {
-                            viewModel.importDetectedAccount(id: account.id)
-                        } label: {
-                            Label("Add", systemImage: "plus.circle")
-                        }
-                        .disabled(account.gitUserEmail == nil)
-                        .help(account.gitUserEmail == nil ? "Add an email before importing this account" : "Add detected account")
                     }
-                    .padding(8)
-                    .background(Color(nsColor: .controlBackgroundColor))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
                 }
+                .frame(minHeight: 0, maxHeight: 88)
             }
         }
     }
