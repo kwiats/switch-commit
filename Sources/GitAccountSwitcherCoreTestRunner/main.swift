@@ -207,6 +207,16 @@ let tests: [(String, () throws -> Void)] = [
                 "diagnostics should explain that it stays local"
             )
         }
+    }),
+    ("settings action requests settings presentation", {
+        try MainActor.assumeIsolated {
+            let viewModel = AppViewModel(profiles: [])
+            viewModel.requestSettingsPresentation()
+            try expect(
+                viewModel.presentationRequest == .settings,
+                "settings action should request visible settings presentation"
+            )
+        }
     })
 ]
 
