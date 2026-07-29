@@ -17,7 +17,9 @@ This iteration should be intentionally thin but functional:
 
 The existing app has an in-memory `AppViewModel`, a `GitProfile` model, JSON profile storage, and keychain abstractions. This change keeps the first Settings pass inside SwiftUI and `AppViewModel`, while using existing core models and keychain interfaces.
 
-Persistent app startup loading can remain outside this first pass unless it is already needed by the touched code. The settings actions should mutate the same profile state used by the menu, so the menu title and active profile details update immediately.
+Settings actions should mutate the same profile state used by the menu, so the menu title and active profile details update immediately. Profile mutations in this pass should also persist through `ProfileStoreData` JSON so add, delete, reset, and display-name edits survive app restart.
+
+Full startup wiring can remain small, but the app must have one consistent source of initial profile data: load profiles from `ProfileStore` when available, and fall back to preview/default seed data only when no profile file exists.
 
 ## User Experience
 
@@ -44,7 +46,9 @@ Adding an account creates a valid default profile draft with a unique id and edi
 
 Settings views call view-model methods instead of directly editing array internals. The view model validates profile updates by rebuilding `GitProfile` through its throwing initializer.
 
-Reset access uses a `KeychainStoring` dependency. If a profile has an `httpsCredentialRef`, the view model derives the same `KeychainCredentialIdentifier(profileId:purpose:)` convention used by the core and asks the keychain to delete the HTTPS credential, then clears `httpsCredentialRef`.
+Reset access uses a `KeychainStoring` dependency. HTTPS credentials must use the existing convention `KeychainCredentialIdentifier(profileId: profile.id, purpose: "https")`, and `httpsCredentialRef` should store that identifier's `rawValue`.
+
+When resetting access, the view model deletes the credential represented by the stored reference, then clears `httpsCredentialRef`. If the stored reference is missing or does not match the current convention, the reset still clears the reference and reports that no matching local credential was found.
 
 ## Error Handling
 
@@ -62,4 +66,4 @@ Add local test-runner coverage for view-model behavior:
 - deleting the last profile clears active selection,
 - resetting access deletes the in-memory keychain value and clears the credential reference.
 
-Because the current repository uses a local Swift test runner rather than XCTest, tests should be added to `GitAccountSwitcherCoreTestRunner` or a similarly lightweight executable target if app-module testing is not directly available.
+Because the current repository uses a local Swift test runner rather than XCTest, the behavior under test must live in a target the runner can import. Move account-management behavior into a core-level service or model helper, or create a small library target for shared app state. Keep SwiftUI view code thin and test the mutations through that importable logic.
