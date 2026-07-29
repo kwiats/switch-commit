@@ -435,6 +435,24 @@ let tests: [(String, () throws -> Void)] = [
             )
         }
     }),
+    ("delete account confirmation warns that removal is irreversible", {
+        try expect(
+            DeleteAccountConfirmationContent.title == "Delete Account?",
+            "delete confirmation should have a clear title"
+        )
+        try expect(
+            DeleteAccountConfirmationContent.confirmButtonTitle == "Delete Account",
+            "delete confirmation should name the destructive action"
+        )
+        try expect(
+            DeleteAccountConfirmationContent.message.contains("cannot be restored"),
+            "delete confirmation should explain the account cannot be restored"
+        )
+        try expect(
+            DeleteAccountConfirmationContent.message.contains("configure it manually again"),
+            "delete confirmation should explain manual reconfiguration is required"
+        )
+    }),
     ("profile git binding status is available for menu icons", {
         try MainActor.assumeIsolated {
             let profile = try GitProfile(
