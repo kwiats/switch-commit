@@ -8,6 +8,8 @@ public enum GitAccountSwitcherError: Error, Equatable {
     case emptyHost
     case emptyFolderRulePath
     case writeOutsideManagedRoots
+    case unsafeConfigValue
+    case unsafeIdentifier
 }
 
 public struct GitProfile: Codable, Equatable, Identifiable, Sendable {
@@ -20,6 +22,17 @@ public struct GitProfile: Codable, Equatable, Identifiable, Sendable {
     public var httpsCredentialRef: String?
     public var isDefault: Bool
 
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case displayName
+        case gitUserName
+        case gitUserEmail
+        case sshKeyPath
+        case hosts
+        case httpsCredentialRef
+        case isDefault
+    }
+
     public init(
         id: String,
         displayName: String,
@@ -30,6 +43,10 @@ public struct GitProfile: Codable, Equatable, Identifiable, Sendable {
         httpsCredentialRef: String?,
         isDefault: Bool
     ) throws {
+        try SecurityValidation.requireSafeIdentifier(id)
+        if let httpsCredentialRef {
+            try SecurityValidation.requireSafeIdentifier(httpsCredentialRef)
+        }
         guard !displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw GitAccountSwitcherError.emptyDisplayName
         }
@@ -45,6 +62,12 @@ public struct GitProfile: Codable, Equatable, Identifiable, Sendable {
         guard hosts.allSatisfy({ !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else {
             throw GitAccountSwitcherError.emptyHost
         }
+        try SecurityValidation.requireSafeConfigValues([
+            displayName,
+            gitUserName,
+            gitUserEmail,
+            sshKeyPath
+        ] + hosts)
 
         self.id = id
         self.displayName = displayName
@@ -54,6 +77,20 @@ public struct GitProfile: Codable, Equatable, Identifiable, Sendable {
         self.hosts = hosts
         self.httpsCredentialRef = httpsCredentialRef
         self.isDefault = isDefault
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        try self.init(
+            id: try container.decode(String.self, forKey: .id),
+            displayName: try container.decode(String.self, forKey: .displayName),
+            gitUserName: try container.decode(String.self, forKey: .gitUserName),
+            gitUserEmail: try container.decode(String.self, forKey: .gitUserEmail),
+            sshKeyPath: try container.decode(String.self, forKey: .sshKeyPath),
+            hosts: try container.decode([String].self, forKey: .hosts),
+            httpsCredentialRef: try container.decodeIfPresent(String.self, forKey: .httpsCredentialRef),
+            isDefault: try container.decode(Bool.self, forKey: .isDefault)
+        )
     }
 }
 
@@ -69,18 +106,44 @@ public struct FolderRule: Codable, Equatable, Identifiable, Sendable {
     public var matchMode: FolderRuleMatchMode
     public var enabled: Bool
 
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case path
+        case profileId
+        case matchMode
+        case enabled
+    }
+
     public init(
         id: String,
         path: String,
         profileId: String,
         matchMode: FolderRuleMatchMode,
         enabled: Bool
-    ) {
+    ) throws {
+        try SecurityValidation.requireSafeIdentifier(id)
+        try SecurityValidation.requireSafeIdentifier(profileId)
+        guard !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw GitAccountSwitcherError.emptyFolderRulePath
+        }
+        try SecurityValidation.requireSafeConfigValues([path])
+
         self.id = id
         self.path = path
         self.profileId = profileId
         self.matchMode = matchMode
         self.enabled = enabled
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        try self.init(
+            id: try container.decode(String.self, forKey: .id),
+            path: try container.decode(String.self, forKey: .path),
+            profileId: try container.decode(String.self, forKey: .profileId),
+            matchMode: try container.decode(FolderRuleMatchMode.self, forKey: .matchMode),
+            enabled: try container.decode(Bool.self, forKey: .enabled)
+        )
     }
 }
 
@@ -91,5 +154,27 @@ public struct ProfileStoreData: Codable, Equatable, Sendable {
     public init(profiles: [GitProfile] = [], rules: [FolderRule] = []) {
         self.profiles = profiles
         self.rules = rules
+    }
+}
+
+enum SecurityValidation {
+    static func requireSafeIdentifier(_ value: String) throws {
+        let allowed = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._-")
+        guard !value.isEmpty,
+              value.rangeOfCharacter(from: allowed.inverted) == nil,
+              value != ".",
+              value != "..",
+              !value.hasPrefix("."),
+              !value.contains("..") else {
+            throw GitAccountSwitcherError.unsafeIdentifier
+        }
+    }
+
+    static func requireSafeConfigValues(_ values: [String]) throws {
+        for value in values {
+            if value.unicodeScalars.contains(where: { $0.value == 0 || $0.value == 10 || $0.value == 13 }) {
+                throw GitAccountSwitcherError.unsafeConfigValue
+            }
+        }
     }
 }
