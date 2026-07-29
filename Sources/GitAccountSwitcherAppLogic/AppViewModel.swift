@@ -166,11 +166,11 @@ public final class AppViewModel: ObservableObject {
         do {
             try update()
             settingsMessage = profileSettingsManager.statusMessage
+            refreshFromProfileSettings()
             menuContentRevision += 1
         } catch {
             settingsMessage = "Could not save settings: \(error.localizedDescription)"
         }
-        refreshFromProfileSettings()
     }
 
     private func refreshFromProfileSettings() {
