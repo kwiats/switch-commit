@@ -18,6 +18,13 @@ func expect(_ condition: @autoclosure () -> Bool, _ message: String) throws {
     }
 }
 
+func expectRange(of needle: String, in haystack: String) throws -> Range<String.Index> {
+    guard let range = haystack.range(of: needle) else {
+        throw TestFailure.expectationFailed("expected to find \(needle)")
+    }
+    return range
+}
+
 func expectThrows<T: Error & Equatable>(
     _ expectedError: T,
     _ operation: () throws -> Void,
@@ -82,6 +89,37 @@ let tests: [(String, () throws -> Void)] = [
         let loaded = try store.load()
         try expect(loaded.profiles == [profile], "profiles should round trip")
         try expect(loaded.rules == [rule], "rules should round trip")
+    }),
+    ("git config generator emits profile and ordered includes", {
+        let profile = try GitProfile(
+            id: "work",
+            displayName: "Work",
+            gitUserName: "Work User",
+            gitUserEmail: "work@example.com",
+            sshKeyPath: "~/.ssh/id_work",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: false
+        )
+        let generator = GitConfigGenerator()
+        let profileConfig = generator.profileConfig(for: profile)
+        try expect(profileConfig.contains("[user]"), "profile config should contain user section")
+        try expect(profileConfig.contains("name = Work User"), "profile config should contain name")
+        try expect(profileConfig.contains("email = work@example.com"), "profile config should contain email")
+        try expect(profileConfig.contains("sshCommand = ssh -i ~/.ssh/id_work -F ~/.ssh/config"), "profile config should contain ssh command")
+
+        let includeConfig = generator.rootIncludeConfig(
+            globalConfigPath: "~/.config/git-account-switcher/global.gitconfig",
+            rulesConfigPath: "~/.config/git-account-switcher/rules.gitconfig"
+        )
+        let globalRange = try expectRange(of: "global.gitconfig", in: includeConfig)
+        let rulesRange = try expectRange(of: "rules.gitconfig", in: includeConfig)
+        try expect(globalRange.lowerBound < rulesRange.lowerBound, "global include should come before folder rules")
+
+        let rule = FolderRule(id: "work", path: "/Users/me/Work", profileId: "work", matchMode: .folderTree, enabled: true)
+        let rulesConfig = generator.rulesConfig(rules: [rule], profilesDirectory: "~/.config/git-account-switcher/profiles")
+        try expect(rulesConfig.contains("[includeIf \"gitdir:/Users/me/Work/**\"]"), "folder tree rule should match children")
+        try expect(rulesConfig.contains("path = ~/.config/git-account-switcher/profiles/work.gitconfig"), "rule should include profile config")
     })
 ]
 
