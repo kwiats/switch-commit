@@ -41,8 +41,11 @@ public struct DetectedAccountMerger: Sendable {
     }
 
     private func stableId(for account: DetectedGitAccount) -> String {
-        if let username = account.username, let safe = safeIdentifier("github-\(username)") {
-            return safe
+        if let username = account.username {
+            let id = "github-\(username.lowercased())"
+            if isSafeIdentifier(id) {
+                return id
+            }
         }
         if let email = account.gitUserEmail, let safe = safeIdentifier("github-\(email)") {
             return safe
@@ -65,6 +68,15 @@ public struct DetectedAccountMerger: Sendable {
             return id
         } catch {
             return nil
+        }
+    }
+
+    private func isSafeIdentifier(_ value: String) -> Bool {
+        do {
+            try SecurityValidation.requireSafeIdentifier(value)
+            return true
+        } catch {
+            return false
         }
     }
 

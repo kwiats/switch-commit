@@ -146,6 +146,21 @@ let tests: [(String, () throws -> Void)] = [
         try expect(accounts[0].confidence == .high, "highest confidence should win")
         try expect(accounts[0].sources == [.githubCliHostsFile, .globalGitConfig, .sshResolvedConfig], "sources should be stable and unique")
     }),
+    ("detected account merger falls back to email id for unsafe username", {
+        let signals = [
+            DetectionSignal(
+                provider: .github,
+                username: "bad/name",
+                gitUserEmail: "pawel@example.com",
+                confidence: .high,
+                source: .githubCliHostsFile
+            )
+        ]
+
+        let account = DetectedAccountMerger().merge(signals: signals, existingProfiles: []).first
+
+        try expect(account?.id == "github-pawel-example.com", "unsafe username should fall back to email-derived id")
+    }),
     ("detected account merger skips existing github profile duplicates", {
         let existing = try GitProfile(
             id: "personal",
