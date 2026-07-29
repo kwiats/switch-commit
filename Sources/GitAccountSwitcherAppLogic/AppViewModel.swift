@@ -6,6 +6,17 @@ public enum AppPresentationRequest: Equatable, Sendable {
     case settings
 }
 
+public enum ProfileGitBindingStatus: Equatable, Sendable {
+    case mockLinked
+
+    public var systemImageName: String {
+        switch self {
+        case .mockLinked:
+            return "link.circle.fill"
+        }
+    }
+}
+
 @MainActor
 public final class AppViewModel: ObservableObject {
     @Published public private(set) var profiles: [GitProfile]
@@ -14,6 +25,7 @@ public final class AppViewModel: ObservableObject {
     @Published public var diagnosticsText: String
     @Published public var settingsMessage: String?
     @Published public private(set) var presentationRequest: AppPresentationRequest?
+    @Published public private(set) var menuContentRevision: Int
 
     private let profileSettingsManager: ProfileSettingsManager
 
@@ -56,6 +68,7 @@ public final class AppViewModel: ObservableObject {
         self.diagnosticsText = diagnosticsText
         self.settingsMessage = startupMessage
         self.presentationRequest = presentationRequest
+        self.menuContentRevision = 0
     }
 
     public var activeProfile: GitProfile? {
@@ -90,6 +103,10 @@ public final class AppViewModel: ObservableObject {
 
     public func clearPresentationRequest() {
         presentationRequest = nil
+    }
+
+    public func gitBindingStatus(for profile: GitProfile) -> ProfileGitBindingStatus {
+        .mockLinked
     }
 
     public func selectProfile(id: String?) {
@@ -149,6 +166,7 @@ public final class AppViewModel: ObservableObject {
         do {
             try update()
             settingsMessage = profileSettingsManager.statusMessage
+            menuContentRevision += 1
         } catch {
             settingsMessage = "Could not save settings: \(error.localizedDescription)"
         }
