@@ -12,6 +12,12 @@ Local-only macOS menu bar tool for switching Git identities globally and per fol
 - SSH/GitHub checks are manual diagnostics only.
 - Existing `~/.gitconfig` and `~/.ssh/config` are never replaced wholesale.
 
+### Local GitHub Discovery
+
+Git Account Switcher can suggest a GitHub account from local-only signals such as GitHub CLI configuration, global Git identity, SSH configuration, and GitHub remotes in a folder selected by the user.
+
+Discovery does not call the GitHub API, does not log in to GitHub, does not read token values into app data, and does not scan the home directory automatically. A detected account is only a suggestion until the user imports it as a profile.
+
 ## Managed Files
 
 The app is designed to manage only these paths:
