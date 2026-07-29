@@ -6,6 +6,27 @@ public enum AppPresentationRequest: Equatable, Sendable {
     case settings
 }
 
+private struct UncheckedSendable<Value>: @unchecked Sendable {
+    let value: Value
+}
+
+private actor GitHubDiscoveryWorker {
+    // The actor serializes use of the discovery service's non-Sendable command runner.
+    private let service: UncheckedSendable<GitHubLocalDiscoveryService>
+
+    init(service: UncheckedSendable<GitHubLocalDiscoveryService>) {
+        self.service = service
+    }
+
+    func detect(existingProfiles: [GitProfile]) -> [DetectedGitAccount] {
+        service.value.detect(existingProfiles: existingProfiles)
+    }
+
+    func detect(in folderURL: URL, existingProfiles: [GitProfile]) -> [DetectedGitAccount] {
+        service.value.detect(in: folderURL, existingProfiles: existingProfiles)
+    }
+}
+
 public enum ProfileGitBindingStatus: Equatable, Sendable {
     case mockLinked
 
@@ -25,9 +46,11 @@ public final class AppViewModel: ObservableObject {
     @Published public var diagnosticsText: String
     @Published public var settingsMessage: String?
     @Published public private(set) var presentationRequest: AppPresentationRequest?
+    @Published public private(set) var detectedAccounts: [DetectedGitAccount]
     @Published public private(set) var menuContentRevision: Int
 
     private let profileSettingsManager: ProfileSettingsManager
+    private let githubDiscoveryWorker: GitHubDiscoveryWorker
 
     public init(
         profiles: [GitProfile]? = nil,
@@ -35,7 +58,8 @@ public final class AppViewModel: ObservableObject {
         diagnosticsText: String = "Diagnostics have not run.",
         presentationRequest: AppPresentationRequest? = nil,
         profileStore: ProfileStore? = nil,
-        keychainStore: KeychainStoring = SystemKeychainStore()
+        keychainStore: KeychainStoring = SystemKeychainStore(),
+        githubDiscoveryService: GitHubLocalDiscoveryService? = nil
     ) {
         let seedProfiles = profiles ?? AppViewModel.previewProfiles()
         let resolvedProfileStore = profileStore ?? ProfileStore(fileURL: profiles == nil ? AppViewModel.defaultProfilesURL() : AppViewModel.temporaryProfilesURL())
@@ -68,6 +92,10 @@ public final class AppViewModel: ObservableObject {
         self.diagnosticsText = diagnosticsText
         self.settingsMessage = startupMessage
         self.presentationRequest = presentationRequest
+        self.githubDiscoveryWorker = GitHubDiscoveryWorker(
+            service: UncheckedSendable(value: githubDiscoveryService ?? GitHubLocalDiscoveryService())
+        )
+        self.detectedAccounts = []
         self.menuContentRevision = 0
     }
 
@@ -162,6 +190,92 @@ public final class AppViewModel: ObservableObject {
         }
     }
 
+    public func refreshDetectedAccounts() {
+        let existingProfiles = profiles
+        let worker = githubDiscoveryWorker
+        Task { [weak self, worker, existingProfiles] in
+            let accounts = await worker.detect(existingProfiles: existingProfiles)
+            guard let self else {
+                return
+            }
+            let filteredAccounts = accounts.filter { !isDuplicateDetectedAccount($0) }
+            detectedAccounts = filteredAccounts
+            if filteredAccounts.isEmpty {
+                settingsMessage = "No local GitHub account was detected."
+            } else {
+                let noun = filteredAccounts.count == 1 ? "suggestion" : "suggestions"
+                settingsMessage = "Detected \(filteredAccounts.count) local GitHub account \(noun)."
+            }
+        }
+    }
+
+    public func scanSelectedFolderForGitHubAccounts(_ folderURL: URL) {
+        let existingProfiles = profiles
+        let worker = githubDiscoveryWorker
+        Task { [weak self, worker, folderURL, existingProfiles] in
+            let accounts = await worker.detect(in: folderURL, existingProfiles: existingProfiles)
+            guard let self else {
+                return
+            }
+            let filteredAccounts = accounts.filter { !isDuplicateDetectedAccount($0) }
+            detectedAccounts = filteredAccounts
+            if filteredAccounts.isEmpty {
+                settingsMessage = "No GitHub remotes were detected in the selected folder."
+            } else {
+                let noun = filteredAccounts.count == 1 ? "suggestion" : "suggestions"
+                settingsMessage = "Detected \(filteredAccounts.count) GitHub account \(noun) from local data."
+            }
+        }
+    }
+
+    public func importDetectedAccount(id: String) {
+        guard let account = detectedAccounts.first(where: { $0.id == id }) else {
+            settingsMessage = "Detected account is no longer available."
+            return
+        }
+        performSettingsUpdate {
+            try profileSettingsManager.importDetectedAccount(account)
+        }
+        let existingProfiles = profiles
+        let worker = githubDiscoveryWorker
+        Task { [weak self, worker, existingProfiles] in
+            let accounts = await worker.detect(existingProfiles: existingProfiles)
+            guard let self else {
+                return
+            }
+            detectedAccounts = accounts.filter { !isDuplicateDetectedAccount($0) }
+        }
+    }
+
+    public func completeDetectedAccount(id: String) {
+        guard let account = detectedAccounts.first(where: { $0.id == id }) else {
+            settingsMessage = "Detected account is no longer available."
+            return
+        }
+        do {
+            try profileSettingsManager.addProfile()
+            if let displayName = account.username ?? account.gitUserName {
+                try profileSettingsManager.updateSelectedProfileDisplayName(displayName)
+            }
+            if let gitUserName = account.gitUserName ?? account.username {
+                try profileSettingsManager.updateSelectedProfileGitUserName(gitUserName)
+            }
+            if let sshKeyPath = account.sshKeyPath {
+                try profileSettingsManager.updateSelectedProfileSSHKeyPath(sshKeyPath)
+            }
+            if !account.hosts.isEmpty {
+                try profileSettingsManager.updateSelectedProfileHostsText(account.hosts.joined(separator: ", "))
+            }
+            refreshFromProfileSettings()
+            menuContentRevision += 1
+            detectedAccounts.removeAll { $0.id == id }
+            settingsMessage = "Complete the detected GitHub account before using it."
+        } catch {
+            settingsMessage = "Could not save settings: \(error.localizedDescription)"
+            refreshFromProfileSettings()
+        }
+    }
+
     private func performSettingsUpdate(_ update: () throws -> Void) {
         do {
             try update()
@@ -177,6 +291,22 @@ public final class AppViewModel: ObservableObject {
         profiles = profileSettingsManager.profiles
         activeProfileId = profileSettingsManager.activeProfileId
         selectedProfileId = profileSettingsManager.selectedProfileId
+    }
+
+    private func isDuplicateDetectedAccount(_ account: DetectedGitAccount) -> Bool {
+        profiles.contains { profile in
+            let hosts = Set(profile.hosts.map { $0.lowercased() })
+            guard hosts.contains("github.com") else {
+                return false
+            }
+            if let email = account.gitUserEmail, profile.gitUserEmail.caseInsensitiveCompare(email) == .orderedSame {
+                return true
+            }
+            if let username = account.username, profile.displayName.caseInsensitiveCompare(username) == .orderedSame {
+                return true
+            }
+            return false
+        }
     }
 
     private static func defaultProfilesURL() -> URL {
