@@ -26,6 +26,7 @@ When existing files must be touched, the core file writer creates backups before
 ## Development
 
 ```bash
+Scripts/pr-checks.sh
 swift run GitAccountSwitcherCoreTestRunner
 swift build
 ```
