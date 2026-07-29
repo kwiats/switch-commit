@@ -22,6 +22,18 @@ swift build
 
 Do not assume `swift test` works here. The current project intentionally uses a local executable test runner because XCTest and Swift Testing are unavailable in the installed Command Line Tools environment.
 
+## Default Task Workflow
+
+Unless the user explicitly asks for a different flow, handle implementation tasks end to end:
+
+- Start each task from a dedicated Git branch using the `codex/` prefix.
+- Inspect relevant files before editing and keep changes focused on the requested behavior.
+- Run `swift run GitAccountSwitcherCoreTestRunner` and `swift build` before claiming the work is complete.
+- Commit completed work with a clear message after verification passes.
+- Push the branch to the repository remote.
+- Open a pull request for the pushed branch, using draft status unless the user asks for a ready PR.
+- If verification or publishing cannot be completed, report the blocker and the exact command or step that failed.
+
 ## Non-Negotiable Safety Rules
 
 - Do not add telemetry, analytics, background network calls, crash upload, or auto-update behavior.
@@ -48,4 +60,3 @@ Do not assume `swift test` works here. The current project intentionally uses a 
 - Add comments only when they clarify a non-obvious safety or platform decision.
 - Keep generated output deterministic so tests and diffs stay stable.
 - Update docs when commands, safety behavior, managed paths, or user-visible flows change.
-
