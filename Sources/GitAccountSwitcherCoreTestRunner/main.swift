@@ -43,6 +43,26 @@ func expectThrows<T: Error & Equatable>(
 }
 
 let tests: [(String, () throws -> Void)] = [
+    ("detected git account exposes stable local-only metadata", {
+        let account = DetectedGitAccount(
+            id: "github-pawelkwiatkowski",
+            provider: .github,
+            username: "pawelkwiatkowski",
+            gitUserName: "Pawel Kwiatkowski",
+            gitUserEmail: "pawel@example.com",
+            sshKeyPath: "~/.ssh/id_ed25519",
+            hosts: ["github.com"],
+            confidence: .high,
+            sources: [.githubCliHostsFile, .globalGitConfig],
+            warnings: []
+        )
+
+        try expect(account.id == "github-pawelkwiatkowski", "detected account id should be stable")
+        try expect(account.provider == .github, "provider should be github")
+        try expect(account.confidence == .high, "confidence should be high")
+        try expect(account.sources.contains(.githubCliHostsFile), "sources should include gh hosts file")
+        try expect(account.hosts == ["github.com"], "hosts should contain github.com")
+    }),
     ("profile rejects empty commit identity", {
         try expectThrows(GitAccountSwitcherError.emptyGitUserName, {
             _ = try GitProfile(
