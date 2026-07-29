@@ -137,6 +137,28 @@ let tests: [(String, () throws -> Void)] = [
         try expect(config.contains("Host github.com"), "config should contain host")
         try expect(config.contains("IdentityFile ~/.ssh/id_work"), "config should contain identity file")
         try expect(config.contains("IdentitiesOnly yes"), "config should force selected identity")
+    }),
+    ("safe file writer constrains writes and creates backups", {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let managed = root.appendingPathComponent("managed", isDirectory: true)
+        let backups = root.appendingPathComponent("backups", isDirectory: true)
+        let writer = SafeFileWriter(allowedRoots: [managed], backupDirectory: backups)
+        let target = managed.appendingPathComponent("global.gitconfig")
+
+        try writer.write("first", to: target)
+        let firstContent = try String(contentsOf: target, encoding: .utf8)
+        try expect(firstContent == "first", "writer should write managed file")
+
+        try writer.write("second", to: target)
+        let secondContent = try String(contentsOf: target, encoding: .utf8)
+        try expect(secondContent == "second", "writer should replace managed file")
+        let backupFiles = try FileManager.default.contentsOfDirectory(atPath: backups.path)
+        try expect(backupFiles.contains { $0.contains("global.gitconfig") }, "writer should backup previous file")
+
+        let outside = root.appendingPathComponent("outside.gitconfig")
+        try expectThrows(GitAccountSwitcherError.writeOutsideManagedRoots, {
+            try writer.write("bad", to: outside)
+        }, "outside writes should be rejected")
     })
 ]
 

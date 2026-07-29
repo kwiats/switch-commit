@@ -7,6 +7,7 @@ public enum GitAccountSwitcherError: Error, Equatable {
     case emptySSHKeyPath
     case emptyHost
     case emptyFolderRulePath
+    case writeOutsideManagedRoots
 }
 
 public struct GitProfile: Codable, Equatable, Identifiable, Sendable {
