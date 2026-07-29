@@ -1,3 +1,4 @@
+import AppKit
 import GitAccountSwitcherAppLogic
 import GitAccountSwitcherCore
 import SwiftUI
@@ -81,6 +82,7 @@ struct SettingsView: View {
             if let profile = viewModel.selectedProfile {
                 header(for: profile)
                 accountForm
+                detectedAccountsSection
                 Spacer()
                 footer
             } else {
@@ -88,6 +90,75 @@ struct SettingsView: View {
             }
         }
         .padding(20)
+    }
+
+    private var detectedAccountsSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Detected Accounts")
+                    .font(.headline)
+                Spacer()
+                Button {
+                    viewModel.refreshDetectedAccounts()
+                } label: {
+                    Label("Detect", systemImage: "magnifyingglass")
+                }
+                Button {
+                    let panel = NSOpenPanel()
+                    panel.canChooseFiles = false
+                    panel.canChooseDirectories = true
+                    panel.allowsMultipleSelection = false
+                    if panel.runModal() == .OK, let url = panel.url {
+                        viewModel.scanSelectedFolderForGitHubAccounts(url)
+                    }
+                } label: {
+                    Label("Scan Folder", systemImage: "folder.badge.gearshape")
+                }
+            }
+
+            if viewModel.detectedAccounts.isEmpty {
+                Text("No local GitHub account was detected.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(viewModel.detectedAccounts) { account in
+                    HStack(alignment: .center, spacing: 10) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(account.username ?? account.gitUserName ?? "GitHub Account")
+                                .lineLimit(1)
+                            Text(detectedAccountSubtitle(account))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
+                        Spacer()
+                        Text(account.confidence.rawValue.capitalized)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Button {
+                            viewModel.importDetectedAccount(id: account.id)
+                        } label: {
+                            Label("Add", systemImage: "plus.circle")
+                        }
+                        .disabled(account.gitUserEmail == nil)
+                        .help(account.gitUserEmail == nil ? "Add an email before importing this account" : "Add detected account")
+                    }
+                    .padding(8)
+                    .background(Color(nsColor: .controlBackgroundColor))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+            }
+        }
+    }
+
+    private func detectedAccountSubtitle(_ account: DetectedGitAccount) -> String {
+        if let email = account.gitUserEmail {
+            return email
+        }
+        if account.warnings.isEmpty {
+            return "Local GitHub configuration found"
+        }
+        return account.warnings[0]
     }
 
     private func header(for profile: GitProfile) -> some View {
