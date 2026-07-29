@@ -6,6 +6,27 @@ public enum AppPresentationRequest: Equatable, Sendable {
     case settings
 }
 
+private struct UncheckedSendable<Value>: @unchecked Sendable {
+    let value: Value
+}
+
+private actor GitHubDiscoveryWorker {
+    // The actor serializes use of the discovery service's non-Sendable command runner.
+    private let service: UncheckedSendable<GitHubLocalDiscoveryService>
+
+    init(service: UncheckedSendable<GitHubLocalDiscoveryService>) {
+        self.service = service
+    }
+
+    func detect(existingProfiles: [GitProfile]) -> [DetectedGitAccount] {
+        service.value.detect(existingProfiles: existingProfiles)
+    }
+
+    func detect(in folderURL: URL, existingProfiles: [GitProfile]) -> [DetectedGitAccount] {
+        service.value.detect(in: folderURL, existingProfiles: existingProfiles)
+    }
+}
+
 @MainActor
 public final class AppViewModel: ObservableObject {
     @Published public private(set) var profiles: [GitProfile]
@@ -17,7 +38,7 @@ public final class AppViewModel: ObservableObject {
     @Published public private(set) var detectedAccounts: [DetectedGitAccount]
 
     private let profileSettingsManager: ProfileSettingsManager
-    private let githubDiscoveryService: GitHubLocalDiscoveryService
+    private let githubDiscoveryWorker: GitHubDiscoveryWorker
 
     public init(
         profiles: [GitProfile]? = nil,
@@ -59,7 +80,9 @@ public final class AppViewModel: ObservableObject {
         self.diagnosticsText = diagnosticsText
         self.settingsMessage = startupMessage
         self.presentationRequest = presentationRequest
-        self.githubDiscoveryService = githubDiscoveryService ?? GitHubLocalDiscoveryService()
+        self.githubDiscoveryWorker = GitHubDiscoveryWorker(
+            service: UncheckedSendable(value: githubDiscoveryService ?? GitHubLocalDiscoveryService())
+        )
         self.detectedAccounts = []
     }
 
@@ -151,31 +174,58 @@ public final class AppViewModel: ObservableObject {
     }
 
     public func refreshDetectedAccounts() {
-        detectedAccounts = githubDiscoveryService.detect(existingProfiles: profiles)
-        if detectedAccounts.isEmpty {
-            settingsMessage = "No local GitHub account was detected."
-        } else {
-            settingsMessage = "Detected \(detectedAccounts.count) local GitHub account suggestion."
+        let existingProfiles = profiles
+        let worker = githubDiscoveryWorker
+        Task { [weak self, worker, existingProfiles] in
+            let accounts = await worker.detect(existingProfiles: existingProfiles)
+            guard let self else {
+                return
+            }
+            detectedAccounts = accounts
+            if accounts.isEmpty {
+                settingsMessage = "No local GitHub account was detected."
+            } else {
+                let noun = accounts.count == 1 ? "suggestion" : "suggestions"
+                settingsMessage = "Detected \(accounts.count) local GitHub account \(noun)."
+            }
         }
     }
 
     public func scanSelectedFolderForGitHubAccounts(_ folderURL: URL) {
-        detectedAccounts = githubDiscoveryService.detect(in: folderURL, existingProfiles: profiles)
-        if detectedAccounts.isEmpty {
-            settingsMessage = "No GitHub remotes were detected in the selected folder."
-        } else {
-            settingsMessage = "Detected \(detectedAccounts.count) GitHub account suggestion from local data."
+        let existingProfiles = profiles
+        let worker = githubDiscoveryWorker
+        Task { [weak self, worker, folderURL, existingProfiles] in
+            let accounts = await worker.detect(in: folderURL, existingProfiles: existingProfiles)
+            guard let self else {
+                return
+            }
+            detectedAccounts = accounts
+            if accounts.isEmpty {
+                settingsMessage = "No GitHub remotes were detected in the selected folder."
+            } else {
+                let noun = accounts.count == 1 ? "suggestion" : "suggestions"
+                settingsMessage = "Detected \(accounts.count) GitHub account \(noun) from local data."
+            }
         }
     }
 
     public func importDetectedAccount(id: String) {
         guard let account = detectedAccounts.first(where: { $0.id == id }) else {
+            settingsMessage = "Detected account is no longer available."
             return
         }
         performSettingsUpdate {
             try profileSettingsManager.importDetectedAccount(account)
         }
-        detectedAccounts = githubDiscoveryService.detect(existingProfiles: profiles)
+        let existingProfiles = profiles
+        let worker = githubDiscoveryWorker
+        Task { [weak self, worker, existingProfiles] in
+            let accounts = await worker.detect(existingProfiles: existingProfiles)
+            guard let self else {
+                return
+            }
+            detectedAccounts = accounts
+        }
     }
 
     private func performSettingsUpdate(_ update: () throws -> Void) {

@@ -51,6 +51,17 @@ func expectThrowsAny(_ operation: () throws -> Void, _ message: String) throws {
     throw TestFailure.expectationFailed("\(message): expected an error")
 }
 
+func waitUntil(
+    timeout: TimeInterval = 2,
+    condition: @escaping () -> Bool
+) -> Bool {
+    let deadline = Date().addingTimeInterval(timeout)
+    while !condition(), Date() < deadline {
+        RunLoop.current.run(until: Date().addingTimeInterval(0.01))
+    }
+    return condition()
+}
+
 extension DetectedGitAccount {
     var displaySummary: String {
         username ?? gitUserName ?? gitUserEmail ?? "GitHub Account"
@@ -787,6 +798,7 @@ let tests: [(String, () throws -> Void)] = [
             final class FakeDiscoveryRunner: CommandRunning {
                 func run(_ command: String, arguments: [String], workingDirectory: URL?) throws -> CommandResult {
                     if command == "git", arguments == ["config", "--global", "--get", "user.name"] {
+                        Thread.sleep(forTimeInterval: 0.2)
                         return CommandResult(exitCode: 0, standardOutput: "Pawel Kwiatkowski\n", standardError: "")
                     }
                     if command == "git", arguments == ["config", "--global", "--get", "user.email"] {
@@ -812,12 +824,28 @@ let tests: [(String, () throws -> Void)] = [
             )
 
             viewModel.refreshDetectedAccounts()
-            try expect(viewModel.detectedAccounts.count == 1, "view model should expose detected account")
+            try expect(
+                viewModel.detectedAccounts.isEmpty,
+                "refresh should defer local discovery work from the main actor"
+            )
+            try expect(
+                waitUntil { viewModel.detectedAccounts.count == 1 },
+                "view model should eventually expose detected account"
+            )
 
             viewModel.importDetectedAccount(id: "github-pawelkwiatkowski")
             try expect(viewModel.profiles.count == 1, "import should create profile")
             try expect(viewModel.profiles[0].displayName == "pawelkwiatkowski", "profile should use detected username")
-            try expect(viewModel.detectedAccounts.isEmpty, "import should refresh suggestions and remove duplicate")
+            try expect(
+                waitUntil { viewModel.detectedAccounts.isEmpty },
+                "import should refresh suggestions and remove duplicate"
+            )
+
+            viewModel.importDetectedAccount(id: "github-pawelkwiatkowski")
+            try expect(
+                viewModel.settingsMessage == "Detected account is no longer available.",
+                "stale detected account imports should be reported"
+            )
         }
     }),
     ("run local diagnostics requests settings presentation", {
