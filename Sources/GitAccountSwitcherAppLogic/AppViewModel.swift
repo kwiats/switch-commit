@@ -181,12 +181,13 @@ public final class AppViewModel: ObservableObject {
             guard let self else {
                 return
             }
-            detectedAccounts = accounts
-            if accounts.isEmpty {
+            let filteredAccounts = accounts.filter { !isDuplicateDetectedAccount($0) }
+            detectedAccounts = filteredAccounts
+            if filteredAccounts.isEmpty {
                 settingsMessage = "No local GitHub account was detected."
             } else {
-                let noun = accounts.count == 1 ? "suggestion" : "suggestions"
-                settingsMessage = "Detected \(accounts.count) local GitHub account \(noun)."
+                let noun = filteredAccounts.count == 1 ? "suggestion" : "suggestions"
+                settingsMessage = "Detected \(filteredAccounts.count) local GitHub account \(noun)."
             }
         }
     }
@@ -199,12 +200,13 @@ public final class AppViewModel: ObservableObject {
             guard let self else {
                 return
             }
-            detectedAccounts = accounts
-            if accounts.isEmpty {
+            let filteredAccounts = accounts.filter { !isDuplicateDetectedAccount($0) }
+            detectedAccounts = filteredAccounts
+            if filteredAccounts.isEmpty {
                 settingsMessage = "No GitHub remotes were detected in the selected folder."
             } else {
-                let noun = accounts.count == 1 ? "suggestion" : "suggestions"
-                settingsMessage = "Detected \(accounts.count) GitHub account \(noun) from local data."
+                let noun = filteredAccounts.count == 1 ? "suggestion" : "suggestions"
+                settingsMessage = "Detected \(filteredAccounts.count) GitHub account \(noun) from local data."
             }
         }
     }
@@ -224,7 +226,35 @@ public final class AppViewModel: ObservableObject {
             guard let self else {
                 return
             }
-            detectedAccounts = accounts
+            detectedAccounts = accounts.filter { !isDuplicateDetectedAccount($0) }
+        }
+    }
+
+    public func completeDetectedAccount(id: String) {
+        guard let account = detectedAccounts.first(where: { $0.id == id }) else {
+            settingsMessage = "Detected account is no longer available."
+            return
+        }
+        do {
+            try profileSettingsManager.addProfile()
+            if let displayName = account.username ?? account.gitUserName {
+                try profileSettingsManager.updateSelectedProfileDisplayName(displayName)
+            }
+            if let gitUserName = account.gitUserName ?? account.username {
+                try profileSettingsManager.updateSelectedProfileGitUserName(gitUserName)
+            }
+            if let sshKeyPath = account.sshKeyPath {
+                try profileSettingsManager.updateSelectedProfileSSHKeyPath(sshKeyPath)
+            }
+            if !account.hosts.isEmpty {
+                try profileSettingsManager.updateSelectedProfileHostsText(account.hosts.joined(separator: ", "))
+            }
+            refreshFromProfileSettings()
+            detectedAccounts.removeAll { $0.id == id }
+            settingsMessage = "Complete the detected GitHub account before using it."
+        } catch {
+            settingsMessage = "Could not save settings: \(error.localizedDescription)"
+            refreshFromProfileSettings()
         }
     }
 
@@ -242,6 +272,22 @@ public final class AppViewModel: ObservableObject {
         profiles = profileSettingsManager.profiles
         activeProfileId = profileSettingsManager.activeProfileId
         selectedProfileId = profileSettingsManager.selectedProfileId
+    }
+
+    private func isDuplicateDetectedAccount(_ account: DetectedGitAccount) -> Bool {
+        profiles.contains { profile in
+            let hosts = Set(profile.hosts.map { $0.lowercased() })
+            guard hosts.contains("github.com") else {
+                return false
+            }
+            if let email = account.gitUserEmail, profile.gitUserEmail.caseInsensitiveCompare(email) == .orderedSame {
+                return true
+            }
+            if let username = account.username, profile.displayName.caseInsensitiveCompare(username) == .orderedSame {
+                return true
+            }
+            return false
+        }
     }
 
     private static func defaultProfilesURL() -> URL {

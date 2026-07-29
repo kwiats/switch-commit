@@ -26,6 +26,13 @@ func expectRange(of needle: String, in haystack: String) throws -> Range<String.
     return range
 }
 
+func expectValue<T>(_ value: T?, _ message: String) throws -> T {
+    guard let value else {
+        throw TestFailure.expectationFailed(message)
+    }
+    return value
+}
+
 func expectThrows<T: Error & Equatable>(
     _ expectedError: T,
     _ operation: () throws -> Void,
@@ -181,6 +188,21 @@ let tests: [(String, () throws -> Void)] = [
 
         try expect(account?.id == "github-pawel-example.com", "unsafe username should fall back to email-derived id")
     }),
+    ("detected account merger separates conflicting github usernames", {
+        let signals = [
+            DetectionSignal(provider: .github, username: "alice", confidence: .high, source: .githubCliHostsFile),
+            DetectionSignal(provider: .github, username: "bob", confidence: .medium, source: .gitCredentialUsername),
+            DetectionSignal(provider: .github, gitUserName: "Global User", gitUserEmail: "global@example.com", confidence: .low, source: .globalGitConfig),
+            DetectionSignal(provider: .github, sshKeyPath: "~/.ssh/id_ed25519", confidence: .medium, source: .sshResolvedConfig)
+        ]
+
+        let accounts = DetectedAccountMerger().merge(signals: signals, existingProfiles: [])
+
+        try expect(accounts.map(\.username) == ["alice", "bob"], "conflicting usernames should produce separate candidates")
+        try expect(accounts.allSatisfy { $0.gitUserEmail == nil }, "conflicting username candidates should not inherit global git email")
+        try expect(accounts.allSatisfy { $0.sshKeyPath == nil }, "conflicting username candidates should not inherit ambiguous ssh key")
+        try expect(accounts.allSatisfy { $0.warnings.contains("Conflicting local GitHub identities were detected. Complete this account before import.") }, "conflicting candidates should warn")
+    }),
     ("detected account merger skips existing github profile duplicates", {
         let existing = try GitProfile(
             id: "personal",
@@ -225,12 +247,18 @@ let tests: [(String, () throws -> Void)] = [
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         let ghConfig = temporaryDirectory.appendingPathComponent(".config/gh", isDirectory: true)
+        let sshConfig = temporaryDirectory.appendingPathComponent(".ssh", isDirectory: true)
         try FileManager.default.createDirectory(at: ghConfig, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: sshConfig, withIntermediateDirectories: true)
         try """
         github.com:
             oauth_token: secret-token
             user: pawelkwiatkowski
         """.write(to: ghConfig.appendingPathComponent("hosts.yml"), atomically: true, encoding: .utf8)
+        try """
+        Host github.com
+            IdentityFile ~/.ssh/id_ed25519
+        """.write(to: sshConfig.appendingPathComponent("config"), atomically: true, encoding: .utf8)
 
         let runner = FakeDiscoveryRunner()
         let service = GitHubLocalDiscoveryService(
@@ -253,6 +281,33 @@ let tests: [(String, () throws -> Void)] = [
             ["ssh", "-G", "github.com"]
         ]
         try expect(runner.commands.allSatisfy { allowlistedCommands.contains($0) }, "service must use only approved local commands")
+    }),
+    ("github local discovery ignores default ssh identity without explicit github ssh config", {
+        final class FakeSSHRunner: CommandRunning {
+            func run(_ command: String, arguments: [String], workingDirectory: URL?) throws -> CommandResult {
+                if command == "git", arguments == ["config", "--global", "--get", "user.name"] {
+                    return CommandResult(exitCode: 0, standardOutput: "Pawel Kwiatkowski\n", standardError: "")
+                }
+                if command == "git", arguments == ["config", "--global", "--get", "user.email"] {
+                    return CommandResult(exitCode: 0, standardOutput: "pawel@example.com\n", standardError: "")
+                }
+                if command == "ssh", arguments == ["-G", "github.com"] {
+                    return CommandResult(exitCode: 0, standardOutput: "identityfile ~/.ssh/id_ed25519\n", standardError: "")
+                }
+                return CommandResult(exitCode: 1, standardOutput: "", standardError: "missing")
+            }
+        }
+
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let service = GitHubLocalDiscoveryService(
+            homeDirectory: temporaryDirectory,
+            commandRunner: FakeSSHRunner()
+        )
+
+        let accounts = service.detect(existingProfiles: [])
+
+        try expect(accounts.isEmpty, "default ssh identity should not create a github candidate without explicit github ssh config")
     }),
     ("github local discovery manual scan reads only git configs under selected folder", {
         let root = FileManager.default.temporaryDirectory
@@ -846,6 +901,100 @@ let tests: [(String, () throws -> Void)] = [
                 viewModel.settingsMessage == "Detected account is no longer available.",
                 "stale detected account imports should be reported"
             )
+        }
+    }),
+    ("app view model filters stale detected accounts against current profiles", {
+        try MainActor.assumeIsolated {
+            let temporaryDirectory = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            let ghConfig = temporaryDirectory.appendingPathComponent(".config/gh", isDirectory: true)
+            try FileManager.default.createDirectory(at: ghConfig, withIntermediateDirectories: true)
+            try """
+            github.com:
+                user: pawelkwiatkowski
+            """.write(to: ghConfig.appendingPathComponent("hosts.yml"), atomically: true, encoding: .utf8)
+
+            final class SlowDiscoveryRunner: CommandRunning {
+                func run(_ command: String, arguments: [String], workingDirectory: URL?) throws -> CommandResult {
+                    if command == "git", arguments == ["config", "--global", "--get", "user.name"] {
+                        Thread.sleep(forTimeInterval: 0.2)
+                        return CommandResult(exitCode: 0, standardOutput: "Pawel Kwiatkowski\n", standardError: "")
+                    }
+                    if command == "git", arguments == ["config", "--global", "--get", "user.email"] {
+                        return CommandResult(exitCode: 0, standardOutput: "pawel@example.com\n", standardError: "")
+                    }
+                    return CommandResult(exitCode: 1, standardOutput: "", standardError: "missing")
+                }
+            }
+
+            let storeURL = temporaryDirectory.appendingPathComponent("profiles.json")
+            let discovery = GitHubLocalDiscoveryService(
+                homeDirectory: temporaryDirectory,
+                commandRunner: SlowDiscoveryRunner()
+            )
+            let viewModel = AppViewModel(
+                profiles: [],
+                profileStore: ProfileStore(fileURL: storeURL),
+                keychainStore: InMemoryKeychainStore(),
+                githubDiscoveryService: discovery
+            )
+
+            viewModel.refreshDetectedAccounts()
+            viewModel.addProfile()
+            viewModel.updateSelectedProfileDisplayName("pawelkwiatkowski")
+            viewModel.updateSelectedProfileGitUserEmail("pawel@example.com")
+
+            try expect(
+                waitUntil { viewModel.settingsMessage == "No local GitHub account was detected." },
+                "stale detection results should be deduped against current profiles"
+            )
+            try expect(viewModel.detectedAccounts.isEmpty, "stale duplicate suggestion should not remain visible")
+        }
+    }),
+    ("app view model creates editable profile for detected account without email", {
+        try MainActor.assumeIsolated {
+            let temporaryDirectory = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            let ghConfig = temporaryDirectory.appendingPathComponent(".config/gh", isDirectory: true)
+            try FileManager.default.createDirectory(at: ghConfig, withIntermediateDirectories: true)
+            try """
+            github.com:
+                user: pawelkwiatkowski
+            """.write(to: ghConfig.appendingPathComponent("hosts.yml"), atomically: true, encoding: .utf8)
+
+            final class EmptyDiscoveryRunner: CommandRunning {
+                func run(_ command: String, arguments: [String], workingDirectory: URL?) throws -> CommandResult {
+                    CommandResult(exitCode: 1, standardOutput: "", standardError: "missing")
+                }
+            }
+
+            let storeURL = temporaryDirectory.appendingPathComponent("profiles.json")
+            let discovery = GitHubLocalDiscoveryService(
+                homeDirectory: temporaryDirectory,
+                commandRunner: EmptyDiscoveryRunner()
+            )
+            let viewModel = AppViewModel(
+                profiles: [],
+                profileStore: ProfileStore(fileURL: storeURL),
+                keychainStore: InMemoryKeychainStore(),
+                githubDiscoveryService: discovery
+            )
+
+            viewModel.refreshDetectedAccounts()
+            try expect(
+                waitUntil { !viewModel.detectedAccounts.isEmpty && viewModel.detectedAccounts.first?.gitUserEmail == nil },
+                "email-less detected account should be exposed for completion"
+            )
+            let detectedId = try expectValue(viewModel.detectedAccounts.first?.id, "detected account should have an id")
+
+            viewModel.completeDetectedAccount(id: detectedId)
+
+            try expect(viewModel.profiles.count == 1, "completion should create an editable profile")
+            try expect(viewModel.profiles[0].displayName == "pawelkwiatkowski", "completion should prefill display name")
+            try expect(viewModel.profiles[0].gitUserName == "pawelkwiatkowski", "completion should prefill git user name")
+            try expect(viewModel.profiles[0].gitUserEmail == "user1@example.com", "completion should keep the editable default email")
+            try expect(viewModel.detectedAccounts.isEmpty, "completed suggestion should be removed")
+            try expect(viewModel.settingsMessage == "Complete the detected GitHub account before using it.", "completion should explain next step")
         }
     }),
     ("run local diagnostics requests settings presentation", {

@@ -9,6 +9,31 @@ public struct DetectedAccountMerger: Sendable {
             return []
         }
 
+        let usernames = uniqueUsernames(githubSignals.compactMap(\.username))
+        if usernames.count > 1 {
+            return usernames.compactMap { username in
+                var candidateSignals = githubSignals.filter {
+                    $0.username?.caseInsensitiveCompare(username) == .orderedSame
+                }
+                candidateSignals.append(
+                    DetectionSignal(
+                        provider: .github,
+                        confidence: .low,
+                        source: .globalGitConfig,
+                        warnings: ["Conflicting local GitHub identities were detected. Complete this account before import."]
+                    )
+                )
+                return makeCandidate(from: candidateSignals, existingProfiles: existingProfiles)
+            }
+        }
+
+        return makeCandidate(from: githubSignals, existingProfiles: existingProfiles).map { [$0] } ?? []
+    }
+
+    private func makeCandidate(
+        from githubSignals: [DetectionSignal],
+        existingProfiles: [GitProfile]
+    ) -> DetectedGitAccount? {
         var candidate = DetectedGitAccount(
             id: "github-account",
             provider: .github,
@@ -35,9 +60,9 @@ public struct DetectedAccountMerger: Sendable {
 
         candidate.id = stableId(for: candidate)
         guard !isDuplicate(candidate, existingProfiles: existingProfiles) else {
-            return []
+            return nil
         }
-        return [candidate]
+        return candidate
     }
 
     private func stableId(for account: DetectedGitAccount) -> String {
@@ -101,6 +126,18 @@ public struct DetectedAccountMerger: Sendable {
         var result: [T] = []
         for value in values where seen.insert(value).inserted {
             result.append(value)
+        }
+        return result
+    }
+
+    private func uniqueUsernames(_ usernames: [String]) -> [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        for username in usernames {
+            let key = username.lowercased()
+            if seen.insert(key).inserted {
+                result.append(username)
+            }
         }
         return result
     }

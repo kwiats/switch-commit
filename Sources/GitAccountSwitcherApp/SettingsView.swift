@@ -86,7 +86,10 @@ struct SettingsView: View {
                 Spacer()
                 footer
             } else {
-                emptyState
+                VStack(alignment: .leading, spacing: 16) {
+                    emptyState
+                    detectedAccountsSection
+                }
             }
         }
         .padding(20)
@@ -139,13 +142,21 @@ struct SettingsView: View {
                                 Text(account.confidence.rawValue.capitalized)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
-                                Button {
-                                    viewModel.importDetectedAccount(id: account.id)
-                                } label: {
-                                    Label("Add", systemImage: "plus.circle")
+                                if account.gitUserEmail == nil {
+                                    Button {
+                                        viewModel.completeDetectedAccount(id: account.id)
+                                    } label: {
+                                        Label("Complete", systemImage: "square.and.pencil")
+                                    }
+                                    .help("Complete this detected account before importing")
+                                } else {
+                                    Button {
+                                        viewModel.importDetectedAccount(id: account.id)
+                                    } label: {
+                                        Label("Add", systemImage: "plus.circle")
+                                    }
+                                    .help("Add detected account")
                                 }
-                                .disabled(account.gitUserEmail == nil)
-                                .help(account.gitUserEmail == nil ? "Add an email before importing this account" : "Add detected account")
                             }
                             .padding(8)
                             .background(Color(nsColor: .controlBackgroundColor))
@@ -270,6 +281,6 @@ struct SettingsView: View {
                 Label("Add Account", systemImage: "plus")
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .frame(maxWidth: .infinity, alignment: .center)
     }
 }

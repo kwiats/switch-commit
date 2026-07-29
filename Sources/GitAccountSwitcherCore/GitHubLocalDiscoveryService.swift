@@ -128,7 +128,8 @@ public struct GitHubLocalDiscoveryService {
 
     private func sshConfigurationSignals() -> [DetectionSignal] {
         var signals = sshConfigFileSignals()
-        if let resolvedConfig = commandOutput(command: "ssh", arguments: ["-G", "github.com"]),
+        if !signals.isEmpty,
+           let resolvedConfig = commandOutput(command: "ssh", arguments: ["-G", "github.com"]),
            let identityFile = identityFile(in: resolvedConfig) {
             signals.append(
                 DetectionSignal(
