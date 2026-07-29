@@ -159,6 +159,27 @@ let tests: [(String, () throws -> Void)] = [
         try expectThrows(GitAccountSwitcherError.writeOutsideManagedRoots, {
             try writer.write("bad", to: outside)
         }, "outside writes should be rejected")
+    }),
+    ("diagnostics run local git config commands and report warnings", {
+        final class FakeRunner: CommandRunning {
+            var commands: [[String]] = []
+
+            func run(_ command: String, arguments: [String], workingDirectory: URL?) throws -> CommandResult {
+                commands.append([command] + arguments)
+                if arguments.contains("core.sshCommand") {
+                    return CommandResult(exitCode: 1, standardOutput: "", standardError: "missing")
+                }
+                return CommandResult(exitCode: 0, standardOutput: "file\tvalue", standardError: "")
+            }
+        }
+
+        let runner = FakeRunner()
+        let service = DiagnosticsService(commandRunner: runner)
+        let report = service.inspectGitIdentity(at: URL(fileURLWithPath: "/tmp/repo"))
+        try expect(runner.commands.count == 3, "diagnostics should run three local git config commands")
+        try expect(runner.commands.allSatisfy { $0.first == "git" }, "diagnostics should only call git")
+        try expect(runner.commands.allSatisfy { $0.contains("--show-origin") }, "diagnostics should show origin")
+        try expect(report.warnings.contains { $0.contains("core.sshCommand") }, "failed command should become warning")
     })
 ]
 
