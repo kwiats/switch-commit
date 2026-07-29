@@ -287,6 +287,116 @@ let tests: [(String, () throws -> Void)] = [
         let deletedValue = try store.read(identifier)
         try expect(deletedValue == nil, "delete should use the same identifier")
     }),
+    ("profile settings manager adds a valid profile and selects it", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let storeURL = temporaryDirectory.appendingPathComponent("profiles.json")
+        let manager = try ProfileSettingsManager(
+            profileStore: ProfileStore(fileURL: storeURL),
+            keychainStore: InMemoryKeychainStore(),
+            seedProfiles: []
+        )
+
+        try manager.addProfile()
+
+        try expect(manager.profiles.count == 1, "add should create one profile")
+        try expect(manager.activeProfileId == manager.profiles[0].id, "added profile should become active")
+        try expect(manager.selectedProfileId == manager.profiles[0].id, "added profile should become selected")
+        let loaded = try ProfileStore(fileURL: storeURL).load()
+        try expect(loaded.profiles == manager.profiles, "added profile should persist")
+    }),
+    ("profile settings manager updates active display name", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let storeURL = temporaryDirectory.appendingPathComponent("profiles.json")
+        let profile = try GitProfile(
+            id: "personal",
+            displayName: "Personal",
+            gitUserName: "Personal User",
+            gitUserEmail: "me@example.com",
+            sshKeyPath: "~/.ssh/id_ed25519",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let manager = try ProfileSettingsManager(
+            profileStore: ProfileStore(fileURL: storeURL),
+            keychainStore: InMemoryKeychainStore(),
+            seedProfiles: [profile]
+        )
+
+        try manager.updateSelectedProfileDisplayName("Top Name")
+
+        try expect(manager.activeProfile?.displayName == "Top Name", "active profile display name should update")
+    }),
+    ("profile settings manager keeps selection valid when deleting profiles", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let storeURL = temporaryDirectory.appendingPathComponent("profiles.json")
+        let first = try GitProfile(
+            id: "first",
+            displayName: "First",
+            gitUserName: "First User",
+            gitUserEmail: "first@example.com",
+            sshKeyPath: "~/.ssh/id_first",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let second = try GitProfile(
+            id: "second",
+            displayName: "Second",
+            gitUserName: "Second User",
+            gitUserEmail: "second@example.com",
+            sshKeyPath: "~/.ssh/id_second",
+            hosts: ["gitlab.com"],
+            httpsCredentialRef: nil,
+            isDefault: false
+        )
+        let manager = try ProfileSettingsManager(
+            profileStore: ProfileStore(fileURL: storeURL),
+            keychainStore: InMemoryKeychainStore(),
+            seedProfiles: [first, second]
+        )
+
+        try manager.deleteSelectedProfile()
+        try expect(manager.profiles.map(\.id) == ["second"], "delete should remove selected profile")
+        try expect(manager.activeProfileId == "second", "remaining profile should become active")
+
+        try manager.deleteSelectedProfile()
+        try expect(manager.profiles.isEmpty, "second delete should remove last profile")
+        try expect(manager.activeProfileId == nil, "active profile should clear after deleting last profile")
+        try expect(manager.selectedProfileId == nil, "selected profile should clear after deleting last profile")
+    }),
+    ("profile settings manager resets https access", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let storeURL = temporaryDirectory.appendingPathComponent("profiles.json")
+        let identifier = KeychainCredentialIdentifier(profileId: "work", purpose: "https")
+        let profile = try GitProfile(
+            id: "work",
+            displayName: "Work",
+            gitUserName: "Work User",
+            gitUserEmail: "work@example.com",
+            sshKeyPath: "~/.ssh/id_work",
+            hosts: ["github.com"],
+            httpsCredentialRef: identifier.rawValue,
+            isDefault: true
+        )
+        let keychain = InMemoryKeychainStore()
+        try keychain.save("secret", for: identifier)
+        let manager = try ProfileSettingsManager(
+            profileStore: ProfileStore(fileURL: storeURL),
+            keychainStore: keychain,
+            seedProfiles: [profile]
+        )
+
+        try manager.resetAccessForSelectedProfile()
+
+        let resetValue = try keychain.read(identifier)
+        try expect(resetValue == nil, "reset should delete keychain value")
+        try expect(manager.profiles[0].httpsCredentialRef == nil, "reset should clear credential reference")
+    }),
     ("run local diagnostics requests settings presentation", {
         try MainActor.assumeIsolated {
             let viewModel = AppViewModel(profiles: [])

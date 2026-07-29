@@ -7,6 +7,10 @@ public struct KeychainCredentialIdentifier: Equatable, Hashable, Sendable {
     public init(profileId: String, purpose: String) {
         self.rawValue = "git-account-switcher.\(profileId).\(purpose)"
     }
+
+    public init(rawValue: String) {
+        self.rawValue = rawValue
+    }
 }
 
 public protocol KeychainStoring: AnyObject {

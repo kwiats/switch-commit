@@ -1,0 +1,221 @@
+import Foundation
+
+public final class ProfileSettingsManager {
+    public private(set) var profiles: [GitProfile]
+    public private(set) var rules: [FolderRule]
+    public private(set) var activeProfileId: String?
+    public private(set) var selectedProfileId: String?
+    public private(set) var statusMessage: String?
+
+    private let profileStore: ProfileStore
+    private let keychainStore: KeychainStoring
+
+    public init(
+        profileStore: ProfileStore,
+        keychainStore: KeychainStoring,
+        seedProfiles: [GitProfile]
+    ) throws {
+        self.profileStore = profileStore
+        self.keychainStore = keychainStore
+
+        let loaded = try profileStore.load()
+        if loaded.profiles.isEmpty {
+            self.profiles = seedProfiles
+            self.rules = []
+        } else {
+            self.profiles = loaded.profiles
+            self.rules = loaded.rules
+        }
+
+        self.activeProfileId = Self.initialProfileId(from: profiles)
+        self.selectedProfileId = activeProfileId
+
+        if loaded.profiles.isEmpty, !seedProfiles.isEmpty {
+            try persist()
+        }
+    }
+
+    public var activeProfile: GitProfile? {
+        profiles.first { $0.id == activeProfileId }
+    }
+
+    public var selectedProfile: GitProfile? {
+        profiles.first { $0.id == selectedProfileId }
+    }
+
+    public func selectProfile(id: String?) {
+        guard let id else {
+            selectedProfileId = nil
+            return
+        }
+        if profiles.contains(where: { $0.id == id }) {
+            selectedProfileId = id
+        }
+    }
+
+    public func switchGlobalProfile(to profile: GitProfile) throws {
+        guard profiles.contains(where: { $0.id == profile.id }) else {
+            return
+        }
+        activeProfileId = profile.id
+        for index in profiles.indices {
+            profiles[index].isDefault = profiles[index].id == profile.id
+        }
+        try persist()
+    }
+
+    public func addProfile() throws {
+        let number = profiles.count + 1
+        let profile = try GitProfile(
+            id: uniqueProfileId(base: "account-\(number)"),
+            displayName: "New Account \(number)",
+            gitUserName: "Git User \(number)",
+            gitUserEmail: "user\(number)@example.com",
+            sshKeyPath: "~/.ssh/id_ed25519",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: profiles.isEmpty
+        )
+
+        profiles.append(profile)
+        selectedProfileId = profile.id
+        if activeProfileId == nil {
+            activeProfileId = profile.id
+        }
+        try persist()
+    }
+
+    public func deleteSelectedProfile() throws {
+        guard let selectedProfileId else {
+            return
+        }
+
+        profiles.removeAll { $0.id == selectedProfileId }
+        rules.removeAll { $0.profileId == selectedProfileId }
+
+        if profiles.isEmpty {
+            self.selectedProfileId = nil
+            activeProfileId = nil
+        } else {
+            let nextId = profiles.first?.id
+            self.selectedProfileId = nextId
+            if activeProfileId == selectedProfileId || activeProfileId == nil {
+                activeProfileId = nextId
+            }
+        }
+
+        normalizeDefaultFlags()
+        try persist()
+    }
+
+    public func updateSelectedProfileDisplayName(_ displayName: String) throws {
+        try updateSelectedProfile { profile in
+            profile.displayName = displayName
+        }
+    }
+
+    public func updateSelectedProfileGitUserName(_ gitUserName: String) throws {
+        try updateSelectedProfile { profile in
+            profile.gitUserName = gitUserName
+        }
+    }
+
+    public func updateSelectedProfileGitUserEmail(_ gitUserEmail: String) throws {
+        try updateSelectedProfile { profile in
+            profile.gitUserEmail = gitUserEmail
+        }
+    }
+
+    public func updateSelectedProfileSSHKeyPath(_ sshKeyPath: String) throws {
+        try updateSelectedProfile { profile in
+            profile.sshKeyPath = sshKeyPath
+        }
+    }
+
+    public func updateSelectedProfileHostsText(_ hostsText: String) throws {
+        let hosts = hostsText
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        try updateSelectedProfile { profile in
+            profile.hosts = hosts
+        }
+    }
+
+    public func resetAccessForSelectedProfile() throws {
+        guard let index = selectedProfileIndex else {
+            return
+        }
+
+        let storedReference = profiles[index].httpsCredentialRef
+        let expectedIdentifier = KeychainCredentialIdentifier(profileId: profiles[index].id, purpose: "https")
+
+        if let storedReference, storedReference == expectedIdentifier.rawValue {
+            try keychainStore.delete(expectedIdentifier)
+            statusMessage = "Access reset for \(profiles[index].displayName)."
+        } else if let storedReference {
+            try keychainStore.delete(KeychainCredentialIdentifier(rawValue: storedReference))
+            statusMessage = "Access reset for \(profiles[index].displayName)."
+        } else {
+            statusMessage = "No local access was stored for \(profiles[index].displayName)."
+        }
+
+        profiles[index].httpsCredentialRef = nil
+        try persist()
+    }
+
+    public func hostsText(for profile: GitProfile) -> String {
+        profile.hosts.joined(separator: ", ")
+    }
+
+    private var selectedProfileIndex: Array<GitProfile>.Index? {
+        guard let selectedProfileId else {
+            return nil
+        }
+        return profiles.firstIndex { $0.id == selectedProfileId }
+    }
+
+    private func updateSelectedProfile(_ mutate: (inout GitProfile) -> Void) throws {
+        guard let index = selectedProfileIndex else {
+            return
+        }
+
+        var draft = profiles[index]
+        mutate(&draft)
+        profiles[index] = try GitProfile(
+            id: draft.id,
+            displayName: draft.displayName,
+            gitUserName: draft.gitUserName,
+            gitUserEmail: draft.gitUserEmail,
+            sshKeyPath: draft.sshKeyPath,
+            hosts: draft.hosts,
+            httpsCredentialRef: draft.httpsCredentialRef,
+            isDefault: draft.isDefault
+        )
+        try persist()
+    }
+
+    private func normalizeDefaultFlags() {
+        for index in profiles.indices {
+            profiles[index].isDefault = profiles[index].id == activeProfileId
+        }
+    }
+
+    private func persist() throws {
+        try profileStore.save(ProfileStoreData(profiles: profiles, rules: rules))
+    }
+
+    private func uniqueProfileId(base: String) -> String {
+        var candidate = base
+        var suffix = 2
+        let ids = Set(profiles.map(\.id))
+        while ids.contains(candidate) {
+            candidate = "\(base)-\(suffix)"
+            suffix += 1
+        }
+        return candidate
+    }
+
+    private static func initialProfileId(from profiles: [GitProfile]) -> String? {
+        profiles.first(where: \.isDefault)?.id ?? profiles.first?.id
+    }
+}
