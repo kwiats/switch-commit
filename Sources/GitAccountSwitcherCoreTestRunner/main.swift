@@ -420,6 +420,40 @@ let tests: [(String, () throws -> Void)] = [
                 "settings action should request visible settings presentation"
             )
         }
+    }),
+    ("adding an account requests menu content rebuild", {
+        try MainActor.assumeIsolated {
+            let viewModel = AppViewModel(profiles: [])
+            let initialRevision = viewModel.menuContentRevision
+
+            viewModel.addProfile()
+
+            try expect(viewModel.profiles.count == 1, "add profile should update app-facing profiles")
+            try expect(
+                viewModel.menuContentRevision == initialRevision + 1,
+                "profile mutations should request menu content rebuild"
+            )
+        }
+    }),
+    ("profile git binding status is available for menu icons", {
+        try MainActor.assumeIsolated {
+            let profile = try GitProfile(
+                id: "personal",
+                displayName: "Personal",
+                gitUserName: "Personal User",
+                gitUserEmail: "me@example.com",
+                sshKeyPath: "~/.ssh/id_ed25519",
+                hosts: ["github.com"],
+                httpsCredentialRef: nil,
+                isDefault: true
+            )
+            let viewModel = AppViewModel(profiles: [profile])
+
+            try expect(
+                viewModel.gitBindingStatus(for: profile) == .mockLinked,
+                "mock git binding status should be available until real integration is wired"
+            )
+        }
     })
 ]
 
