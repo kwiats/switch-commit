@@ -544,6 +544,62 @@ let tests: [(String, () throws -> Void)] = [
         let loaded = try ProfileStore(fileURL: storeURL).load()
         try expect(loaded.profiles == manager.profiles, "added profile should persist")
     }),
+    ("profile settings manager imports complete detected github account", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let storeURL = temporaryDirectory.appendingPathComponent("profiles.json")
+        let manager = try ProfileSettingsManager(
+            profileStore: ProfileStore(fileURL: storeURL),
+            keychainStore: InMemoryKeychainStore(),
+            seedProfiles: []
+        )
+        let account = DetectedGitAccount(
+            id: "github-pawelkwiatkowski",
+            provider: .github,
+            username: "pawelkwiatkowski",
+            gitUserName: "Pawel Kwiatkowski",
+            gitUserEmail: "pawel@example.com",
+            sshKeyPath: "~/.ssh/id_ed25519",
+            hosts: ["github.com"],
+            confidence: .high,
+            sources: [.githubCliHostsFile],
+            warnings: []
+        )
+
+        try manager.importDetectedAccount(account)
+
+        try expect(manager.profiles.count == 1, "import should create one profile")
+        try expect(manager.profiles[0].id == "github-pawelkwiatkowski", "profile id should use detected id")
+        try expect(manager.profiles[0].displayName == "pawelkwiatkowski", "display name should prefer username")
+        try expect(manager.profiles[0].httpsCredentialRef == nil, "import must not store credential refs")
+        try expect(manager.activeProfileId == "github-pawelkwiatkowski", "first imported profile should become active")
+    }),
+    ("profile settings manager refuses incomplete detected github account", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let storeURL = temporaryDirectory.appendingPathComponent("profiles.json")
+        let manager = try ProfileSettingsManager(
+            profileStore: ProfileStore(fileURL: storeURL),
+            keychainStore: InMemoryKeychainStore(),
+            seedProfiles: []
+        )
+        let account = DetectedGitAccount(
+            id: "github-account",
+            provider: .github,
+            username: nil,
+            gitUserName: "Pawel Kwiatkowski",
+            gitUserEmail: nil,
+            sshKeyPath: "~/.ssh/id_ed25519",
+            hosts: ["github.com"],
+            confidence: .medium,
+            sources: [.globalGitConfig],
+            warnings: []
+        )
+
+        try expectThrows(GitAccountSwitcherError.emptyGitUserEmail, {
+            try manager.importDetectedAccount(account)
+        }, "incomplete detected account should not be saved as profile")
+    }),
     ("profile settings manager updates active display name", {
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
