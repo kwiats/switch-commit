@@ -224,8 +224,15 @@ let tests: [(String, () throws -> Void)] = [
         try expect(accounts[0].username == "pawelkwiatkowski", "username should come from local hosts file")
         try expect(accounts[0].gitUserEmail == "pawel@example.com", "git email should come from global config")
         try expect(accounts[0].sshKeyPath == "~/.ssh/id_ed25519", "ssh key should come from resolved ssh config")
-        try expect(runner.commands.contains(["gh", "--version"]), "service may check gh installation")
-        try expect(!runner.commands.contains { $0.contains("auth") || $0.contains("api") }, "service must not run gh auth or gh api")
+        let allowlistedCommands: Set<[String]> = [
+            ["git", "config", "--global", "--get", "user.name"],
+            ["git", "config", "--global", "--get", "user.email"],
+            ["git", "config", "--global", "--get", "credential.https://github.com.username"],
+            ["git", "config", "--global", "--get", "credential.github.com.username"],
+            ["gh", "--version"],
+            ["ssh", "-G", "github.com"]
+        ]
+        try expect(runner.commands.allSatisfy { allowlistedCommands.contains($0) }, "service must use only approved local commands")
     }),
     ("github local discovery manual scan reads only git configs under selected folder", {
         let root = FileManager.default.temporaryDirectory
@@ -247,6 +254,33 @@ let tests: [(String, () throws -> Void)] = [
         try expect(signals.count == 1, "manual scan should find one github remote")
         try expect(signals[0].source == .repositoryRemote, "manual scan source should be repository remote")
         try expect(signals[0].warnings.contains("Remote owner 'pawelkwiatkowski' may be a user or an organization."), "remote owner should not be treated as certain username")
+    }),
+    ("github local discovery manual scan rejects symlinked git config outside selected folder", {
+        let selectedRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let repoGit = selectedRoot.appendingPathComponent("project/.git", isDirectory: true)
+        let outsideRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let outsideConfig = outsideRoot.appendingPathComponent("config")
+        try FileManager.default.createDirectory(at: repoGit, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: outsideRoot, withIntermediateDirectories: true)
+        try """
+        [remote "origin"]
+            url = git@github.com:outside-owner/private.git
+        """.write(to: outsideConfig, atomically: true, encoding: .utf8)
+        try FileManager.default.createSymbolicLink(
+            at: repoGit.appendingPathComponent("config"),
+            withDestinationURL: outsideConfig
+        )
+
+        let service = GitHubLocalDiscoveryService(
+            homeDirectory: selectedRoot,
+            commandRunner: ProcessCommandRunner()
+        )
+
+        let signals = service.repositoryRemoteSignals(in: selectedRoot)
+
+        try expect(signals.isEmpty, "manual scan must not read git config symlinked outside selected folder")
     }),
     ("profile rejects empty commit identity", {
         try expectThrows(GitAccountSwitcherError.emptyGitUserName, {

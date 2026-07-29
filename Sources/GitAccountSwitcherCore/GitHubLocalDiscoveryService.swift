@@ -55,8 +55,8 @@ public struct GitHubLocalDiscoveryService {
 
         var signals: [DetectionSignal] = []
         for case let fileURL as URL in enumerator {
-            guard isGitConfig(fileURL),
-                  let content = try? String(contentsOf: fileURL, encoding: .utf8)
+            guard let validatedConfigURL = validatedGitConfigURL(fileURL, within: folderURL),
+                  let content = try? String(contentsOf: validatedConfigURL, encoding: .utf8)
             else {
                 continue
             }
@@ -189,6 +189,29 @@ public struct GitHubLocalDiscoveryService {
 
     private func isGitConfig(_ url: URL) -> Bool {
         url.lastPathComponent == "config" && url.deletingLastPathComponent().lastPathComponent == ".git"
+    }
+
+    private func validatedGitConfigURL(_ url: URL, within selectedRoot: URL) -> URL? {
+        guard isGitConfig(url) else {
+            return nil
+        }
+
+        let resolvedRoot = selectedRoot.resolvingSymlinksInPath().standardizedFileURL
+        let resolvedConfig = url.resolvingSymlinksInPath().standardizedFileURL
+        guard isGitConfig(resolvedConfig),
+              isDescendant(resolvedConfig, of: resolvedRoot),
+              let values = try? resolvedConfig.resourceValues(forKeys: [.isRegularFileKey]),
+              values.isRegularFile == true
+        else {
+            return nil
+        }
+        return resolvedConfig
+    }
+
+    private func isDescendant(_ url: URL, of root: URL) -> Bool {
+        let rootComponents = root.pathComponents
+        let components = url.pathComponents
+        return components.count > rootComponents.count && components.starts(with: rootComponents)
     }
 
     private func remoteURLs(in config: String) -> [String] {
