@@ -14,8 +14,10 @@ public final class AppViewModel: ObservableObject {
     @Published public var diagnosticsText: String
     @Published public var settingsMessage: String?
     @Published public private(set) var presentationRequest: AppPresentationRequest?
+    @Published public private(set) var detectedAccounts: [DetectedGitAccount]
 
     private let profileSettingsManager: ProfileSettingsManager
+    private let githubDiscoveryService: GitHubLocalDiscoveryService
 
     public init(
         profiles: [GitProfile]? = nil,
@@ -23,7 +25,8 @@ public final class AppViewModel: ObservableObject {
         diagnosticsText: String = "Diagnostics have not run.",
         presentationRequest: AppPresentationRequest? = nil,
         profileStore: ProfileStore? = nil,
-        keychainStore: KeychainStoring = SystemKeychainStore()
+        keychainStore: KeychainStoring = SystemKeychainStore(),
+        githubDiscoveryService: GitHubLocalDiscoveryService? = nil
     ) {
         let seedProfiles = profiles ?? AppViewModel.previewProfiles()
         let resolvedProfileStore = profileStore ?? ProfileStore(fileURL: profiles == nil ? AppViewModel.defaultProfilesURL() : AppViewModel.temporaryProfilesURL())
@@ -56,6 +59,8 @@ public final class AppViewModel: ObservableObject {
         self.diagnosticsText = diagnosticsText
         self.settingsMessage = startupMessage
         self.presentationRequest = presentationRequest
+        self.githubDiscoveryService = githubDiscoveryService ?? GitHubLocalDiscoveryService()
+        self.detectedAccounts = []
     }
 
     public var activeProfile: GitProfile? {
@@ -143,6 +148,34 @@ public final class AppViewModel: ObservableObject {
         performSettingsUpdate {
             try profileSettingsManager.resetAccessForSelectedProfile()
         }
+    }
+
+    public func refreshDetectedAccounts() {
+        detectedAccounts = githubDiscoveryService.detect(existingProfiles: profiles)
+        if detectedAccounts.isEmpty {
+            settingsMessage = "No local GitHub account was detected."
+        } else {
+            settingsMessage = "Detected \(detectedAccounts.count) local GitHub account suggestion."
+        }
+    }
+
+    public func scanSelectedFolderForGitHubAccounts(_ folderURL: URL) {
+        detectedAccounts = githubDiscoveryService.detect(in: folderURL, existingProfiles: profiles)
+        if detectedAccounts.isEmpty {
+            settingsMessage = "No GitHub remotes were detected in the selected folder."
+        } else {
+            settingsMessage = "Detected \(detectedAccounts.count) GitHub account suggestion from local data."
+        }
+    }
+
+    public func importDetectedAccount(id: String) {
+        guard let account = detectedAccounts.first(where: { $0.id == id }) else {
+            return
+        }
+        performSettingsUpdate {
+            try profileSettingsManager.importDetectedAccount(account)
+        }
+        detectedAccounts = githubDiscoveryService.detect(existingProfiles: profiles)
     }
 
     private func performSettingsUpdate(_ update: () throws -> Void) {

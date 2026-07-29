@@ -773,6 +773,53 @@ let tests: [(String, () throws -> Void)] = [
         try expect(resetValue == nil, "reset should delete keychain value")
         try expect(manager.profiles[0].httpsCredentialRef == nil, "reset should clear credential reference")
     }),
+    ("app view model refreshes and imports detected github accounts", {
+        try MainActor.assumeIsolated {
+            let temporaryDirectory = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            let ghConfig = temporaryDirectory.appendingPathComponent(".config/gh", isDirectory: true)
+            try FileManager.default.createDirectory(at: ghConfig, withIntermediateDirectories: true)
+            try """
+            github.com:
+                user: pawelkwiatkowski
+            """.write(to: ghConfig.appendingPathComponent("hosts.yml"), atomically: true, encoding: .utf8)
+
+            final class FakeDiscoveryRunner: CommandRunning {
+                func run(_ command: String, arguments: [String], workingDirectory: URL?) throws -> CommandResult {
+                    if command == "git", arguments == ["config", "--global", "--get", "user.name"] {
+                        return CommandResult(exitCode: 0, standardOutput: "Pawel Kwiatkowski\n", standardError: "")
+                    }
+                    if command == "git", arguments == ["config", "--global", "--get", "user.email"] {
+                        return CommandResult(exitCode: 0, standardOutput: "pawel@example.com\n", standardError: "")
+                    }
+                    if command == "ssh", arguments == ["-G", "github.com"] {
+                        return CommandResult(exitCode: 0, standardOutput: "identityfile ~/.ssh/id_ed25519\n", standardError: "")
+                    }
+                    return CommandResult(exitCode: 1, standardOutput: "", standardError: "missing")
+                }
+            }
+
+            let storeURL = temporaryDirectory.appendingPathComponent("profiles.json")
+            let discovery = GitHubLocalDiscoveryService(
+                homeDirectory: temporaryDirectory,
+                commandRunner: FakeDiscoveryRunner()
+            )
+            let viewModel = AppViewModel(
+                profiles: [],
+                profileStore: ProfileStore(fileURL: storeURL),
+                keychainStore: InMemoryKeychainStore(),
+                githubDiscoveryService: discovery
+            )
+
+            viewModel.refreshDetectedAccounts()
+            try expect(viewModel.detectedAccounts.count == 1, "view model should expose detected account")
+
+            viewModel.importDetectedAccount(id: "github-pawelkwiatkowski")
+            try expect(viewModel.profiles.count == 1, "import should create profile")
+            try expect(viewModel.profiles[0].displayName == "pawelkwiatkowski", "profile should use detected username")
+            try expect(viewModel.detectedAccounts.isEmpty, "import should refresh suggestions and remove duplicate")
+        }
+    }),
     ("run local diagnostics requests settings presentation", {
         try MainActor.assumeIsolated {
             let viewModel = AppViewModel(profiles: [])
