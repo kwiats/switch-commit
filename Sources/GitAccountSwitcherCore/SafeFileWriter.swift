@@ -17,7 +17,8 @@ public struct SafeFileWriter {
 
     public func write(_ content: String, to targetURL: URL) throws {
         let standardizedTarget = targetURL.standardizedFileURL
-        guard isAllowed(standardizedTarget) else {
+        guard isAllowed(standardizedTarget),
+              isAllowedResolvedLocation(standardizedTarget) else {
             throw GitAccountSwitcherError.writeOutsideManagedRoots
         }
 
@@ -36,6 +37,18 @@ public struct SafeFileWriter {
     private func isAllowed(_ targetURL: URL) -> Bool {
         allowedRoots.contains { root in
             targetURL.path == root.path || targetURL.path.hasPrefix(root.path + "/")
+        }
+    }
+
+    private func isAllowedResolvedLocation(_ targetURL: URL) -> Bool {
+        let resolvedParent = targetURL
+            .deletingLastPathComponent()
+            .resolvingSymlinksInPath()
+            .standardizedFileURL
+        let resolvedTarget = resolvedParent.appendingPathComponent(targetURL.lastPathComponent)
+        return allowedRoots.contains { root in
+            let resolvedRoot = root.resolvingSymlinksInPath().standardizedFileURL
+            return resolvedTarget.path == resolvedRoot.path || resolvedTarget.path.hasPrefix(resolvedRoot.path + "/")
         }
     }
 

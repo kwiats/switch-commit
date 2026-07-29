@@ -1,4 +1,5 @@
 import Foundation
+import GitAccountSwitcherAppLogic
 import GitAccountSwitcherCore
 
 enum TestFailure: Error, CustomStringConvertible {
@@ -56,6 +57,47 @@ let tests: [(String, () throws -> Void)] = [
             )
         }, "empty git user name should be rejected")
     }),
+    ("profile rejects config injection characters", {
+        try expectThrows(GitAccountSwitcherError.unsafeConfigValue, {
+            _ = try GitProfile(
+                id: "personal",
+                displayName: "Personal",
+                gitUserName: "Personal User\n[alias]\n    leak = !cat ~/.ssh/id_ed25519",
+                gitUserEmail: "me@example.com",
+                sshKeyPath: "/Users/me/.ssh/id_ed25519",
+                hosts: ["github.com"],
+                httpsCredentialRef: nil,
+                isDefault: true
+            )
+        }, "newlines in git user name should be rejected")
+
+        try expectThrows(GitAccountSwitcherError.unsafeConfigValue, {
+            _ = try GitProfile(
+                id: "personal",
+                displayName: "Personal",
+                gitUserName: "Personal User",
+                gitUserEmail: "me@example.com",
+                sshKeyPath: "/Users/me/.ssh/id_ed25519",
+                hosts: ["github.com\n    ProxyCommand sh -c env"],
+                httpsCredentialRef: nil,
+                isDefault: true
+            )
+        }, "newlines in ssh hosts should be rejected")
+    }),
+    ("profile rejects identifiers that can escape managed filenames", {
+        try expectThrows(GitAccountSwitcherError.unsafeIdentifier, {
+            _ = try GitProfile(
+                id: "../work",
+                displayName: "Work",
+                gitUserName: "Work User",
+                gitUserEmail: "work@example.com",
+                sshKeyPath: "/Users/me/.ssh/id_work",
+                hosts: ["github.com"],
+                httpsCredentialRef: nil,
+                isDefault: false
+            )
+        }, "profile ids should be safe path components")
+    }),
     ("profile store round trips metadata without secret payloads", {
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -72,7 +114,7 @@ let tests: [(String, () throws -> Void)] = [
             httpsCredentialRef: "git-account-switcher.work.https",
             isDefault: false
         )
-        let rule = FolderRule(
+        let rule = try FolderRule(
             id: "work-folder",
             path: "/Users/me/Work",
             profileId: "work",
@@ -90,6 +132,27 @@ let tests: [(String, () throws -> Void)] = [
         try expect(loaded.profiles == [profile], "profiles should round trip")
         try expect(loaded.rules == [rule], "rules should round trip")
     }),
+    ("folder rule rejects unsafe config paths and identifiers", {
+        try expectThrows(GitAccountSwitcherError.unsafeConfigValue, {
+            _ = try FolderRule(
+                id: "work-folder",
+                path: "/Users/me/Work\n[alias]\n    leak = !env",
+                profileId: "work",
+                matchMode: .folderTree,
+                enabled: true
+            )
+        }, "folder paths should not allow newline injection")
+
+        try expectThrows(GitAccountSwitcherError.unsafeIdentifier, {
+            _ = try FolderRule(
+                id: "work-folder",
+                path: "/Users/me/Work",
+                profileId: "../work",
+                matchMode: .folderTree,
+                enabled: true
+            )
+        }, "folder rule profile ids should be safe path components")
+    }),
     ("git config generator emits profile and ordered includes", {
         let profile = try GitProfile(
             id: "work",
@@ -106,7 +169,7 @@ let tests: [(String, () throws -> Void)] = [
         try expect(profileConfig.contains("[user]"), "profile config should contain user section")
         try expect(profileConfig.contains("name = Work User"), "profile config should contain name")
         try expect(profileConfig.contains("email = work@example.com"), "profile config should contain email")
-        try expect(profileConfig.contains("sshCommand = ssh -i ~/.ssh/id_work -F ~/.ssh/config"), "profile config should contain ssh command")
+        try expect(profileConfig.contains("sshCommand = ssh -i '~/.ssh/id_work' -F ~/.ssh/config"), "profile config should contain ssh command")
 
         let includeConfig = generator.rootIncludeConfig(
             globalConfigPath: "~/.config/git-account-switcher/global.gitconfig",
@@ -116,10 +179,24 @@ let tests: [(String, () throws -> Void)] = [
         let rulesRange = try expectRange(of: "rules.gitconfig", in: includeConfig)
         try expect(globalRange.lowerBound < rulesRange.lowerBound, "global include should come before folder rules")
 
-        let rule = FolderRule(id: "work", path: "/Users/me/Work", profileId: "work", matchMode: .folderTree, enabled: true)
+        let rule = try FolderRule(id: "work", path: "/Users/me/Work", profileId: "work", matchMode: .folderTree, enabled: true)
         let rulesConfig = generator.rulesConfig(rules: [rule], profilesDirectory: "~/.config/git-account-switcher/profiles")
         try expect(rulesConfig.contains("[includeIf \"gitdir:/Users/me/Work/**\"]"), "folder tree rule should match children")
         try expect(rulesConfig.contains("path = ~/.config/git-account-switcher/profiles/work.gitconfig"), "rule should include profile config")
+    }),
+    ("git config generator shell quotes ssh identity path", {
+        let profile = try GitProfile(
+            id: "work",
+            displayName: "Work",
+            gitUserName: "Work User",
+            gitUserEmail: "work@example.com",
+            sshKeyPath: "/Users/me/My Keys/id_work'; env",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: false
+        )
+        let config = GitConfigGenerator().profileConfig(for: profile)
+        try expect(config.contains("sshCommand = ssh -i '/Users/me/My Keys/id_work'\\''; env' -F ~/.ssh/config"), "ssh key path should be shell quoted")
     }),
     ("ssh config generator emits managed identity blocks", {
         let profile = try GitProfile(
@@ -159,6 +236,23 @@ let tests: [(String, () throws -> Void)] = [
         try expectThrows(GitAccountSwitcherError.writeOutsideManagedRoots, {
             try writer.write("bad", to: outside)
         }, "outside writes should be rejected")
+    }),
+    ("safe file writer rejects writes through symlinked directories", {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let managed = root.appendingPathComponent("managed", isDirectory: true)
+        let outside = root.appendingPathComponent("outside", isDirectory: true)
+        let backups = root.appendingPathComponent("backups", isDirectory: true)
+        try FileManager.default.createDirectory(at: managed, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
+        let linked = managed.appendingPathComponent("linked", isDirectory: true)
+        try FileManager.default.createSymbolicLink(at: linked, withDestinationURL: outside)
+
+        let writer = SafeFileWriter(allowedRoots: [managed], backupDirectory: backups)
+        let target = linked.appendingPathComponent("escaped.gitconfig")
+        try expectThrows(GitAccountSwitcherError.writeOutsideManagedRoots, {
+            try writer.write("bad", to: target)
+        }, "symlinked parent directories should not escape managed roots")
+        try expect(!FileManager.default.fileExists(atPath: outside.appendingPathComponent("escaped.gitconfig").path), "outside file should not be written")
     }),
     ("diagnostics run local git config commands and report warnings", {
         final class FakeRunner: CommandRunning {
@@ -302,6 +396,30 @@ let tests: [(String, () throws -> Void)] = [
         let resetValue = try keychain.read(identifier)
         try expect(resetValue == nil, "reset should delete keychain value")
         try expect(manager.profiles[0].httpsCredentialRef == nil, "reset should clear credential reference")
+    }),
+    ("run local diagnostics requests settings presentation", {
+        try MainActor.assumeIsolated {
+            let viewModel = AppViewModel(profiles: [])
+            viewModel.runLocalDiagnostics()
+            try expect(
+                viewModel.presentationRequest == .settings,
+                "diagnostics should request visible settings presentation"
+            )
+            try expect(
+                viewModel.diagnosticsText.contains("No network checks run automatically"),
+                "diagnostics should explain that it stays local"
+            )
+        }
+    }),
+    ("settings action requests settings presentation", {
+        try MainActor.assumeIsolated {
+            let viewModel = AppViewModel(profiles: [])
+            viewModel.requestSettingsPresentation()
+            try expect(
+                viewModel.presentationRequest == .settings,
+                "settings action should request visible settings presentation"
+            )
+        }
     })
 ]
 
