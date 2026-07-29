@@ -63,6 +63,38 @@ let tests: [(String, () throws -> Void)] = [
         try expect(account.sources.contains(.githubCliHostsFile), "sources should include gh hosts file")
         try expect(account.hosts == ["github.com"], "hosts should contain github.com")
     }),
+    ("github cli hosts parser extracts username and ignores token", {
+        let yaml = """
+        github.com:
+            oauth_token: super-secret-token
+            user: pawelkwiatkowski
+            git_protocol: ssh
+        """
+
+        let signals = GitHubCLIHostsParser().signals(from: yaml)
+
+        try expect(signals.count == 1, "parser should emit one signal")
+        try expect(signals[0].username == "pawelkwiatkowski", "parser should extract user")
+        try expect(signals[0].confidence == .high, "gh hosts username should be high confidence")
+        try expect(signals[0].source == .githubCliHostsFile, "source should be gh hosts file")
+        try expect(signals[0].warnings.isEmpty, "valid hosts file should not warn")
+        try expect(!String(describing: signals).contains("super-secret-token"), "token should never appear in parsed output")
+    }),
+    ("github cli hosts parser returns warning for github host without username", {
+        let yaml = """
+        github.com:
+            oauth_token: super-secret-token
+            git_protocol: ssh
+        """
+
+        let signals = GitHubCLIHostsParser().signals(from: yaml)
+
+        try expect(signals.count == 1, "parser should emit one weak signal")
+        try expect(signals[0].username == nil, "missing username should remain nil")
+        try expect(signals[0].confidence == .medium, "configured gh host should be medium confidence")
+        try expect(signals[0].warnings.contains("GitHub CLI host is configured without a visible username."), "missing username should warn")
+        try expect(!String(describing: signals).contains("super-secret-token"), "token should be ignored")
+    }),
     ("profile rejects empty commit identity", {
         try expectThrows(GitAccountSwitcherError.emptyGitUserName, {
             _ = try GitProfile(
