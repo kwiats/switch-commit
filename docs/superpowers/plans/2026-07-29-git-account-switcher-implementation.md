@@ -6,7 +6,7 @@
 
 **Architecture:** Use a Swift Package with a testable `GitAccountSwitcherCore` library and a SwiftUI/AppKit `GitAccountSwitcherApp` executable. The core owns profile models, deterministic config generation, backup-aware file writes, and diagnostics with injectable command execution; the UI only calls core APIs and never talks to the network directly.
 
-**Tech Stack:** Swift 6.2, Swift Package Manager, SwiftUI `MenuBarExtra`, Foundation, Security framework for Keychain references, XCTest.
+**Tech Stack:** Swift 6.2, Swift Package Manager, SwiftUI `MenuBarExtra`, Foundation, Security framework for Keychain references, custom local test runner executable.
 
 ---
 
@@ -23,7 +23,7 @@
 - `Sources/GitAccountSwitcherCore/KeychainStore.swift`: Keychain wrapper storing secret payloads by profile-owned identifiers.
 - `Sources/GitAccountSwitcherApp/GitAccountSwitcherApp.swift`: macOS menu bar app entry point.
 - `Sources/GitAccountSwitcherApp/AppViewModel.swift`: UI state and commands.
-- `Tests/GitAccountSwitcherCoreTests/*.swift`: focused XCTest coverage for each core unit.
+- `Sources/GitAccountSwitcherCoreTestRunner/main.swift`: focused local test runner for core behavior because this Command Line Tools install does not expose XCTest or Swift Testing.
 
 ## Security Invariants
 
@@ -41,17 +41,19 @@
 - Create: `README.md`
 - Create: `Sources/GitAccountSwitcherCore/Models.swift`
 - Create: `Sources/GitAccountSwitcherApp/GitAccountSwitcherApp.swift`
-- Create: `Tests/GitAccountSwitcherCoreTests/ModelsTests.swift`
+- Create: `Sources/GitAccountSwitcherCoreTestRunner/main.swift`
 
 - [ ] **Step 1: Write the failing model test**
 
 ```swift
-import XCTest
+import Testing
 @testable import GitAccountSwitcherCore
 
-final class ModelsTests: XCTestCase {
-    func testProfileRejectsEmptyCommitIdentity() throws {
-        XCTAssertThrowsError(
+@Suite("Models")
+struct ModelsTests {
+    @Test("Profile rejects empty commit identity")
+    func profileRejectsEmptyCommitIdentity() throws {
+        #expect(throws: GitAccountSwitcherError.emptyGitUserName) {
             try GitProfile(
                 id: "personal",
                 displayName: "Personal",
@@ -62,7 +64,7 @@ final class ModelsTests: XCTestCase {
                 httpsCredentialRef: nil,
                 isDefault: true
             )
-        )
+        }
     }
 }
 ```
