@@ -599,6 +599,9 @@ let tests: [(String, () throws -> Void)] = [
         try expectThrows(GitAccountSwitcherError.emptyGitUserEmail, {
             try manager.importDetectedAccount(account)
         }, "incomplete detected account should not be saved as profile")
+        try expect(manager.profiles.isEmpty, "incomplete detected account should not mutate profiles")
+        let loaded = try ProfileStore(fileURL: storeURL).load()
+        try expect(loaded.profiles.isEmpty, "incomplete detected account should not persist a profile")
     }),
     ("profile settings manager updates active display name", {
         let temporaryDirectory = FileManager.default.temporaryDirectory
