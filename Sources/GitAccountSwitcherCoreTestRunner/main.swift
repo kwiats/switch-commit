@@ -48,6 +48,40 @@ let tests: [(String, () throws -> Void)] = [
                 isDefault: true
             )
         }, "empty git user name should be rejected")
+    }),
+    ("profile store round trips metadata without secret payloads", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        let storeURL = temporaryDirectory.appendingPathComponent("profiles.json")
+        let store = ProfileStore(fileURL: storeURL)
+        let profile = try GitProfile(
+            id: "work",
+            displayName: "Work",
+            gitUserName: "Work User",
+            gitUserEmail: "work@example.com",
+            sshKeyPath: "/Users/me/.ssh/id_work",
+            hosts: ["github.com"],
+            httpsCredentialRef: "git-account-switcher.work.https",
+            isDefault: false
+        )
+        let rule = FolderRule(
+            id: "work-folder",
+            path: "/Users/me/Work",
+            profileId: "work",
+            matchMode: .folderTree,
+            enabled: true
+        )
+
+        try store.save(ProfileStoreData(profiles: [profile], rules: [rule]))
+
+        let raw = try String(contentsOf: storeURL, encoding: .utf8)
+        try expect(raw.contains("git-account-switcher.work.https"), "credential reference should be stored")
+        try expect(!raw.contains("super-secret-token"), "secret payload should not be stored")
+
+        let loaded = try store.load()
+        try expect(loaded.profiles == [profile], "profiles should round trip")
+        try expect(loaded.rules == [rule], "rules should round trip")
     })
 ]
 

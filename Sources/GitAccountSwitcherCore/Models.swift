@@ -6,6 +6,7 @@ public enum GitAccountSwitcherError: Error, Equatable {
     case emptyGitUserEmail
     case emptySSHKeyPath
     case emptyHost
+    case emptyFolderRulePath
 }
 
 public struct GitProfile: Codable, Equatable, Identifiable, Sendable {
@@ -52,5 +53,42 @@ public struct GitProfile: Codable, Equatable, Identifiable, Sendable {
         self.hosts = hosts
         self.httpsCredentialRef = httpsCredentialRef
         self.isDefault = isDefault
+    }
+}
+
+public enum FolderRuleMatchMode: String, Codable, Equatable, Sendable {
+    case folderTree
+    case singleRepo
+}
+
+public struct FolderRule: Codable, Equatable, Identifiable, Sendable {
+    public let id: String
+    public var path: String
+    public var profileId: String
+    public var matchMode: FolderRuleMatchMode
+    public var enabled: Bool
+
+    public init(
+        id: String,
+        path: String,
+        profileId: String,
+        matchMode: FolderRuleMatchMode,
+        enabled: Bool
+    ) {
+        self.id = id
+        self.path = path
+        self.profileId = profileId
+        self.matchMode = matchMode
+        self.enabled = enabled
+    }
+}
+
+public struct ProfileStoreData: Codable, Equatable, Sendable {
+    public var profiles: [GitProfile]
+    public var rules: [FolderRule]
+
+    public init(profiles: [GitProfile] = [], rules: [FolderRule] = []) {
+        self.profiles = profiles
+        self.rules = rules
     }
 }
