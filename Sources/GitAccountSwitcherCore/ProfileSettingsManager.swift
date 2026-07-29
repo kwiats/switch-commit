@@ -104,14 +104,19 @@ public final class ProfileSettingsManager {
             isDefault: profiles.isEmpty
         )
 
-        profiles.append(profile)
-        selectedProfileId = profile.id
-        if activeProfileId == nil {
-            activeProfileId = profile.id
+        var updatedProfiles = profiles
+        updatedProfiles.append(profile)
+        let updatedActiveProfileId = activeProfileId ?? profile.id
+        for index in updatedProfiles.indices {
+            updatedProfiles[index].isDefault = updatedProfiles[index].id == updatedActiveProfileId
         }
-        normalizeDefaultFlags()
+
+        try profileStore.save(ProfileStoreData(profiles: updatedProfiles, rules: rules))
+
+        profiles = updatedProfiles
+        selectedProfileId = profile.id
+        activeProfileId = updatedActiveProfileId
         statusMessage = "Added detected GitHub account \(profile.displayName)."
-        try persist()
     }
 
     public func deleteSelectedProfile() throws {

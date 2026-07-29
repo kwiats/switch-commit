@@ -42,6 +42,15 @@ func expectThrows<T: Error & Equatable>(
     throw TestFailure.expectationFailed("\(message): expected error \(expectedError)")
 }
 
+func expectThrowsAny(_ operation: () throws -> Void, _ message: String) throws {
+    do {
+        try operation()
+    } catch {
+        return
+    }
+    throw TestFailure.expectationFailed("\(message): expected an error")
+}
+
 extension DetectedGitAccount {
     var displaySummary: String {
         username ?? gitUserName ?? gitUserEmail ?? "GitHub Account"
@@ -569,10 +578,28 @@ let tests: [(String, () throws -> Void)] = [
         try manager.importDetectedAccount(account)
 
         try expect(manager.profiles.count == 1, "import should create one profile")
-        try expect(manager.profiles[0].id == "github-pawelkwiatkowski", "profile id should use detected id")
-        try expect(manager.profiles[0].displayName == "pawelkwiatkowski", "display name should prefer username")
-        try expect(manager.profiles[0].httpsCredentialRef == nil, "import must not store credential refs")
+        let profile = manager.profiles[0]
+        try expect(profile.id == "github-pawelkwiatkowski", "profile id should use detected id")
+        try expect(profile.displayName == "pawelkwiatkowski", "display name should prefer username")
+        try expect(profile.gitUserName == "Pawel Kwiatkowski", "import should map git user name")
+        try expect(profile.gitUserEmail == "pawel@example.com", "import should map git user email")
+        try expect(profile.sshKeyPath == "~/.ssh/id_ed25519", "import should map ssh key path")
+        try expect(profile.hosts == ["github.com"], "import should map hosts")
+        try expect(profile.httpsCredentialRef == nil, "import must not store credential refs")
+        try expect(profile.isDefault, "first imported profile should be default")
         try expect(manager.activeProfileId == "github-pawelkwiatkowski", "first imported profile should become active")
+        try expect(manager.selectedProfileId == "github-pawelkwiatkowski", "imported profile should become selected")
+        try expect(
+            manager.statusMessage == "Added detected GitHub account pawelkwiatkowski.",
+            "import should report the added account"
+        )
+        let loaded = try ProfileStore(fileURL: storeURL).load()
+        try expect(loaded.profiles == [profile], "imported profile should persist all mapped values")
+        try expect(loaded.profiles[0].gitUserName == "Pawel Kwiatkowski", "persisted profile should retain git user name")
+        try expect(loaded.profiles[0].gitUserEmail == "pawel@example.com", "persisted profile should retain git user email")
+        try expect(loaded.profiles[0].sshKeyPath == "~/.ssh/id_ed25519", "persisted profile should retain ssh key path")
+        try expect(loaded.profiles[0].hosts == ["github.com"], "persisted profile should retain hosts")
+        try expect(loaded.profiles[0].isDefault, "persisted imported profile should be default")
     }),
     ("profile settings manager refuses incomplete detected github account", {
         let temporaryDirectory = FileManager.default.temporaryDirectory
@@ -602,6 +629,57 @@ let tests: [(String, () throws -> Void)] = [
         try expect(manager.profiles.isEmpty, "incomplete detected account should not mutate profiles")
         let loaded = try ProfileStore(fileURL: storeURL).load()
         try expect(loaded.profiles.isEmpty, "incomplete detected account should not persist a profile")
+    }),
+    ("profile settings manager preserves state when detected account persistence fails", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: temporaryDirectory,
+            withIntermediateDirectories: true
+        )
+        let storageURL = temporaryDirectory.appendingPathComponent("storage", isDirectory: true)
+        let storeURL = storageURL.appendingPathComponent("profiles.json")
+        let existingProfile = try GitProfile(
+            id: "existing",
+            displayName: "Existing",
+            gitUserName: "Existing User",
+            gitUserEmail: "existing@example.com",
+            sshKeyPath: "~/.ssh/id_existing",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let manager = try ProfileSettingsManager(
+            profileStore: ProfileStore(fileURL: storeURL),
+            keychainStore: InMemoryKeychainStore(),
+            seedProfiles: [existingProfile]
+        )
+        try FileManager.default.removeItem(at: storageURL)
+        try Data("not a directory".utf8).write(to: storageURL)
+        let account = DetectedGitAccount(
+            id: "github-failing-import",
+            provider: .github,
+            username: "failing-import",
+            gitUserName: "Failing Import",
+            gitUserEmail: "failing@example.com",
+            sshKeyPath: "~/.ssh/id_failing",
+            hosts: ["github.com"],
+            confidence: .high,
+            sources: [.githubCliHostsFile],
+            warnings: []
+        )
+        let originalProfiles = manager.profiles
+        let originalSelectedProfileId = manager.selectedProfileId
+        let originalActiveProfileId = manager.activeProfileId
+        let originalStatusMessage = manager.statusMessage
+
+        try expectThrowsAny({
+            try manager.importDetectedAccount(account)
+        }, "persistence failure should be reported")
+        try expect(manager.profiles == originalProfiles, "failed import should not mutate profiles")
+        try expect(manager.selectedProfileId == originalSelectedProfileId, "failed import should preserve selection")
+        try expect(manager.activeProfileId == originalActiveProfileId, "failed import should preserve active profile")
+        try expect(manager.statusMessage == originalStatusMessage, "failed import should preserve status")
     }),
     ("profile settings manager updates active display name", {
         let temporaryDirectory = FileManager.default.temporaryDirectory
