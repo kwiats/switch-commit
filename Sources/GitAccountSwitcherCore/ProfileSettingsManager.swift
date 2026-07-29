@@ -85,6 +85,40 @@ public final class ProfileSettingsManager {
         try persist()
     }
 
+    public func importDetectedAccount(_ account: DetectedGitAccount) throws {
+        let displayName = account.username ?? account.gitUserName ?? "GitHub Account"
+        let gitUserName = account.gitUserName ?? account.username ?? ""
+        let gitUserEmail = account.gitUserEmail ?? ""
+        let sshKeyPath = account.sshKeyPath ?? "~/.ssh/id_ed25519"
+        let hosts = account.hosts.isEmpty ? ["github.com"] : account.hosts
+        let profileId = uniqueProfileId(base: account.id)
+
+        let profile = try GitProfile(
+            id: profileId,
+            displayName: displayName,
+            gitUserName: gitUserName,
+            gitUserEmail: gitUserEmail,
+            sshKeyPath: sshKeyPath,
+            hosts: hosts,
+            httpsCredentialRef: nil,
+            isDefault: profiles.isEmpty
+        )
+
+        var updatedProfiles = profiles
+        updatedProfiles.append(profile)
+        let updatedActiveProfileId = activeProfileId ?? profile.id
+        for index in updatedProfiles.indices {
+            updatedProfiles[index].isDefault = updatedProfiles[index].id == updatedActiveProfileId
+        }
+
+        try profileStore.save(ProfileStoreData(profiles: updatedProfiles, rules: rules))
+
+        profiles = updatedProfiles
+        selectedProfileId = profile.id
+        activeProfileId = updatedActiveProfileId
+        statusMessage = "Added detected GitHub account \(profile.displayName)."
+    }
+
     public func deleteSelectedProfile() throws {
         guard let selectedProfileId else {
             return
