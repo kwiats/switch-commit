@@ -42,6 +42,12 @@ func expectThrows<T: Error & Equatable>(
     throw TestFailure.expectationFailed("\(message): expected error \(expectedError)")
 }
 
+extension DetectedGitAccount {
+    var displaySummary: String {
+        username ?? gitUserName ?? gitUserEmail ?? "GitHub Account"
+    }
+}
+
 let tests: [(String, () throws -> Void)] = [
     ("detected git account exposes stable local-only metadata", {
         let account = DetectedGitAccount(
@@ -122,6 +128,42 @@ let tests: [(String, () throws -> Void)] = [
         try expect(signal?.hosts == ["github.com"], "remote signal should identify github.com")
         try expect(signal?.username == nil, "remote owner should not become a username")
         try expect(signal?.warnings == ["Remote owner 'pawelkwiatkowski' may be a user or an organization."], "remote signal should warn about owner ambiguity")
+    }),
+    ("detected account merger combines github signals into one candidate", {
+        let signals = [
+            DetectionSignal(provider: .github, username: "pawelkwiatkowski", confidence: .high, source: .githubCliHostsFile),
+            DetectionSignal(provider: .github, gitUserName: "Pawel Kwiatkowski", gitUserEmail: "pawel@example.com", confidence: .low, source: .globalGitConfig),
+            DetectionSignal(provider: .github, sshKeyPath: "~/.ssh/id_ed25519", confidence: .medium, source: .sshResolvedConfig)
+        ]
+
+        let accounts = DetectedAccountMerger().merge(signals: signals, existingProfiles: [])
+
+        try expect(accounts.count == 1, "signals should merge into one account")
+        try expect(accounts[0].id == "github-pawelkwiatkowski", "username should drive stable id")
+        try expect(accounts[0].displaySummary == "pawelkwiatkowski", "display summary should prefer username")
+        try expect(accounts[0].gitUserEmail == "pawel@example.com", "git email should merge")
+        try expect(accounts[0].sshKeyPath == "~/.ssh/id_ed25519", "ssh path should merge")
+        try expect(accounts[0].confidence == .high, "highest confidence should win")
+        try expect(accounts[0].sources == [.githubCliHostsFile, .globalGitConfig, .sshResolvedConfig], "sources should be stable and unique")
+    }),
+    ("detected account merger skips existing github profile duplicates", {
+        let existing = try GitProfile(
+            id: "personal",
+            displayName: "pawelkwiatkowski",
+            gitUserName: "Pawel Kwiatkowski",
+            gitUserEmail: "pawel@example.com",
+            sshKeyPath: "~/.ssh/id_ed25519",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let signals = [
+            DetectionSignal(provider: .github, username: "pawelkwiatkowski", gitUserEmail: "pawel@example.com", confidence: .high, source: .githubCliHostsFile)
+        ]
+
+        let accounts = DetectedAccountMerger().merge(signals: signals, existingProfiles: [existing])
+
+        try expect(accounts.isEmpty, "duplicate existing github profile should suppress suggestion")
     }),
     ("profile rejects empty commit identity", {
         try expectThrows(GitAccountSwitcherError.emptyGitUserName, {
