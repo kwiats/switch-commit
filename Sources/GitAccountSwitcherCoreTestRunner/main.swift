@@ -102,11 +102,26 @@ let tests: [(String, () throws -> Void)] = [
         let https = parser.githubRemote(from: "https://github.com/pawelkwiatkowski/project.git")
         let sshURL = parser.githubRemote(from: "ssh://git@github.com/pawelkwiatkowski/project.git")
         let nonGitHub = parser.githubRemote(from: "git@gitlab.com:pawelkwiatkowski/project.git")
+        let emptyPathComponent = parser.githubRemote(from: "git@github.com:pawelkwiatkowski//project.git")
+        let extendedPath = parser.githubRemote(from: "https://github.com/pawelkwiatkowski/project/issues")
+        let query = parser.githubRemote(from: "https://github.com/pawelkwiatkowski/project.git?token=x")
 
         try expect(scp == GitHubRemoteAccount(owner: "pawelkwiatkowski", repository: "project"), "scp-like ssh remote should parse")
         try expect(https == GitHubRemoteAccount(owner: "pawelkwiatkowski", repository: "project"), "https remote should parse")
         try expect(sshURL == GitHubRemoteAccount(owner: "pawelkwiatkowski", repository: "project"), "ssh url remote should parse")
         try expect(nonGitHub == nil, "non-github remote should not parse")
+        try expect(emptyPathComponent == nil, "empty path component should not parse")
+        try expect(extendedPath == nil, "extended repository path should not parse")
+        try expect(query == nil, "repository query should not parse")
+    }),
+    ("git remote parser emits a privacy-safe signal", {
+        let signal = GitRemoteParser().signal(from: "https://github.com/pawelkwiatkowski/project.git")
+
+        try expect(signal?.confidence == .medium, "remote signal should have medium confidence")
+        try expect(signal?.source == .repositoryRemote, "remote signal should identify repository remote source")
+        try expect(signal?.hosts == ["github.com"], "remote signal should identify github.com")
+        try expect(signal?.username == nil, "remote owner should not become a username")
+        try expect(signal?.warnings == ["Remote owner 'pawelkwiatkowski' may be a user or an organization."], "remote signal should warn about owner ambiguity")
     }),
     ("profile rejects empty commit identity", {
         try expectThrows(GitAccountSwitcherError.emptyGitUserName, {

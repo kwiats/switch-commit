@@ -33,8 +33,11 @@ public struct GitRemoteParser: Sendable {
 
     private func parsePath(_ path: String) -> GitHubRemoteAccount? {
         let cleaned = path.hasSuffix(".git") ? String(path.dropLast(4)) : path
-        let parts = cleaned.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
-        guard parts.count >= 2, !parts[0].isEmpty, !parts[1].isEmpty else {
+        guard !cleaned.contains("?"), !cleaned.contains("#") else {
+            return nil
+        }
+        let parts = cleaned.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
+        guard parts.count == 2, !parts[0].isEmpty, !parts[1].isEmpty else {
             return nil
         }
         return GitHubRemoteAccount(owner: parts[0], repository: parts[1])
