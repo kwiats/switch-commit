@@ -180,6 +180,18 @@ let tests: [(String, () throws -> Void)] = [
         try expect(runner.commands.allSatisfy { $0.first == "git" }, "diagnostics should only call git")
         try expect(runner.commands.allSatisfy { $0.contains("--show-origin") }, "diagnostics should show origin")
         try expect(report.warnings.contains { $0.contains("core.sshCommand") }, "failed command should become warning")
+    }),
+    ("keychain identifiers are app and profile scoped", {
+        let identifier = KeychainCredentialIdentifier(profileId: "work", purpose: "https")
+        try expect(identifier.rawValue == "git-account-switcher.work.https", "identifier should be namespaced")
+
+        let store = InMemoryKeychainStore()
+        try store.save("token-value", for: identifier)
+        let savedValue = try store.read(identifier)
+        try expect(savedValue == "token-value", "fake keychain should read saved value")
+        try store.delete(identifier)
+        let deletedValue = try store.read(identifier)
+        try expect(deletedValue == nil, "delete should use the same identifier")
     })
 ]
 
