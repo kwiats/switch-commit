@@ -9,7 +9,7 @@ public struct GitConfigGenerator: Sendable {
             name = \(escape(profile.gitUserName))
             email = \(escape(profile.gitUserEmail))
         [core]
-            sshCommand = ssh -i \(escape(profile.sshKeyPath)) -F ~/.ssh/config
+            sshCommand = ssh -i \(shellQuote(profile.sshKeyPath)) -F ~/.ssh/config
 
         """
     }
@@ -50,5 +50,9 @@ public struct GitConfigGenerator: Sendable {
         value
             .replacingOccurrences(of: "\\", with: "\\\\")
             .replacingOccurrences(of: "\"", with: "\\\"")
+    }
+
+    private func shellQuote(_ value: String) -> String {
+        "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
     }
 }
