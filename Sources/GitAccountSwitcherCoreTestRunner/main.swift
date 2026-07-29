@@ -1,4 +1,5 @@
 import Foundation
+import GitAccountSwitcherAppLogic
 import GitAccountSwitcherCore
 
 enum TestFailure: Error, CustomStringConvertible {
@@ -192,6 +193,20 @@ let tests: [(String, () throws -> Void)] = [
         try store.delete(identifier)
         let deletedValue = try store.read(identifier)
         try expect(deletedValue == nil, "delete should use the same identifier")
+    }),
+    ("run local diagnostics requests settings presentation", {
+        try MainActor.assumeIsolated {
+            let viewModel = AppViewModel(profiles: [])
+            viewModel.runLocalDiagnostics()
+            try expect(
+                viewModel.presentationRequest == .settings,
+                "diagnostics should request visible settings presentation"
+            )
+            try expect(
+                viewModel.diagnosticsText.contains("No network checks run automatically"),
+                "diagnostics should explain that it stays local"
+            )
+        }
     })
 ]
 

@@ -12,6 +12,10 @@ let package = Package(
             name: "GitAccountSwitcherCore",
             targets: ["GitAccountSwitcherCore"]
         ),
+        .library(
+            name: "GitAccountSwitcherAppLogic",
+            targets: ["GitAccountSwitcherAppLogic"]
+        ),
         .executable(
             name: "GitAccountSwitcherApp",
             targets: ["GitAccountSwitcherApp"]
@@ -25,13 +29,23 @@ let package = Package(
         .target(
             name: "GitAccountSwitcherCore"
         ),
-        .executableTarget(
-            name: "GitAccountSwitcherApp",
+        .target(
+            name: "GitAccountSwitcherAppLogic",
             dependencies: ["GitAccountSwitcherCore"]
         ),
         .executableTarget(
+            name: "GitAccountSwitcherApp",
+            dependencies: [
+                "GitAccountSwitcherAppLogic",
+                "GitAccountSwitcherCore"
+            ]
+        ),
+        .executableTarget(
             name: "GitAccountSwitcherCoreTestRunner",
-            dependencies: ["GitAccountSwitcherCore"]
+            dependencies: [
+                "GitAccountSwitcherAppLogic",
+                "GitAccountSwitcherCore"
+            ]
         )
     ]
 )

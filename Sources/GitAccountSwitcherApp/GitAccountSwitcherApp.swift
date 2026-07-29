@@ -1,9 +1,11 @@
+import GitAccountSwitcherAppLogic
 import GitAccountSwitcherCore
 import SwiftUI
 
 @main
 struct GitAccountSwitcherApp: App {
     @StateObject private var viewModel = AppViewModel()
+    @State private var settingsWindowController = SettingsWindowController()
 
     var body: some Scene {
         MenuBarExtra("Git Account Switcher", systemImage: "person.crop.circle.badge.checkmark") {
@@ -21,30 +23,23 @@ struct GitAccountSwitcherApp: App {
             Divider()
             Button("Run Local Diagnostics") {
                 viewModel.runLocalDiagnostics()
+                presentRequestedWindow()
             }
             Button("Settings") {
-                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                viewModel.requestSettingsPresentation()
+                presentRequestedWindow()
             }
             Button("Quit") {
                 NSApplication.shared.terminate(nil)
             }
         }
+    }
 
-        Settings {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Git Account Switcher")
-                    .font(.headline)
-                if let activeProfile = viewModel.activeProfile {
-                    Text("Active profile: \(activeProfile.displayName)")
-                    Text(activeProfile.gitUserEmail)
-                        .foregroundStyle(.secondary)
-                }
-                Divider()
-                Text(viewModel.diagnosticsText)
-                    .foregroundStyle(.secondary)
-            }
-            .padding()
-            .frame(width: 420, height: 220)
+    private func presentRequestedWindow() {
+        guard viewModel.presentationRequest == .settings else {
+            return
         }
+        settingsWindowController.show(viewModel: viewModel)
+        viewModel.clearPresentationRequest()
     }
 }
