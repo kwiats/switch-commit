@@ -95,6 +95,19 @@ let tests: [(String, () throws -> Void)] = [
         try expect(signals[0].warnings.contains("GitHub CLI host is configured without a visible username."), "missing username should warn")
         try expect(!String(describing: signals).contains("super-secret-token"), "token should be ignored")
     }),
+    ("git remote parser recognizes github ssh https and ssh url remotes", {
+        let parser = GitRemoteParser()
+
+        let scp = parser.githubRemote(from: "git@github.com:pawelkwiatkowski/project.git")
+        let https = parser.githubRemote(from: "https://github.com/pawelkwiatkowski/project.git")
+        let sshURL = parser.githubRemote(from: "ssh://git@github.com/pawelkwiatkowski/project.git")
+        let nonGitHub = parser.githubRemote(from: "git@gitlab.com:pawelkwiatkowski/project.git")
+
+        try expect(scp == GitHubRemoteAccount(owner: "pawelkwiatkowski", repository: "project"), "scp-like ssh remote should parse")
+        try expect(https == GitHubRemoteAccount(owner: "pawelkwiatkowski", repository: "project"), "https remote should parse")
+        try expect(sshURL == GitHubRemoteAccount(owner: "pawelkwiatkowski", repository: "project"), "ssh url remote should parse")
+        try expect(nonGitHub == nil, "non-github remote should not parse")
+    }),
     ("profile rejects empty commit identity", {
         try expectThrows(GitAccountSwitcherError.emptyGitUserName, {
             _ = try GitProfile(
