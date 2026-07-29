@@ -5,6 +5,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @ObservedObject var viewModel: AppViewModel
+    @State private var isShowingDeleteConfirmation = false
 
     var body: some View {
         HStack(spacing: 0) {
@@ -15,6 +16,14 @@ struct SettingsView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(width: 700, height: 440)
+        .alert(DeleteAccountConfirmationContent.title, isPresented: $isShowingDeleteConfirmation) {
+            Button(DeleteAccountConfirmationContent.confirmButtonTitle, role: .destructive) {
+                viewModel.deleteSelectedProfile()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(DeleteAccountConfirmationContent.message)
+        }
     }
 
     private var accountList: some View {
@@ -56,7 +65,7 @@ struct SettingsView: View {
 
             HStack {
                 Button(role: .destructive) {
-                    viewModel.deleteSelectedProfile()
+                    isShowingDeleteConfirmation = true
                 } label: {
                     Image(systemName: "trash")
                 }

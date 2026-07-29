@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import GitAccountSwitcherAppLogic
 
 @main
@@ -9,6 +10,7 @@ final class GitAccountSwitcherApp: NSObject, NSApplicationDelegate {
     private let viewModel = AppViewModel()
     private let settingsWindowController = SettingsWindowController()
     private var statusItem: NSStatusItem?
+    private var cancellables: Set<AnyCancellable> = []
 
     static func main() {
         let app = NSApplication.shared
@@ -27,6 +29,7 @@ final class GitAccountSwitcherApp: NSObject, NSApplicationDelegate {
         item.button?.imagePosition = .imageOnly
         item.menu = buildMenu()
         statusItem = item
+        observeMenuContentChanges()
         print("GitAccountSwitcherApp status item installed")
     }
 
@@ -43,6 +46,10 @@ final class GitAccountSwitcherApp: NSObject, NSApplicationDelegate {
                 let item = NSMenuItem(title: profile.displayName, action: #selector(selectProfile(_:)), keyEquivalent: "")
                 item.target = self
                 item.representedObject = profile.id
+                item.image = NSImage(
+                    systemSymbolName: viewModel.gitBindingStatus(for: profile).systemImageName,
+                    accessibilityDescription: "Git binding status"
+                )
                 item.state = profile.id == viewModel.activeProfileId ? .on : .off
                 menu.addItem(item)
             }
@@ -66,6 +73,15 @@ final class GitAccountSwitcherApp: NSObject, NSApplicationDelegate {
         menu.addItem(quitItem)
 
         return menu
+    }
+
+    private func observeMenuContentChanges() {
+        viewModel.$menuContentRevision
+            .dropFirst()
+            .sink { [weak self] _ in
+                self?.statusItem?.menu = self?.buildMenu()
+            }
+            .store(in: &cancellables)
     }
 
     @objc private func selectProfile(_ sender: NSMenuItem) {
