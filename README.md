@@ -12,6 +12,12 @@ Local-only macOS menu bar tool for switching Git identities globally and per fol
 - SSH/GitHub checks are manual diagnostics only.
 - Existing `~/.gitconfig` and `~/.ssh/config` are never replaced wholesale.
 
+## Local Discovery
+
+GitHub account discovery reads local GitHub CLI and SSH configuration, plus global Git identity values. It may use only `git config --global --get`, `gh --version`, and `ssh -G github.com`; it never uses GitHub APIs, `gh auth`, `git ls-remote`, `ssh -T`, or `curl`.
+
+Manual folder discovery reads only `.git/config` files beneath the folder selected by the user. GitHub remote owners are treated as ambiguous and are not assumed to be usernames.
+
 ## Managed Files
 
 The app is designed to manage only these paths:

@@ -180,6 +180,74 @@ let tests: [(String, () throws -> Void)] = [
 
         try expect(accounts.isEmpty, "duplicate existing github profile should suppress suggestion")
     }),
+    ("github local discovery service uses only allowlisted local commands", {
+        final class FakeDiscoveryRunner: CommandRunning {
+            var commands: [[String]] = []
+
+            func run(_ command: String, arguments: [String], workingDirectory: URL?) throws -> CommandResult {
+                commands.append([command] + arguments)
+                if command == "git", arguments == ["config", "--global", "--get", "user.name"] {
+                    return CommandResult(exitCode: 0, standardOutput: "Pawel Kwiatkowski\n", standardError: "")
+                }
+                if command == "git", arguments == ["config", "--global", "--get", "user.email"] {
+                    return CommandResult(exitCode: 0, standardOutput: "pawel@example.com\n", standardError: "")
+                }
+                if command == "ssh", arguments == ["-G", "github.com"] {
+                    return CommandResult(exitCode: 0, standardOutput: "identityfile ~/.ssh/id_ed25519\n", standardError: "")
+                }
+                if command == "gh", arguments == ["--version"] {
+                    return CommandResult(exitCode: 0, standardOutput: "gh version 2.0.0\n", standardError: "")
+                }
+                return CommandResult(exitCode: 1, standardOutput: "", standardError: "missing")
+            }
+        }
+
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let ghConfig = temporaryDirectory.appendingPathComponent(".config/gh", isDirectory: true)
+        try FileManager.default.createDirectory(at: ghConfig, withIntermediateDirectories: true)
+        try """
+        github.com:
+            oauth_token: secret-token
+            user: pawelkwiatkowski
+        """.write(to: ghConfig.appendingPathComponent("hosts.yml"), atomically: true, encoding: .utf8)
+
+        let runner = FakeDiscoveryRunner()
+        let service = GitHubLocalDiscoveryService(
+            homeDirectory: temporaryDirectory,
+            commandRunner: runner
+        )
+
+        let accounts = service.detect(existingProfiles: [])
+
+        try expect(accounts.count == 1, "service should detect one github account")
+        try expect(accounts[0].username == "pawelkwiatkowski", "username should come from local hosts file")
+        try expect(accounts[0].gitUserEmail == "pawel@example.com", "git email should come from global config")
+        try expect(accounts[0].sshKeyPath == "~/.ssh/id_ed25519", "ssh key should come from resolved ssh config")
+        try expect(runner.commands.contains(["gh", "--version"]), "service may check gh installation")
+        try expect(!runner.commands.contains { $0.contains("auth") || $0.contains("api") }, "service must not run gh auth or gh api")
+    }),
+    ("github local discovery manual scan reads only git configs under selected folder", {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let repoGit = root.appendingPathComponent("project/.git", isDirectory: true)
+        try FileManager.default.createDirectory(at: repoGit, withIntermediateDirectories: true)
+        try """
+        [remote "origin"]
+            url = git@github.com:pawelkwiatkowski/project.git
+        """.write(to: repoGit.appendingPathComponent("config"), atomically: true, encoding: .utf8)
+
+        let service = GitHubLocalDiscoveryService(
+            homeDirectory: root,
+            commandRunner: ProcessCommandRunner()
+        )
+
+        let signals = service.repositoryRemoteSignals(in: root)
+
+        try expect(signals.count == 1, "manual scan should find one github remote")
+        try expect(signals[0].source == .repositoryRemote, "manual scan source should be repository remote")
+        try expect(signals[0].warnings.contains("Remote owner 'pawelkwiatkowski' may be a user or an organization."), "remote owner should not be treated as certain username")
+    }),
     ("profile rejects empty commit identity", {
         try expectThrows(GitAccountSwitcherError.emptyGitUserName, {
             _ = try GitProfile(
