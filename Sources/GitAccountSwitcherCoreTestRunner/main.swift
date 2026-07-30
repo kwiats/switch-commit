@@ -75,6 +75,37 @@ extension DetectedGitAccount {
     }
 }
 
+enum FakeLaunchAtLoginError: Error {
+    case denied
+}
+
+final class FakeLaunchAtLoginManager: LaunchAtLoginManaging, @unchecked Sendable {
+    var status: LaunchAtLoginStatus
+    var enableCallCount = 0
+    var disableCallCount = 0
+    var errorToThrow: Error?
+
+    init(status: LaunchAtLoginStatus) {
+        self.status = status
+    }
+
+    func enable() throws {
+        enableCallCount += 1
+        if let errorToThrow {
+            throw errorToThrow
+        }
+        status = .enabled
+    }
+
+    func disable() throws {
+        disableCallCount += 1
+        if let errorToThrow {
+            throw errorToThrow
+        }
+        status = .disabled
+    }
+}
+
 let tests: [(String, () throws -> Void)] = [
     ("detected git account exposes stable local-only metadata", {
         let account = DetectedGitAccount(
@@ -1109,6 +1140,75 @@ let tests: [(String, () throws -> Void)] = [
             try expect(
                 viewModel.presentationRequest == .settings,
                 "settings action should request visible settings presentation"
+            )
+        }
+    }),
+    ("app view model initializes launch at login from manager status", {
+        try MainActor.assumeIsolated {
+            let launchAtLoginManager = FakeLaunchAtLoginManager(status: .enabled)
+            let viewModel = AppViewModel(
+                profiles: [],
+                launchAtLoginManager: launchAtLoginManager
+            )
+
+            try expect(viewModel.isLaunchAtLoginEnabled, "enabled manager status should enable settings toggle")
+            try expect(
+                viewModel.launchAtLoginStatusText == "Launch at login is enabled.",
+                "view model should expose enabled launch-at-login status text"
+            )
+        }
+    }),
+    ("app view model enables launch at login through manager", {
+        try MainActor.assumeIsolated {
+            let launchAtLoginManager = FakeLaunchAtLoginManager(status: .disabled)
+            let viewModel = AppViewModel(
+                profiles: [],
+                launchAtLoginManager: launchAtLoginManager
+            )
+
+            viewModel.setLaunchAtLoginEnabled(true)
+
+            try expect(launchAtLoginManager.enableCallCount == 1, "enable should register launch at login")
+            try expect(viewModel.isLaunchAtLoginEnabled, "successful enable should update settings toggle")
+            try expect(
+                viewModel.launchAtLoginStatusText == "Launch at login is enabled.",
+                "successful enable should expose enabled status text"
+            )
+        }
+    }),
+    ("app view model disables launch at login through manager", {
+        try MainActor.assumeIsolated {
+            let launchAtLoginManager = FakeLaunchAtLoginManager(status: .enabled)
+            let viewModel = AppViewModel(
+                profiles: [],
+                launchAtLoginManager: launchAtLoginManager
+            )
+
+            viewModel.setLaunchAtLoginEnabled(false)
+
+            try expect(launchAtLoginManager.disableCallCount == 1, "disable should unregister launch at login")
+            try expect(!viewModel.isLaunchAtLoginEnabled, "successful disable should update settings toggle")
+            try expect(
+                viewModel.launchAtLoginStatusText == "Launch at login is disabled.",
+                "successful disable should expose disabled status text"
+            )
+        }
+    }),
+    ("app view model reverts launch at login setting after manager failure", {
+        try MainActor.assumeIsolated {
+            let launchAtLoginManager = FakeLaunchAtLoginManager(status: .disabled)
+            launchAtLoginManager.errorToThrow = FakeLaunchAtLoginError.denied
+            let viewModel = AppViewModel(
+                profiles: [],
+                launchAtLoginManager: launchAtLoginManager
+            )
+
+            viewModel.setLaunchAtLoginEnabled(true)
+
+            try expect(!viewModel.isLaunchAtLoginEnabled, "failed enable should refresh toggle from manager status")
+            try expect(
+                viewModel.launchAtLoginStatusText.contains("Could not update launch at login"),
+                "failed enable should expose error text"
             )
         }
     }),

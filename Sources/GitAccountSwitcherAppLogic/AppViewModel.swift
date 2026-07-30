@@ -6,6 +6,49 @@ public enum AppPresentationRequest: Equatable, Sendable {
     case settings
 }
 
+public enum LaunchAtLoginStatus: Equatable, Sendable {
+    case enabled
+    case disabled
+    case unavailable(message: String)
+
+    public var isEnabled: Bool {
+        switch self {
+        case .enabled:
+            return true
+        case .disabled, .unavailable:
+            return false
+        }
+    }
+
+    public var displayMessage: String {
+        switch self {
+        case .enabled:
+            return "Launch at login is enabled."
+        case .disabled:
+            return "Launch at login is disabled."
+        case .unavailable(let message):
+            return message
+        }
+    }
+}
+
+public protocol LaunchAtLoginManaging: Sendable {
+    var status: LaunchAtLoginStatus { get }
+    func enable() throws
+    func disable() throws
+}
+
+public struct UnavailableLaunchAtLoginManager: LaunchAtLoginManaging {
+    public init() {}
+
+    public var status: LaunchAtLoginStatus {
+        .unavailable(message: "Launch at login is unavailable in this runtime.")
+    }
+
+    public func enable() throws {}
+    public func disable() throws {}
+}
+
 private struct UncheckedSendable<Value>: @unchecked Sendable {
     let value: Value
 }
@@ -77,10 +120,13 @@ public final class AppViewModel: ObservableObject {
     @Published public private(set) var presentationRequest: AppPresentationRequest?
     @Published public private(set) var detectedAccounts: [DetectedGitAccount]
     @Published public private(set) var menuContentRevision: Int
+    @Published public private(set) var isLaunchAtLoginEnabled: Bool
+    @Published public private(set) var launchAtLoginStatusText: String
 
     private let profileSettingsManager: ProfileSettingsManager
     private let githubDiscoveryWorker: GitHubDiscoveryWorker
     private let hostConnectionTestWorker: HostConnectionTestWorker
+    private let launchAtLoginManager: LaunchAtLoginManaging
     private var connectionTestResultsByProfileId: [String: [HostConnectionTestResult]]
 
     public init(
@@ -92,7 +138,8 @@ public final class AppViewModel: ObservableObject {
         keychainStore: KeychainStoring = SystemKeychainStore(),
         gitConfigInstaller: GitConfigInstalling? = nil,
         githubDiscoveryService: GitHubLocalDiscoveryService? = nil,
-        diagnosticsService: DiagnosticsService = DiagnosticsService()
+        diagnosticsService: DiagnosticsService = DiagnosticsService(),
+        launchAtLoginManager: LaunchAtLoginManaging = UnavailableLaunchAtLoginManager()
     ) {
         let seedProfiles = profiles ?? AppViewModel.previewProfiles()
         let resolvedProfileStore = profileStore ?? ProfileStore(fileURL: profiles == nil ? AppViewModel.defaultProfilesURL() : AppViewModel.temporaryProfilesURL())
@@ -134,9 +181,12 @@ public final class AppViewModel: ObservableObject {
         self.hostConnectionTestWorker = HostConnectionTestWorker(
             service: UncheckedSendable(value: diagnosticsService)
         )
+        self.launchAtLoginManager = launchAtLoginManager
         self.connectionTestResultsByProfileId = [:]
         self.detectedAccounts = []
         self.menuContentRevision = 0
+        self.isLaunchAtLoginEnabled = launchAtLoginManager.status.isEnabled
+        self.launchAtLoginStatusText = launchAtLoginManager.status.displayMessage
     }
 
     public var activeProfile: GitProfile? {
@@ -286,6 +336,20 @@ public final class AppViewModel: ObservableObject {
         }
     }
 
+    public func setLaunchAtLoginEnabled(_ isEnabled: Bool) {
+        do {
+            if isEnabled {
+                try launchAtLoginManager.enable()
+            } else {
+                try launchAtLoginManager.disable()
+            }
+            refreshLaunchAtLoginState()
+        } catch {
+            refreshLaunchAtLoginState()
+            launchAtLoginStatusText = "Could not update launch at login: \(error.localizedDescription)"
+        }
+    }
+
     public func refreshDetectedAccounts() {
         let existingProfiles = profiles
         let worker = githubDiscoveryWorker
@@ -387,6 +451,12 @@ public final class AppViewModel: ObservableObject {
         profiles = profileSettingsManager.profiles
         activeProfileId = profileSettingsManager.activeProfileId
         selectedProfileId = profileSettingsManager.selectedProfileId
+    }
+
+    private func refreshLaunchAtLoginState() {
+        let status = launchAtLoginManager.status
+        isLaunchAtLoginEnabled = status.isEnabled
+        launchAtLoginStatusText = status.displayMessage
     }
 
     private func isDuplicateDetectedAccount(_ account: DetectedGitAccount) -> Bool {

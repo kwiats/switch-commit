@@ -12,6 +12,7 @@ Local-only macOS menu bar tool for switching Git identities globally and per fol
 - `~/.gitconfig` only receives explicit include lines for managed Git config files.
 - SSH/GitHub checks are manual diagnostics only.
 - Host connection status updates only after the user clicks `Test Connection`; no connection checks run in the background.
+- Launch at login is opt-in and controlled from Settings.
 - Existing `~/.gitconfig` and `~/.ssh/config` are never replaced wholesale.
 
 ### Local GitHub Discovery
@@ -67,6 +68,10 @@ The settings window shows a provider icon and connection status for each account
 - green: the latest manual test succeeded for every host in the profile.
 
 Click `Test Connection` in the selected account header to run the SSH check. The app never starts these network checks automatically.
+
+## Launch at Login
+
+Open Settings, choose `General`, and switch `Launch at Login` on or off. The app uses macOS Login Items registration and does not modify shell startup files.
 
 ## Development
 
