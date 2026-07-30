@@ -5,6 +5,7 @@ import SwiftUI
 
 struct SettingsView: View {
     private enum SettingsTab: Hashable {
+        case general
         case accounts
         case detection
     }
@@ -15,6 +16,12 @@ struct SettingsView: View {
 
     var body: some View {
         TabView(selection: $selectedTab) {
+            generalTab
+                .tabItem {
+                    Label("General", systemImage: "gearshape")
+                }
+                .tag(SettingsTab.general)
+
             accountsTab
                 .tabItem {
                     Label("Accounts", systemImage: "person.2")
@@ -36,6 +43,29 @@ struct SettingsView: View {
         } message: {
             Text(DeleteAccountConfirmationContent.message)
         }
+    }
+
+    private var generalTab: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("General")
+                .font(.title2)
+
+            Toggle(isOn: Binding(
+                get: { viewModel.isLaunchAtLoginEnabled },
+                set: { viewModel.setLaunchAtLoginEnabled($0) }
+            )) {
+                Label("Launch at Login", systemImage: "power")
+            }
+            .toggleStyle(.switch)
+
+            Text(viewModel.launchAtLoginStatusText)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Spacer()
+            footer
+        }
+        .padding(20)
     }
 
     private var accountsTab: some View {
