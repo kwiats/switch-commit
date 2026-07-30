@@ -49,6 +49,23 @@ public struct DiagnosticsReport: Equatable, Sendable {
     }
 }
 
+public enum HostConnectionTestStatus: Equatable, Sendable {
+    case connected
+    case failed
+}
+
+public struct HostConnectionTestResult: Equatable, Sendable {
+    public var host: String
+    public var status: HostConnectionTestStatus
+    public var message: String
+
+    public init(host: String, status: HostConnectionTestStatus, message: String) {
+        self.host = host
+        self.status = status
+        self.message = message
+    }
+}
+
 public struct DiagnosticsService {
     private let commandRunner: CommandRunning
 
@@ -76,5 +93,41 @@ public struct DiagnosticsService {
 
     public func manualSSHTestCommand(host: String) -> (command: String, arguments: [String]) {
         ("ssh", ["-T", host])
+    }
+
+    public func sshConnectionTestCommand(host: String) -> (command: String, arguments: [String]) {
+        ("ssh", ["-o", "BatchMode=yes", "-T", "git@\(host)"])
+    }
+
+    public func testSSHConnection(host: String) -> HostConnectionTestResult {
+        let testCommand = sshConnectionTestCommand(host: host)
+        do {
+            let result = try commandRunner.run(testCommand.command, arguments: testCommand.arguments, workingDirectory: nil)
+            let message = connectionMessage(from: result)
+            let isConnected = result.exitCode == 0 || isGitHubAuthenticated(host: host, message: message)
+            return HostConnectionTestResult(
+                host: host,
+                status: isConnected ? .connected : .failed,
+                message: message
+            )
+        } catch {
+            return HostConnectionTestResult(host: host, status: .failed, message: String(describing: error))
+        }
+    }
+
+    private func connectionMessage(from result: CommandResult) -> String {
+        let combined = [result.standardOutput, result.standardError]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+        if combined.isEmpty {
+            return "No output from SSH connection test."
+        }
+        return combined
+    }
+
+    private func isGitHubAuthenticated(host: String, message: String) -> Bool {
+        host.caseInsensitiveCompare("github.com") == .orderedSame
+            && message.localizedCaseInsensitiveContains("successfully authenticated")
     }
 }
