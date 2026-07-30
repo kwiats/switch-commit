@@ -10,6 +10,8 @@ app_name="Git Account Switcher"
 app_bundle="${release_dir}/${app_name}.app"
 binary_name="GitAccountSwitcherApp"
 bundle_id="com.git-account-switcher.app"
+sparkle_feed_url="https://kwiats.github.io/switch-commit-release-channel/appcast.xml"
+sparkle_public_ed_key="x4XXCgBb5YuShR9DnY81L9bPJ+6vFaKeL46WK/fEte8="
 
 echo "==> Building release binary"
 cd "${repo_root}"
@@ -52,6 +54,12 @@ cat > "${app_bundle}/Contents/Info.plist" <<PLIST
     <true/>
     <key>NSHumanReadableCopyright</key>
     <string>Copyright 2026 Git Account Switcher contributors</string>
+    <key>SUEnableAutomaticChecks</key>
+    <false/>
+    <key>SUFeedURL</key>
+    <string>${sparkle_feed_url}</string>
+    <key>SUPublicEDKey</key>
+    <string>${sparkle_public_ed_key}</string>
 </dict>
 </plist>
 PLIST

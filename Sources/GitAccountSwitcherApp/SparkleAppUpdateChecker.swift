@@ -20,10 +20,13 @@ final class SparkleAppUpdateChecker: NSObject, AppUpdateChecking {
     }
 
     var canCheckForUpdates: Bool {
-        false
+        hasReleaseChannelConfiguration && (!hasStartedUpdater || updaterController.updater.canCheckForUpdates)
     }
 
     func checkForUpdates() {
+        guard hasReleaseChannelConfiguration else {
+            return
+        }
         if !hasStartedUpdater {
             updaterController.updater.automaticallyChecksForUpdates = false
             updaterController.updater.automaticallyDownloadsUpdates = false
@@ -31,6 +34,17 @@ final class SparkleAppUpdateChecker: NSObject, AppUpdateChecking {
             hasStartedUpdater = true
         }
         updaterController.checkForUpdates(nil)
+    }
+
+    private var hasReleaseChannelConfiguration: Bool {
+        hasInfoValue(forKey: "SUFeedURL") && hasInfoValue(forKey: "SUPublicEDKey")
+    }
+
+    private func hasInfoValue(forKey key: String) -> Bool {
+        guard let value = Bundle.main.object(forInfoDictionaryKey: key) as? String else {
+            return false
+        }
+        return !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }
 
