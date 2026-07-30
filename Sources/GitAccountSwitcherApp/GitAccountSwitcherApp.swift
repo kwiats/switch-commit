@@ -7,7 +7,8 @@ import GitAccountSwitcherAppLogic
 final class GitAccountSwitcherApp: NSObject, NSApplicationDelegate {
     private static var sharedDelegate: GitAccountSwitcherApp?
 
-    private let viewModel = AppViewModel()
+    private let updateChecker = SparkleAppUpdateChecker()
+    private lazy var viewModel = AppViewModel(updateChecker: updateChecker)
     private let settingsWindowController = SettingsWindowController()
     private var statusItem: NSStatusItem?
     private var cancellables: Set<AnyCancellable> = []

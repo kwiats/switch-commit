@@ -1148,6 +1148,21 @@ let tests: [(String, () throws -> Void)] = [
         try expect(checker.checkCount == 0, "disabled checker must not be called")
         try expect(viewModel.settingsMessage == "Updates are not available in this build.", "disabled checker should explain why nothing happened")
     }),
+    ("sparkle adapter does not start automatic update cycle at initialization", {
+        let adapterURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("Sources/GitAccountSwitcherApp/SparkleAppUpdateChecker.swift")
+        let source = try String(contentsOf: adapterURL, encoding: .utf8)
+
+        try expect(source.contains("startingUpdater: false"), "sparkle adapter should not start updater during initialization")
+        try expect(!source.contains("startingUpdater: true"), "sparkle adapter must not start Sparkle automatically")
+        try expect(source.contains("var canCheckForUpdates: Bool {\n        false\n    }"), "sparkle adapter should disable checks until real update config exists")
+        try expect(!source.contains("!hasStartedUpdater ||"), "sparkle adapter must not enable checks before update config exists")
+        try expect(source.contains("automaticallyChecksForUpdates = false"), "sparkle adapter should keep automatic checks disabled")
+        try expect(source.contains("automaticallyDownloadsUpdates = false"), "sparkle adapter should keep automatic downloads disabled")
+        try expect(source.contains("updaterShouldPromptForPermissionToCheck"), "sparkle adapter should suppress permission prompts")
+        try expect(source.contains("feedParameters"), "sparkle adapter should return no feed parameters")
+        try expect(!source.contains("checkForUpdatesInBackground"), "sparkle adapter must not perform background update checks")
+    }),
     ("run local diagnostics requests settings presentation", {
         try MainActor.assumeIsolated {
             let viewModel = AppViewModel(profiles: [])

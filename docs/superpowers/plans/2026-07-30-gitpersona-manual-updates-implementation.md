@@ -391,12 +391,13 @@ import Sparkle
 final class SparkleAppUpdateChecker: NSObject, AppUpdateChecking {
     private let updaterDelegate: ManualSparkleUpdaterDelegate
     private let updaterController: SPUStandardUpdaterController
+    private var hasStartedUpdater = false
 
     override init() {
         let createdUpdaterDelegate = ManualSparkleUpdaterDelegate()
         self.updaterDelegate = createdUpdaterDelegate
         self.updaterController = SPUStandardUpdaterController(
-            startingUpdater: true,
+            startingUpdater: false,
             updaterDelegate: createdUpdaterDelegate,
             userDriverDelegate: nil
         )
@@ -404,16 +405,22 @@ final class SparkleAppUpdateChecker: NSObject, AppUpdateChecking {
     }
 
     var canCheckForUpdates: Bool {
-        updaterController.updater.canCheckForUpdates
+        false
     }
 
     func checkForUpdates() {
+        if !hasStartedUpdater {
+            updaterController.updater.automaticallyChecksForUpdates = false
+            updaterController.updater.automaticallyDownloadsUpdates = false
+            updaterController.startUpdater()
+            hasStartedUpdater = true
+        }
         updaterController.checkForUpdates(nil)
     }
 }
 
 private final class ManualSparkleUpdaterDelegate: NSObject, SPUUpdaterDelegate {
-    func updaterShouldPromptForPermissionToCheckForUpdates(_ updater: SPUUpdater) -> Bool {
+    func updaterShouldPromptForPermissionToCheck(forUpdates updater: SPUUpdater) -> Bool {
         false
     }
 
