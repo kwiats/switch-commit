@@ -7,6 +7,7 @@ public struct GitHubCLIHostsParser: Sendable {
         let lines = content.split(whereSeparator: \.isNewline).map(String.init)
         var insideGitHub = false
         var username: String?
+        var gitProtocol: String?
         var sawGitHubHost = false
 
         for rawLine in lines {
@@ -25,6 +26,8 @@ public struct GitHubCLIHostsParser: Sendable {
                 username = value
             } else if let value = value(for: "username", in: trimmed) {
                 username = value
+            } else if let value = value(for: "git_protocol", in: trimmed) {
+                gitProtocol = value
             }
         }
 
@@ -32,11 +35,13 @@ public struct GitHubCLIHostsParser: Sendable {
             return []
         }
 
+        let accessMethod = accessMethod(from: gitProtocol)
         if let username, !username.isEmpty {
             return [
                 DetectionSignal(
                     provider: .github,
                     username: username,
+                    accessMethods: accessMethod.map { [$0] } ?? [],
                     confidence: .high,
                     source: .githubCliHostsFile
                 )
@@ -46,6 +51,7 @@ public struct GitHubCLIHostsParser: Sendable {
         return [
             DetectionSignal(
                 provider: .github,
+                accessMethods: accessMethod.map { [$0] } ?? [],
                 confidence: .medium,
                 source: .githubCliHostsFile,
                 warnings: ["GitHub CLI host is configured without a visible username."]
@@ -60,5 +66,16 @@ public struct GitHubCLIHostsParser: Sendable {
         }
         let value = String(line.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
         return value.isEmpty ? nil : value.trimmingCharacters(in: CharacterSet(charactersIn: "\"'"))
+    }
+
+    private func accessMethod(from protocolValue: String?) -> GitAccessMethod? {
+        switch protocolValue?.trimmingCharacters(in: .whitespacesAndNewlines) {
+        case "ssh":
+            return .ssh
+        case "https":
+            return .https
+        default:
+            return nil
+        }
     }
 }

@@ -13,6 +13,7 @@ Local-only macOS menu bar tool for switching Git identities globally and per fol
 - `~/.gitconfig` only receives explicit include lines for managed Git config files.
 - SSH/GitHub checks are manual diagnostics only.
 - Host connection status updates only after the user clicks `Test Connection`; no connection checks run in the background.
+- Launch at login is opt-in and controlled from Settings.
 - Existing `~/.gitconfig` and `~/.ssh/config` are never replaced wholesale.
 
 ### Manual Updates
@@ -26,6 +27,8 @@ The app checks for updates only when the user clicks `Check for Updates` in Sett
 Git Account Switcher can suggest a GitHub account from local-only signals such as GitHub CLI configuration, global Git identity, SSH configuration, and GitHub remotes in a folder selected by the user.
 
 Discovery does not call the GitHub API, does not log in to GitHub, does not read token values into app data, and does not scan the home directory automatically. A detected account is only a suggestion until the user imports it as a profile.
+
+Profiles use an explicit access method: SSH or HTTPS. SSH profiles generate a managed `core.sshCommand` and can run a manual SSH connection test. HTTPS profiles rely on local Git credentials or GitHub CLI-configured credentials and do not require an SSH key.
 
 ## Managed Files
 
@@ -75,6 +78,10 @@ The settings window shows a provider icon and connection status for each account
 
 Click `Test Connection` in the selected account header to run the SSH check. The app never starts these network checks automatically.
 
+## Launch at Login
+
+Open Settings, choose `General`, and switch `Launch at Login` on or off. The app uses macOS Login Items registration and does not modify shell startup files.
+
 ## Development
 
 ```bash
@@ -84,3 +91,20 @@ swift build
 ```
 
 This repository currently uses a local test runner because the available Command Line Tools install does not expose XCTest or Swift Testing modules.
+
+## Release Build
+
+Create a distributable macOS app ZIP:
+
+```bash
+Scripts/build-release.sh 0.1.1
+```
+
+The release artifacts are written to `dist/v0.1.1/`:
+
+```text
+GitAccountSwitcher-v0.1.1-macOS.zip
+GitAccountSwitcher-v0.1.1-macOS.zip.sha256
+```
+
+Install by unzipping the archive and moving `Git Account Switcher.app` to `Applications`.

@@ -51,6 +51,7 @@ public struct DetectionSignal: Equatable, Sendable {
     public var gitUserName: String?
     public var gitUserEmail: String?
     public var sshKeyPath: String?
+    public var accessMethods: [GitAccessMethod]
     public var hosts: [String]
     public var confidence: DetectionConfidence
     public var source: DetectionSource
@@ -62,6 +63,7 @@ public struct DetectionSignal: Equatable, Sendable {
         gitUserName: String? = nil,
         gitUserEmail: String? = nil,
         sshKeyPath: String? = nil,
+        accessMethods: [GitAccessMethod] = [],
         hosts: [String] = ["github.com"],
         confidence: DetectionConfidence,
         source: DetectionSource,
@@ -72,6 +74,7 @@ public struct DetectionSignal: Equatable, Sendable {
         self.gitUserName = gitUserName
         self.gitUserEmail = gitUserEmail
         self.sshKeyPath = sshKeyPath
+        self.accessMethods = accessMethods
         self.hosts = hosts
         self.confidence = confidence
         self.source = source
@@ -86,6 +89,7 @@ public struct DetectedGitAccount: Equatable, Identifiable, Sendable {
     public var gitUserName: String?
     public var gitUserEmail: String?
     public var sshKeyPath: String?
+    public var accessMethods: [GitAccessMethod]
     public var hosts: [String]
     public var confidence: DetectionConfidence
     public var sources: [DetectionSource]
@@ -98,6 +102,7 @@ public struct DetectedGitAccount: Equatable, Identifiable, Sendable {
         gitUserName: String?,
         gitUserEmail: String?,
         sshKeyPath: String?,
+        accessMethods: [GitAccessMethod] = [],
         hosts: [String],
         confidence: DetectionConfidence,
         sources: [DetectionSource],
@@ -109,6 +114,7 @@ public struct DetectedGitAccount: Equatable, Identifiable, Sendable {
         self.gitUserName = gitUserName
         self.gitUserEmail = gitUserEmail
         self.sshKeyPath = sshKeyPath
+        self.accessMethods = accessMethods
         self.hosts = hosts
         self.confidence = confidence
         self.sources = sources

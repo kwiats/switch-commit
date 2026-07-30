@@ -48,6 +48,49 @@ public final class DisabledAppUpdateChecker: AppUpdateChecking {
     public func checkForUpdates() {}
 }
 
+public enum LaunchAtLoginStatus: Equatable, Sendable {
+    case enabled
+    case disabled
+    case unavailable(message: String)
+
+    public var isEnabled: Bool {
+        switch self {
+        case .enabled:
+            return true
+        case .disabled, .unavailable:
+            return false
+        }
+    }
+
+    public var displayMessage: String {
+        switch self {
+        case .enabled:
+            return "Launch at login is enabled."
+        case .disabled:
+            return "Launch at login is disabled."
+        case .unavailable(let message):
+            return message
+        }
+    }
+}
+
+public protocol LaunchAtLoginManaging: Sendable {
+    var status: LaunchAtLoginStatus { get }
+    func enable() throws
+    func disable() throws
+}
+
+public struct UnavailableLaunchAtLoginManager: LaunchAtLoginManaging {
+    public init() {}
+
+    public var status: LaunchAtLoginStatus {
+        .unavailable(message: "Launch at login is unavailable in this runtime.")
+    }
+
+    public func enable() throws {}
+    public func disable() throws {}
+}
+
 private struct UncheckedSendable<Value>: @unchecked Sendable {
     let value: Value
 }
@@ -119,12 +162,15 @@ public final class AppViewModel: ObservableObject {
     @Published public private(set) var presentationRequest: AppPresentationRequest?
     @Published public private(set) var detectedAccounts: [DetectedGitAccount]
     @Published public private(set) var menuContentRevision: Int
+    @Published public private(set) var isLaunchAtLoginEnabled: Bool
+    @Published public private(set) var launchAtLoginStatusText: String
 
     private let profileSettingsManager: ProfileSettingsManager
     private let githubDiscoveryWorker: GitHubDiscoveryWorker
     private let hostConnectionTestWorker: HostConnectionTestWorker
     private let updateChecker: AppUpdateChecking
     private let bundleInfo: AppBundleInfo
+    private let launchAtLoginManager: LaunchAtLoginManaging
     private var connectionTestResultsByProfileId: [String: [HostConnectionTestResult]]
 
     public init(
@@ -138,7 +184,8 @@ public final class AppViewModel: ObservableObject {
         githubDiscoveryService: GitHubLocalDiscoveryService? = nil,
         diagnosticsService: DiagnosticsService = DiagnosticsService(),
         updateChecker: AppUpdateChecking = DisabledAppUpdateChecker(),
-        bundleInfo: AppBundleInfo = .mainBundle()
+        bundleInfo: AppBundleInfo = .mainBundle(),
+        launchAtLoginManager: LaunchAtLoginManaging = UnavailableLaunchAtLoginManager()
     ) {
         let seedProfiles = profiles ?? AppViewModel.previewProfiles()
         let resolvedProfileStore = profileStore ?? ProfileStore(fileURL: profiles == nil ? AppViewModel.defaultProfilesURL() : AppViewModel.temporaryProfilesURL())
@@ -182,9 +229,12 @@ public final class AppViewModel: ObservableObject {
         )
         self.updateChecker = updateChecker
         self.bundleInfo = bundleInfo
+        self.launchAtLoginManager = launchAtLoginManager
         self.connectionTestResultsByProfileId = [:]
         self.detectedAccounts = []
         self.menuContentRevision = 0
+        self.isLaunchAtLoginEnabled = launchAtLoginManager.status.isEnabled
+        self.launchAtLoginStatusText = launchAtLoginManager.status.displayMessage
     }
 
     public var activeProfile: GitProfile? {
@@ -248,6 +298,9 @@ public final class AppViewModel: ObservableObject {
         guard !hosts.isEmpty else {
             return .needsAttention(message: "No host configured.")
         }
+        guard profile.accessMethod == .ssh else {
+            return .connected(message: "Uses HTTPS credentials.")
+        }
         guard !profile.sshKeyPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return .needsAttention(message: "No SSH key configured.")
         }
@@ -269,6 +322,12 @@ public final class AppViewModel: ObservableObject {
             settingsMessage = "Select an account before testing connection."
             return
         }
+        guard profile.accessMethod == .ssh else {
+            settingsMessage = "HTTPS access uses Git credentials."
+            connectionTestResultsByProfileId[profile.id] = []
+            menuContentRevision += 1
+            return
+        }
         let hosts = normalizedHosts(for: profile)
         guard !hosts.isEmpty else {
             connectionTestResultsByProfileId[profile.id] = [
@@ -285,8 +344,15 @@ public final class AppViewModel: ObservableObject {
             guard let self else {
                 return
             }
+            guard let currentProfile = selectedProfile,
+                  currentProfile.id == profile.id,
+                  currentProfile.accessMethod == profile.accessMethod,
+                  currentProfile.accessMethod == .ssh
+            else {
+                return
+            }
             connectionTestResultsByProfileId[profile.id] = results
-            settingsMessage = connectionStatus(for: profile).message
+            settingsMessage = connectionStatus(for: currentProfile).message
             menuContentRevision += 1
         }
     }
@@ -340,6 +406,16 @@ public final class AppViewModel: ObservableObject {
         }
     }
 
+    public func updateSelectedProfileAccessMethod(_ accessMethod: GitAccessMethod) {
+        let profileId = selectedProfile?.id
+        performSettingsUpdate {
+            try profileSettingsManager.updateSelectedProfileAccessMethod(accessMethod)
+            if let profileId {
+                connectionTestResultsByProfileId.removeValue(forKey: profileId)
+            }
+        }
+    }
+
     public func updateSelectedProfileHostsText(_ hostsText: String) {
         performSettingsUpdate {
             try profileSettingsManager.updateSelectedProfileHostsText(hostsText)
@@ -349,6 +425,20 @@ public final class AppViewModel: ObservableObject {
     public func resetAccessForSelectedProfile() {
         performSettingsUpdate {
             try profileSettingsManager.resetAccessForSelectedProfile()
+        }
+    }
+
+    public func setLaunchAtLoginEnabled(_ isEnabled: Bool) {
+        do {
+            if isEnabled {
+                try launchAtLoginManager.enable()
+            } else {
+                try launchAtLoginManager.disable()
+            }
+            refreshLaunchAtLoginState()
+        } catch {
+            refreshLaunchAtLoginState()
+            launchAtLoginStatusText = "Could not update launch at login: \(error.localizedDescription)"
         }
     }
 
@@ -422,6 +512,9 @@ public final class AppViewModel: ObservableObject {
             if let gitUserName = account.gitUserName ?? account.username {
                 try profileSettingsManager.updateSelectedProfileGitUserName(gitUserName)
             }
+            if let accessMethod = preferredAccessMethod(for: account) {
+                try profileSettingsManager.updateSelectedProfileAccessMethod(accessMethod)
+            }
             if let sshKeyPath = account.sshKeyPath {
                 try profileSettingsManager.updateSelectedProfileSSHKeyPath(sshKeyPath)
             }
@@ -436,6 +529,19 @@ public final class AppViewModel: ObservableObject {
             settingsMessage = "Could not save settings: \(error.localizedDescription)"
             refreshFromProfileSettings()
         }
+    }
+
+    private func preferredAccessMethod(for account: DetectedGitAccount) -> GitAccessMethod? {
+        if account.accessMethods.contains(.ssh), !account.accessMethods.contains(.https) {
+            return .ssh
+        }
+        if account.accessMethods.contains(.ssh), account.sshKeyPath != nil {
+            return .ssh
+        }
+        if account.accessMethods.contains(.https) {
+            return .https
+        }
+        return nil
     }
 
     private func performSettingsUpdate(_ update: () throws -> Void) {
@@ -453,6 +559,12 @@ public final class AppViewModel: ObservableObject {
         profiles = profileSettingsManager.profiles
         activeProfileId = profileSettingsManager.activeProfileId
         selectedProfileId = profileSettingsManager.selectedProfileId
+    }
+
+    private func refreshLaunchAtLoginState() {
+        let status = launchAtLoginManager.status
+        isLaunchAtLoginEnabled = status.isEnabled
+        launchAtLoginStatusText = status.displayMessage
     }
 
     private func isDuplicateDetectedAccount(_ account: DetectedGitAccount) -> Bool {
@@ -512,6 +624,7 @@ public final class AppViewModel: ObservableObject {
                 displayName: "Personal",
                 gitUserName: "Personal User",
                 gitUserEmail: "me@example.com",
+                accessMethod: .ssh,
                 sshKeyPath: "~/.ssh/id_ed25519",
                 hosts: ["github.com"],
                 httpsCredentialRef: nil,

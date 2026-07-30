@@ -75,6 +75,7 @@ public final class ProfileSettingsManager {
             displayName: "New Account \(number)",
             gitUserName: "Git User \(number)",
             gitUserEmail: "user\(number)@example.com",
+            accessMethod: .ssh,
             sshKeyPath: "~/.ssh/id_ed25519",
             hosts: ["github.com"],
             httpsCredentialRef: nil,
@@ -94,7 +95,17 @@ public final class ProfileSettingsManager {
         let displayName = account.username ?? account.gitUserName ?? "GitHub Account"
         let gitUserName = account.gitUserName ?? account.username ?? ""
         let gitUserEmail = account.gitUserEmail ?? ""
-        let sshKeyPath = account.sshKeyPath ?? "~/.ssh/id_ed25519"
+        let accessMethod: GitAccessMethod
+        if account.accessMethods.contains(.ssh), !account.accessMethods.contains(.https) {
+            accessMethod = .ssh
+        } else if account.accessMethods.contains(.ssh), account.sshKeyPath != nil {
+            accessMethod = .ssh
+        } else if account.accessMethods.contains(.https) {
+            accessMethod = .https
+        } else {
+            accessMethod = account.sshKeyPath == nil ? .https : .ssh
+        }
+        let sshKeyPath = accessMethod == .ssh ? (account.sshKeyPath ?? "~/.ssh/id_ed25519") : ""
         let hosts = account.hosts.isEmpty ? ["github.com"] : account.hosts
         let profileId = uniqueProfileId(base: account.id)
 
@@ -103,6 +114,7 @@ public final class ProfileSettingsManager {
             displayName: displayName,
             gitUserName: gitUserName,
             gitUserEmail: gitUserEmail,
+            accessMethod: accessMethod,
             sshKeyPath: sshKeyPath,
             hosts: hosts,
             httpsCredentialRef: nil,
@@ -173,6 +185,45 @@ public final class ProfileSettingsManager {
         }
     }
 
+    public func updateSelectedProfileAccessMethod(_ accessMethod: GitAccessMethod) throws {
+        guard let index = selectedProfileIndex else {
+            return
+        }
+
+        var draftProfiles = profiles
+        var draft = draftProfiles[index]
+        draft.accessMethod = accessMethod
+        if accessMethod == .https {
+            draft.sshKeyPath = ""
+        } else if draft.sshKeyPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            draft.sshKeyPath = "~/.ssh/id_ed25519"
+        }
+        draftProfiles[index] = try GitProfile(
+            id: draft.id,
+            displayName: draft.displayName,
+            gitUserName: draft.gitUserName,
+            gitUserEmail: draft.gitUserEmail,
+            accessMethod: draft.accessMethod,
+            sshKeyPath: draft.sshKeyPath,
+            hosts: draft.hosts,
+            httpsCredentialRef: draft.httpsCredentialRef,
+            isDefault: draft.isDefault
+        )
+
+        let originalProfiles = profiles
+        try profileStore.save(ProfileStoreData(profiles: draftProfiles, rules: rules))
+        do {
+            try applyGitConfig(
+                profiles: draftProfiles,
+                activeProfile: draftProfiles.first { $0.id == activeProfileId }
+            )
+        } catch {
+            try? profileStore.save(ProfileStoreData(profiles: originalProfiles, rules: rules))
+            throw error
+        }
+        profiles = draftProfiles
+    }
+
     public func updateSelectedProfileHostsText(_ hostsText: String) throws {
         let hosts = hostsText
             .split(separator: ",")
@@ -228,6 +279,7 @@ public final class ProfileSettingsManager {
             displayName: draft.displayName,
             gitUserName: draft.gitUserName,
             gitUserEmail: draft.gitUserEmail,
+            accessMethod: draft.accessMethod,
             sshKeyPath: draft.sshKeyPath,
             hosts: draft.hosts,
             httpsCredentialRef: draft.httpsCredentialRef,
@@ -248,6 +300,10 @@ public final class ProfileSettingsManager {
     }
 
     private func applyGitConfig() throws {
+        try applyGitConfig(profiles: profiles, activeProfile: activeProfile)
+    }
+
+    private func applyGitConfig(profiles: [GitProfile], activeProfile: GitProfile?) throws {
         try gitConfigInstaller?.apply(
             profiles: profiles,
             rules: rules,
