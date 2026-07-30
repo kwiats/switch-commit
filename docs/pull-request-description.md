@@ -13,7 +13,7 @@ Ten PR dodaje pierwszą działającą bazę aplikacji macOS do przełączania ko
 - Generatory zarządzanych plików Git config i SSH config.
 - Globalne przełączanie profilu z menu zapisujące zarządzany `global.gitconfig` i include'y w `~/.gitconfig`.
 - `SafeFileWriter`, który ogranicza zapis do dozwolonych katalogów i robi backup przed nadpisaniem.
-- Lokalna diagnostyka przez `git config --show-origin`, bez automatycznych wyjść do sieci.
+- Lokalna diagnostyka przez `git config --includes --show-origin`, bez automatycznych wyjść do sieci.
 - Granica Keychain: namespacowane identyfikatory sekretów i fake store do testów.
 - Dokumentacja modelu bezpieczeństwa i plan implementacji.
 
@@ -21,7 +21,7 @@ Ten PR dodaje pierwszą działającą bazę aplikacji macOS do przełączania ko
 
 - Brak telemetrii, analytics, crash uploadów i automatycznych requestów sieciowych.
 - Sekrety nie trafiają do JSON ani generowanych configów.
-- Automatyczna diagnostyka wykonuje tylko lokalne komendy `git config --show-origin`.
+- Automatyczna diagnostyka wykonuje tylko lokalne komendy `git config --includes --show-origin`.
 - Testy używają tymczasowych katalogów i fake Keychain.
 - Zapis zarządzanych plików jest ograniczony do jawnie dozwolonych managed roots.
 - `~/.gitconfig` dostaje tylko jawne include'y do zarządzanych plików, z backupem przed zmianą istniejącego pliku.

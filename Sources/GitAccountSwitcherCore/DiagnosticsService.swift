@@ -59,7 +59,7 @@ public struct DiagnosticsService {
     public func inspectGitIdentity(at folderURL: URL) -> DiagnosticsReport {
         var report = DiagnosticsReport()
         for key in ["user.name", "user.email", "core.sshCommand"] {
-            let arguments = ["config", "--show-origin", "--get", key]
+            let arguments = ["config", "--includes", "--show-origin", "--get", key]
             do {
                 let result = try commandRunner.run("git", arguments: arguments, workingDirectory: folderURL)
                 if result.exitCode == 0 {
