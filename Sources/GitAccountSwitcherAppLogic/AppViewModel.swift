@@ -274,6 +274,12 @@ public final class AppViewModel: ObservableObject {
         }
     }
 
+    public func updateSelectedProfileAccessMethod(_ accessMethod: GitAccessMethod) {
+        performSettingsUpdate {
+            try profileSettingsManager.updateSelectedProfileAccessMethod(accessMethod)
+        }
+    }
+
     public func updateSelectedProfileHostsText(_ hostsText: String) {
         performSettingsUpdate {
             try profileSettingsManager.updateSelectedProfileHostsText(hostsText)

@@ -58,6 +58,11 @@ public struct DetectedAccountMerger: Sendable {
             candidate.confidence = max(candidate.confidence, signal.confidence)
         }
 
+        candidate.accessMethods = mergedAccessMethods(from: githubSignals)
+        if candidate.accessMethods.contains(.ssh), candidate.accessMethods.contains(.https) {
+            candidate.warnings.append("Local data points to both SSH and HTTPS access. Choose the method before import.")
+        }
+
         candidate.id = stableId(for: candidate)
         guard !isDuplicate(candidate, existingProfiles: existingProfiles) else {
             return nil
@@ -119,6 +124,16 @@ public struct DetectedAccountMerger: Sendable {
             }
             return false
         }
+    }
+
+    private func mergedAccessMethods(from signals: [DetectionSignal]) -> [GitAccessMethod] {
+        var methods: [GitAccessMethod] = []
+        for signal in signals {
+            for method in signal.accessMethods where !methods.contains(method) {
+                methods.append(method)
+            }
+        }
+        return methods
     }
 
     private func unique<T: Hashable>(_ values: [T]) -> [T] {
