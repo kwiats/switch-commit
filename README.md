@@ -43,8 +43,8 @@ The app adds include lines to `~/.gitconfig` when they are missing, after backin
 1. Check the current global identity:
 
 ```bash
-git config --global --show-origin user.name
-git config --global --show-origin user.email
+git config --includes --show-origin user.name
+git config --includes --show-origin user.email
 ```
 
 2. Switch accounts from the menu bar profile list.
@@ -52,8 +52,8 @@ git config --global --show-origin user.email
 3. Confirm Git now resolves the selected profile:
 
 ```bash
-git config --global --show-origin user.name
-git config --global --show-origin user.email
+git config --includes --show-origin user.name
+git config --includes --show-origin user.email
 cat ~/.config/git-account-switcher/global.gitconfig
 ```
 
