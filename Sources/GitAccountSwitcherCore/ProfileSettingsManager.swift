@@ -3,6 +3,7 @@ import Foundation
 public final class ProfileSettingsManager {
     public private(set) var profiles: [GitProfile]
     public private(set) var rules: [FolderRule]
+    public private(set) var profileConnectionStates: [String: PersistedProfileConnectionState]
     public private(set) var activeProfileId: String?
     public private(set) var selectedProfileId: String?
     public private(set) var statusMessage: String?
@@ -25,9 +26,11 @@ public final class ProfileSettingsManager {
         if loaded.profiles.isEmpty {
             self.profiles = seedProfiles
             self.rules = []
+            self.profileConnectionStates = [:]
         } else {
             self.profiles = loaded.profiles
             self.rules = loaded.rules
+            self.profileConnectionStates = loaded.profileConnectionStates
         }
 
         self.activeProfileId = Self.initialProfileId(from: profiles)
@@ -128,7 +131,11 @@ public final class ProfileSettingsManager {
             updatedProfiles[index].isDefault = updatedProfiles[index].id == updatedActiveProfileId
         }
 
-        try profileStore.save(ProfileStoreData(profiles: updatedProfiles, rules: rules))
+        try profileStore.save(ProfileStoreData(
+            profiles: updatedProfiles,
+            rules: rules,
+            profileConnectionStates: profileConnectionStates
+        ))
 
         profiles = updatedProfiles
         selectedProfileId = profile.id
@@ -144,6 +151,7 @@ public final class ProfileSettingsManager {
 
         profiles.removeAll { $0.id == selectedProfileId }
         rules.removeAll { $0.profileId == selectedProfileId }
+        profileConnectionStates.removeValue(forKey: selectedProfileId)
 
         if profiles.isEmpty {
             self.selectedProfileId = nil
@@ -180,8 +188,12 @@ public final class ProfileSettingsManager {
     }
 
     public func updateSelectedProfileSSHKeyPath(_ sshKeyPath: String) throws {
+        let profileId = selectedProfileId
         try updateSelectedProfile { profile in
             profile.sshKeyPath = sshKeyPath
+        }
+        if let profileId {
+            try clearConnectionState(forProfileId: profileId)
         }
     }
 
@@ -211,25 +223,38 @@ public final class ProfileSettingsManager {
         )
 
         let originalProfiles = profiles
-        try profileStore.save(ProfileStoreData(profiles: draftProfiles, rules: rules))
+        try profileStore.save(ProfileStoreData(
+            profiles: draftProfiles,
+            rules: rules,
+            profileConnectionStates: profileConnectionStates
+        ))
         do {
             try applyGitConfig(
                 profiles: draftProfiles,
                 activeProfile: draftProfiles.first { $0.id == activeProfileId }
             )
         } catch {
-            try? profileStore.save(ProfileStoreData(profiles: originalProfiles, rules: rules))
+            try? profileStore.save(ProfileStoreData(
+                profiles: originalProfiles,
+                rules: rules,
+                profileConnectionStates: profileConnectionStates
+            ))
             throw error
         }
         profiles = draftProfiles
+        try clearConnectionState(forProfileId: draft.id)
     }
 
     public func updateSelectedProfileHostsText(_ hostsText: String) throws {
+        let profileId = selectedProfileId
         let hosts = hostsText
             .split(separator: ",")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
         try updateSelectedProfile { profile in
             profile.hosts = hosts
+        }
+        if let profileId {
+            try clearConnectionState(forProfileId: profileId)
         }
     }
 
@@ -258,6 +283,21 @@ public final class ProfileSettingsManager {
 
     public func hostsText(for profile: GitProfile) -> String {
         profile.hosts.joined(separator: ", ")
+    }
+
+    public func saveConnectionState(_ state: PersistedProfileConnectionState, forProfileId profileId: String) throws {
+        guard profiles.contains(where: { $0.id == profileId }) else {
+            return
+        }
+        profileConnectionStates[profileId] = state
+        try persist()
+    }
+
+    public func clearConnectionState(forProfileId profileId: String) throws {
+        guard profileConnectionStates.removeValue(forKey: profileId) != nil else {
+            return
+        }
+        try persist()
     }
 
     private var selectedProfileIndex: Array<GitProfile>.Index? {
@@ -296,7 +336,11 @@ public final class ProfileSettingsManager {
     }
 
     private func persist() throws {
-        try profileStore.save(ProfileStoreData(profiles: profiles, rules: rules))
+        try profileStore.save(ProfileStoreData(
+            profiles: profiles,
+            rules: rules,
+            profileConnectionStates: profileConnectionStates
+        ))
     }
 
     private func applyGitConfig() throws {

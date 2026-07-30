@@ -159,13 +159,66 @@ public struct FolderRule: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
+public enum PersistedHostConnectionTestStatus: String, Codable, Equatable, Sendable {
+    case connected
+    case failed
+}
+
+public struct PersistedHostConnectionTestResult: Codable, Equatable, Sendable {
+    public var host: String
+    public var status: PersistedHostConnectionTestStatus
+    public var message: String
+
+    public init(host: String, status: PersistedHostConnectionTestStatus, message: String) {
+        self.host = host
+        self.status = status
+        self.message = message
+    }
+}
+
+public struct PersistedProfileConnectionState: Codable, Equatable, Sendable {
+    public var profileId: String
+    public var testedAt: String
+    public var results: [PersistedHostConnectionTestResult]
+
+    public init(profileId: String, testedAt: String, results: [PersistedHostConnectionTestResult]) {
+        self.profileId = profileId
+        self.testedAt = testedAt
+        self.results = results
+    }
+}
+
 public struct ProfileStoreData: Codable, Equatable, Sendable {
     public var profiles: [GitProfile]
     public var rules: [FolderRule]
+    public var profileConnectionStates: [String: PersistedProfileConnectionState]
 
-    public init(profiles: [GitProfile] = [], rules: [FolderRule] = []) {
+    private enum CodingKeys: String, CodingKey {
+        case profiles
+        case rules
+        case profileConnectionStates
+    }
+
+    public init(
+        profiles: [GitProfile] = [],
+        rules: [FolderRule] = [],
+        profileConnectionStates: [String: PersistedProfileConnectionState] = [:]
+    ) {
         self.profiles = profiles
         self.rules = rules
+        self.profileConnectionStates = profileConnectionStates
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            profiles: try container.decode([GitProfile].self, forKey: .profiles),
+            rules: try container.decode([FolderRule].self, forKey: .rules),
+            profileConnectionStates: try container.decodeIfPresent(
+                [String: PersistedProfileConnectionState].self,
+                forKey: .profileConnectionStates
+            ) ?? [:]
+        )
     }
 }
 
