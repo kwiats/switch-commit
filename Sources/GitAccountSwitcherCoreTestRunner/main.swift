@@ -1088,6 +1088,66 @@ let tests: [(String, () throws -> Void)] = [
             try expect(viewModel.settingsMessage == "Complete the detected GitHub account before using it.", "completion should explain next step")
         }
     }),
+    ("app view model exposes GitPersona update presentation", {
+        final class RecordingUpdateChecker: AppUpdateChecking {
+            var canCheckForUpdates = true
+            private(set) var checkCount = 0
+
+            func checkForUpdates() {
+                checkCount += 1
+            }
+        }
+
+        let checker = RecordingUpdateChecker()
+        let viewModel = AppViewModel(
+            profiles: [],
+            keychainStore: InMemoryKeychainStore(),
+            updateChecker: checker,
+            bundleInfo: AppBundleInfo(
+                shortVersion: "1.2.3",
+                buildVersion: "45"
+            )
+        )
+
+        try expect(viewModel.updatePresentation.productName == "GitPersona", "updates should use the customer-facing product name")
+        try expect(viewModel.updatePresentation.installedVersion == "1.2.3 (45)", "updates should show semantic version and build")
+        try expect(viewModel.updatePresentation.canCheckForUpdates, "manual update checks should be enabled when checker allows it")
+        try expect(viewModel.updatePresentation.privacyNote == "Checks the public GitPersona release channel only after you click.", "privacy note should explain manual network access")
+
+        viewModel.checkForUpdates()
+
+        try expect(checker.checkCount == 1, "manual update check should call the injected checker once")
+        try expect(viewModel.settingsMessage == "Checking GitPersona updates...", "manual check should show a user-initiated status message")
+    }),
+    ("app view model reports disabled update checker without network access", {
+        final class DisabledRecordingUpdateChecker: AppUpdateChecking {
+            var canCheckForUpdates = false
+            private(set) var checkCount = 0
+
+            func checkForUpdates() {
+                checkCount += 1
+            }
+        }
+
+        let checker = DisabledRecordingUpdateChecker()
+        let viewModel = AppViewModel(
+            profiles: [],
+            keychainStore: InMemoryKeychainStore(),
+            updateChecker: checker,
+            bundleInfo: AppBundleInfo(
+                shortVersion: nil,
+                buildVersion: nil
+            )
+        )
+
+        try expect(viewModel.updatePresentation.installedVersion == "Development Build", "missing bundle version should use a debug-friendly fallback")
+        try expect(!viewModel.updatePresentation.canCheckForUpdates, "presentation should reflect disabled checker")
+
+        viewModel.checkForUpdates()
+
+        try expect(checker.checkCount == 0, "disabled checker must not be called")
+        try expect(viewModel.settingsMessage == "Updates are not available in this build.", "disabled checker should explain why nothing happened")
+    }),
     ("run local diagnostics requests settings presentation", {
         try MainActor.assumeIsolated {
             let viewModel = AppViewModel(profiles: [])

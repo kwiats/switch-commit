@@ -6,6 +6,48 @@ public enum AppPresentationRequest: Equatable, Sendable {
     case settings
 }
 
+public struct AppBundleInfo: Equatable, Sendable {
+    public let shortVersion: String?
+    public let buildVersion: String?
+
+    public init(shortVersion: String?, buildVersion: String?) {
+        self.shortVersion = shortVersion
+        self.buildVersion = buildVersion
+    }
+
+    public static func mainBundle() -> AppBundleInfo {
+        let info = Bundle.main.infoDictionary
+        return AppBundleInfo(
+            shortVersion: info?["CFBundleShortVersionString"] as? String,
+            buildVersion: info?["CFBundleVersion"] as? String
+        )
+    }
+}
+
+public struct AppUpdatePresentation: Equatable, Sendable {
+    public let productName: String
+    public let installedVersion: String
+    public let canCheckForUpdates: Bool
+    public let privacyNote: String
+}
+
+@MainActor
+public protocol AppUpdateChecking: AnyObject {
+    var canCheckForUpdates: Bool { get }
+    func checkForUpdates()
+}
+
+@MainActor
+public final class DisabledAppUpdateChecker: AppUpdateChecking {
+    public init() {}
+
+    public var canCheckForUpdates: Bool {
+        false
+    }
+
+    public func checkForUpdates() {}
+}
+
 private struct UncheckedSendable<Value>: @unchecked Sendable {
     let value: Value
 }
@@ -81,6 +123,8 @@ public final class AppViewModel: ObservableObject {
     private let profileSettingsManager: ProfileSettingsManager
     private let githubDiscoveryWorker: GitHubDiscoveryWorker
     private let hostConnectionTestWorker: HostConnectionTestWorker
+    private let updateChecker: AppUpdateChecking
+    private let bundleInfo: AppBundleInfo
     private var connectionTestResultsByProfileId: [String: [HostConnectionTestResult]]
 
     public init(
@@ -92,7 +136,9 @@ public final class AppViewModel: ObservableObject {
         keychainStore: KeychainStoring = SystemKeychainStore(),
         gitConfigInstaller: GitConfigInstalling? = nil,
         githubDiscoveryService: GitHubLocalDiscoveryService? = nil,
-        diagnosticsService: DiagnosticsService = DiagnosticsService()
+        diagnosticsService: DiagnosticsService = DiagnosticsService(),
+        updateChecker: AppUpdateChecking = DisabledAppUpdateChecker(),
+        bundleInfo: AppBundleInfo = .mainBundle()
     ) {
         let seedProfiles = profiles ?? AppViewModel.previewProfiles()
         let resolvedProfileStore = profileStore ?? ProfileStore(fileURL: profiles == nil ? AppViewModel.defaultProfilesURL() : AppViewModel.temporaryProfilesURL())
@@ -134,6 +180,8 @@ public final class AppViewModel: ObservableObject {
         self.hostConnectionTestWorker = HostConnectionTestWorker(
             service: UncheckedSendable(value: diagnosticsService)
         )
+        self.updateChecker = updateChecker
+        self.bundleInfo = bundleInfo
         self.connectionTestResultsByProfileId = [:]
         self.detectedAccounts = []
         self.menuContentRevision = 0
@@ -145,6 +193,15 @@ public final class AppViewModel: ObservableObject {
 
     public var selectedProfile: GitProfile? {
         profileSettingsManager.selectedProfile
+    }
+
+    public var updatePresentation: AppUpdatePresentation {
+        AppUpdatePresentation(
+            productName: "GitPersona",
+            installedVersion: formattedInstalledVersion,
+            canCheckForUpdates: updateChecker.canCheckForUpdates,
+            privacyNote: "Checks the public GitPersona release channel only after you click."
+        )
     }
 
     public var hostsTextForSelectedProfile: String {
@@ -163,6 +220,15 @@ public final class AppViewModel: ObservableObject {
     public func runLocalDiagnostics() {
         diagnosticsText = "Local diagnostics are available in the core service. No network checks run automatically."
         presentationRequest = .settings
+    }
+
+    public func checkForUpdates() {
+        guard updateChecker.canCheckForUpdates else {
+            settingsMessage = "Updates are not available in this build."
+            return
+        }
+        settingsMessage = "Checking GitPersona updates..."
+        updateChecker.checkForUpdates()
     }
 
     public func requestSettingsPresentation() {
@@ -409,6 +475,21 @@ public final class AppViewModel: ObservableObject {
         profile.hosts
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
+    }
+
+    private var formattedInstalledVersion: String {
+        let shortVersion = bundleInfo.shortVersion?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let buildVersion = bundleInfo.buildVersion?.trimmingCharacters(in: .whitespacesAndNewlines)
+        switch (shortVersion?.isEmpty == false ? shortVersion : nil, buildVersion?.isEmpty == false ? buildVersion : nil) {
+        case (.some(let shortVersion), .some(let buildVersion)):
+            return "\(shortVersion) (\(buildVersion))"
+        case (.some(let shortVersion), nil):
+            return shortVersion
+        case (nil, .some(let buildVersion)):
+            return "Build \(buildVersion)"
+        case (nil, nil):
+            return "Development Build"
+        }
     }
 
     private static func defaultProfilesURL() -> URL {
