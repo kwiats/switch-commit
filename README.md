@@ -11,6 +11,7 @@ Local-only macOS menu bar tool for switching Git identities globally and per fol
 - Managed writes are constrained to app-owned config files.
 - `~/.gitconfig` only receives explicit include lines for managed Git config files.
 - SSH/GitHub checks are manual diagnostics only.
+- Host connection status updates only after the user clicks `Test Connection`; no connection checks run in the background.
 - Existing `~/.gitconfig` and `~/.ssh/config` are never replaced wholesale.
 
 ### Local GitHub Discovery
@@ -56,6 +57,16 @@ git config --includes --show-origin user.name
 git config --includes --show-origin user.email
 cat ~/.config/git-account-switcher/global.gitconfig
 ```
+
+## Manual Host Connection Check
+
+The settings window shows a provider icon and connection status for each account:
+
+- red: connection has not been tested or no usable host is configured,
+- orange: a manual test was attempted but SSH or local configuration reported a problem,
+- green: the latest manual test succeeded for every host in the profile.
+
+Click `Test Connection` in the selected account header to run the SSH check. The app never starts these network checks automatically.
 
 ## Development
 

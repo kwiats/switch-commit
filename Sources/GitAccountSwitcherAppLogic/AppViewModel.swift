@@ -27,13 +27,42 @@ private actor GitHubDiscoveryWorker {
     }
 }
 
+private actor HostConnectionTestWorker {
+    private let service: UncheckedSendable<DiagnosticsService>
+
+    init(service: UncheckedSendable<DiagnosticsService>) {
+        self.service = service
+    }
+
+    func test(hosts: [String]) -> [HostConnectionTestResult] {
+        hosts.map { service.value.testSSHConnection(host: $0) }
+    }
+}
+
 public enum ProfileGitBindingStatus: Equatable, Sendable {
-    case mockLinked
+    case notConnected(message: String)
+    case needsAttention(message: String)
+    case connected(message: String)
 
     public var systemImageName: String {
+        "circle.fill"
+    }
+
+    public var displayColorName: String {
         switch self {
-        case .mockLinked:
-            return "link.circle.fill"
+        case .notConnected:
+            return "red"
+        case .needsAttention:
+            return "orange"
+        case .connected:
+            return "green"
+        }
+    }
+
+    public var message: String {
+        switch self {
+        case .notConnected(let message), .needsAttention(let message), .connected(let message):
+            return message
         }
     }
 }
@@ -51,6 +80,8 @@ public final class AppViewModel: ObservableObject {
 
     private let profileSettingsManager: ProfileSettingsManager
     private let githubDiscoveryWorker: GitHubDiscoveryWorker
+    private let hostConnectionTestWorker: HostConnectionTestWorker
+    private var connectionTestResultsByProfileId: [String: [HostConnectionTestResult]]
 
     public init(
         profiles: [GitProfile]? = nil,
@@ -60,7 +91,8 @@ public final class AppViewModel: ObservableObject {
         profileStore: ProfileStore? = nil,
         keychainStore: KeychainStoring = SystemKeychainStore(),
         gitConfigInstaller: GitConfigInstalling? = nil,
-        githubDiscoveryService: GitHubLocalDiscoveryService? = nil
+        githubDiscoveryService: GitHubLocalDiscoveryService? = nil,
+        diagnosticsService: DiagnosticsService = DiagnosticsService()
     ) {
         let seedProfiles = profiles ?? AppViewModel.previewProfiles()
         let resolvedProfileStore = profileStore ?? ProfileStore(fileURL: profiles == nil ? AppViewModel.defaultProfilesURL() : AppViewModel.temporaryProfilesURL())
@@ -99,6 +131,10 @@ public final class AppViewModel: ObservableObject {
         self.githubDiscoveryWorker = GitHubDiscoveryWorker(
             service: UncheckedSendable(value: githubDiscoveryService ?? GitHubLocalDiscoveryService())
         )
+        self.hostConnectionTestWorker = HostConnectionTestWorker(
+            service: UncheckedSendable(value: diagnosticsService)
+        )
+        self.connectionTestResultsByProfileId = [:]
         self.detectedAccounts = []
         self.menuContentRevision = 0
     }
@@ -138,7 +174,63 @@ public final class AppViewModel: ObservableObject {
     }
 
     public func gitBindingStatus(for profile: GitProfile) -> ProfileGitBindingStatus {
-        .mockLinked
+        connectionStatus(for: profile)
+    }
+
+    public func connectionStatus(for profile: GitProfile) -> ProfileGitBindingStatus {
+        let hosts = normalizedHosts(for: profile)
+        guard !hosts.isEmpty else {
+            return .needsAttention(message: "No host configured.")
+        }
+        guard !profile.sshKeyPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return .needsAttention(message: "No SSH key configured.")
+        }
+        guard let results = connectionTestResultsByProfileId[profile.id], !results.isEmpty else {
+            return .notConnected(message: "Connection not tested.")
+        }
+        if results.allSatisfy({ $0.status == .connected }) {
+            let hostText = results.map(\.host).joined(separator: ", ")
+            return .connected(message: "Connected to \(hostText).")
+        }
+        let failedResults = results.filter { $0.status == .failed }
+        let failedHosts = failedResults.map(\.host).joined(separator: ", ")
+        let firstMessage = failedResults.first?.message ?? "Connection test failed."
+        return .needsAttention(message: "\(failedHosts): \(firstMessage)")
+    }
+
+    public func testConnectionForSelectedProfile() {
+        guard let profile = selectedProfile else {
+            settingsMessage = "Select an account before testing connection."
+            return
+        }
+        let hosts = normalizedHosts(for: profile)
+        guard !hosts.isEmpty else {
+            connectionTestResultsByProfileId[profile.id] = [
+                HostConnectionTestResult(host: "Host", status: .failed, message: "No host configured.")
+            ]
+            settingsMessage = "No host configured for \(profile.displayName)."
+            menuContentRevision += 1
+            return
+        }
+        settingsMessage = "Testing connection for \(profile.displayName)..."
+        let worker = hostConnectionTestWorker
+        Task { [weak self, worker, profile, hosts] in
+            let results = await worker.test(hosts: hosts)
+            guard let self else {
+                return
+            }
+            connectionTestResultsByProfileId[profile.id] = results
+            settingsMessage = connectionStatus(for: profile).message
+            menuContentRevision += 1
+        }
+    }
+
+    public func providerSystemImageName(for profile: GitProfile) -> String {
+        let hosts = Set(profile.hosts.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() })
+        if hosts.contains("github.com") {
+            return "person.crop.circle.badge.checkmark"
+        }
+        return "terminal"
     }
 
     public func selectProfile(id: String?) {
@@ -311,6 +403,12 @@ public final class AppViewModel: ObservableObject {
             }
             return false
         }
+    }
+
+    private func normalizedHosts(for profile: GitProfile) -> [String] {
+        profile.hosts
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
     }
 
     private static func defaultProfilesURL() -> URL {

@@ -70,13 +70,22 @@ struct SettingsView: View {
                 set: { viewModel.selectProfile(id: $0) }
             )) {
                 ForEach(viewModel.profiles) { profile in
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(profile.displayName)
-                            .lineLimit(1)
-                        Text(profile.gitUserEmail)
-                            .font(.caption)
+                    HStack(spacing: 8) {
+                        Image(systemName: viewModel.providerSystemImageName(for: profile))
                             .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                            .frame(width: 16)
+                        Image(systemName: viewModel.connectionStatus(for: profile).systemImageName)
+                            .font(.system(size: 8))
+                            .foregroundStyle(statusColor(viewModel.connectionStatus(for: profile)))
+                            .frame(width: 10)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(profile.displayName)
+                                .lineLimit(1)
+                            Text(profile.gitUserEmail)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
                     }
                     .tag(Optional(profile.id))
                 }
@@ -276,13 +285,46 @@ struct SettingsView: View {
     }
 
     private func header(for profile: GitProfile) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(profile.displayName)
+        let status = viewModel.connectionStatus(for: profile)
+        return HStack(alignment: .top, spacing: 12) {
+            Image(systemName: viewModel.providerSystemImageName(for: profile))
                 .font(.title2)
-                .lineLimit(1)
-            Text(profile.gitUserEmail)
                 .foregroundStyle(.secondary)
-                .lineLimit(1)
+                .frame(width: 28)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(profile.displayName)
+                    .font(.title2)
+                    .lineLimit(1)
+                Text(profile.gitUserEmail)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Image(systemName: status.systemImageName)
+                        .font(.system(size: 10))
+                        .foregroundStyle(statusColor(status))
+                    Text(status.message)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+            }
+            Spacer()
+            Button {
+                viewModel.testConnectionForSelectedProfile()
+            } label: {
+                Label("Test Connection", systemImage: "bolt.horizontal.circle")
+            }
+        }
+    }
+
+    private func statusColor(_ status: ProfileGitBindingStatus) -> Color {
+        switch status.displayColorName {
+        case "green":
+            return .green
+        case "orange":
+            return .orange
+        default:
+            return .red
         }
     }
 

@@ -590,6 +590,49 @@ let tests: [(String, () throws -> Void)] = [
         try expect(runner.commands.allSatisfy { $0.contains("--show-origin") }, "diagnostics should show origin")
         try expect(report.warnings.contains { $0.contains("core.sshCommand") }, "failed command should become warning")
     }),
+    ("diagnostics builds ssh connection test commands for git hosts", {
+        let service = DiagnosticsService()
+
+        let githubCommand = service.sshConnectionTestCommand(host: "github.com")
+        let gitlabCommand = service.sshConnectionTestCommand(host: "gitlab.com")
+
+        try expect(githubCommand.command == "ssh", "github command should use ssh")
+        try expect(githubCommand.arguments == ["-o", "BatchMode=yes", "-T", "git@github.com"], "github command should use git user")
+        try expect(gitlabCommand.command == "ssh", "generic host command should use ssh")
+        try expect(gitlabCommand.arguments == ["-o", "BatchMode=yes", "-T", "git@gitlab.com"], "generic host command should use git user")
+    }),
+    ("diagnostics interprets manual ssh connection results", {
+        final class FakeConnectionRunner: CommandRunning {
+            var result: CommandResult
+
+            init(result: CommandResult) {
+                self.result = result
+            }
+
+            func run(_ command: String, arguments: [String], workingDirectory: URL?) throws -> CommandResult {
+                result
+            }
+        }
+
+        let githubRunner = FakeConnectionRunner(result: CommandResult(
+            exitCode: 1,
+            standardOutput: "",
+            standardError: "Hi pawelkwiatkowski! You've successfully authenticated, but GitHub does not provide shell access."
+        ))
+        let githubResult = DiagnosticsService(commandRunner: githubRunner).testSSHConnection(host: "github.com")
+
+        let failedRunner = FakeConnectionRunner(result: CommandResult(
+            exitCode: 255,
+            standardOutput: "",
+            standardError: "Permission denied (publickey)."
+        ))
+        let failedResult = DiagnosticsService(commandRunner: failedRunner).testSSHConnection(host: "gitlab.com")
+
+        try expect(githubResult.status == .connected, "github success text should count as connected")
+        try expect(githubResult.message.contains("successfully authenticated"), "github success message should be preserved")
+        try expect(failedResult.status == .failed, "non-success result should fail")
+        try expect(failedResult.message.contains("Permission denied"), "failure message should be preserved")
+    }),
     ("keychain identifiers are app and profile scoped", {
         let identifier = KeychainCredentialIdentifier(profileId: "work", purpose: "https")
         try expect(identifier.rawValue == "git-account-switcher.work.https", "identifier should be namespaced")
@@ -1120,7 +1163,77 @@ let tests: [(String, () throws -> Void)] = [
             )
         }
     }),
-    ("profile git binding status is available for menu icons", {
+    ("app view model connection status starts red and turns green after manual test", {
+        final class SuccessfulConnectionRunner: CommandRunning {
+            func run(_ command: String, arguments: [String], workingDirectory: URL?) throws -> CommandResult {
+                CommandResult(exitCode: 0, standardOutput: "connected", standardError: "")
+            }
+        }
+
+        try MainActor.assumeIsolated {
+            let profile = try GitProfile(
+                id: "personal",
+                displayName: "Personal",
+                gitUserName: "Personal User",
+                gitUserEmail: "me@example.com",
+                sshKeyPath: "~/.ssh/id_ed25519",
+                hosts: ["github.com"],
+                httpsCredentialRef: nil,
+                isDefault: true
+            )
+            let viewModel = AppViewModel(
+                profiles: [profile],
+                diagnosticsService: DiagnosticsService(commandRunner: SuccessfulConnectionRunner())
+            )
+
+            try expect(
+                viewModel.connectionStatus(for: profile).displayColorName == "red",
+                "untested profile should be red"
+            )
+
+            viewModel.testConnectionForSelectedProfile()
+            try expect(
+                waitUntil { viewModel.connectionStatus(for: profile).displayColorName == "green" },
+                "successful manual test should turn status green"
+            )
+        }
+    }),
+    ("app view model connection status turns orange after failed manual test", {
+        final class FailedConnectionRunner: CommandRunning {
+            func run(_ command: String, arguments: [String], workingDirectory: URL?) throws -> CommandResult {
+                CommandResult(exitCode: 255, standardOutput: "", standardError: "Permission denied (publickey).")
+            }
+        }
+
+        try MainActor.assumeIsolated {
+            let profile = try GitProfile(
+                id: "work",
+                displayName: "Work",
+                gitUserName: "Work User",
+                gitUserEmail: "work@example.com",
+                sshKeyPath: "~/.ssh/id_work",
+                hosts: ["github.com"],
+                httpsCredentialRef: nil,
+                isDefault: true
+            )
+            let viewModel = AppViewModel(
+                profiles: [profile],
+                diagnosticsService: DiagnosticsService(commandRunner: FailedConnectionRunner())
+            )
+
+            viewModel.testConnectionForSelectedProfile()
+
+            try expect(
+                waitUntil { viewModel.connectionStatus(for: profile).displayColorName == "orange" },
+                "failed manual test should turn status orange"
+            )
+            try expect(
+                viewModel.connectionStatus(for: profile).message.contains("Permission denied"),
+                "failed manual test should expose SSH failure message"
+            )
+        }
+    }),
+    ("profile git binding status exposes manual connection status for menu icons", {
         try MainActor.assumeIsolated {
             let profile = try GitProfile(
                 id: "personal",
@@ -1135,8 +1248,50 @@ let tests: [(String, () throws -> Void)] = [
             let viewModel = AppViewModel(profiles: [profile])
 
             try expect(
-                viewModel.gitBindingStatus(for: profile) == .mockLinked,
-                "mock git binding status should be available until real integration is wired"
+                viewModel.gitBindingStatus(for: profile).systemImageName == "circle.fill",
+                "manual connection status should expose a menu icon"
+            )
+            try expect(
+                viewModel.gitBindingStatus(for: profile).displayColorName == "red",
+                "untested connection status should be red"
+            )
+        }
+    }),
+    ("app view model exposes provider icon metadata for account rows", {
+        try MainActor.assumeIsolated {
+            let githubProfile = try GitProfile(
+                id: "personal",
+                displayName: "Personal",
+                gitUserName: "Personal User",
+                gitUserEmail: "me@example.com",
+                sshKeyPath: "~/.ssh/id_ed25519",
+                hosts: ["github.com"],
+                httpsCredentialRef: nil,
+                isDefault: true
+            )
+            let genericProfile = try GitProfile(
+                id: "gitlab",
+                displayName: "GitLab",
+                gitUserName: "GitLab User",
+                gitUserEmail: "gitlab@example.com",
+                sshKeyPath: "~/.ssh/id_gitlab",
+                hosts: ["gitlab.com"],
+                httpsCredentialRef: nil,
+                isDefault: false
+            )
+            let viewModel = AppViewModel(profiles: [githubProfile, genericProfile])
+
+            try expect(
+                viewModel.providerSystemImageName(for: githubProfile) == "person.crop.circle.badge.checkmark",
+                "github profile should expose provider icon"
+            )
+            try expect(
+                viewModel.providerSystemImageName(for: genericProfile) == "terminal",
+                "non-github profile should expose generic git provider icon"
+            )
+            try expect(
+                viewModel.connectionStatus(for: githubProfile).systemImageName == "circle.fill",
+                "status should expose dot icon"
             )
         }
     })

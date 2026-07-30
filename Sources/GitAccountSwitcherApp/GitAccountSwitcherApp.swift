@@ -46,10 +46,7 @@ final class GitAccountSwitcherApp: NSObject, NSApplicationDelegate {
                 let item = NSMenuItem(title: profile.displayName, action: #selector(selectProfile(_:)), keyEquivalent: "")
                 item.target = self
                 item.representedObject = profile.id
-                item.image = NSImage(
-                    systemSymbolName: viewModel.gitBindingStatus(for: profile).systemImageName,
-                    accessibilityDescription: "Git binding status"
-                )
+                item.image = statusImage(for: viewModel.gitBindingStatus(for: profile))
                 item.state = profile.id == viewModel.activeProfileId ? .on : .off
                 menu.addItem(item)
             }
@@ -82,6 +79,23 @@ final class GitAccountSwitcherApp: NSObject, NSApplicationDelegate {
                 self?.statusItem?.menu = self?.buildMenu()
             }
             .store(in: &cancellables)
+    }
+
+    private func statusImage(for status: ProfileGitBindingStatus) -> NSImage? {
+        let color: NSColor
+        switch status.displayColorName {
+        case "green":
+            color = .systemGreen
+        case "orange":
+            color = .systemOrange
+        default:
+            color = .systemRed
+        }
+        let configuration = NSImage.SymbolConfiguration(hierarchicalColor: color)
+        return NSImage(
+            systemSymbolName: status.systemImageName,
+            accessibilityDescription: "Git binding status"
+        )?.withSymbolConfiguration(configuration)
     }
 
     @objc private func selectProfile(_ sender: NSMenuItem) {
