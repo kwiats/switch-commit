@@ -1545,7 +1545,8 @@ let tests: [(String, () throws -> Void)] = [
         let source = try String(contentsOf: scriptURL, encoding: .utf8)
 
         try expect(
-            source.contains("https://kwiats.github.io/switch-commit-release-channel/appcast.xml"),
+            source.contains("release_channel_base_url=\"https://kwiats.github.io/switch-commit-release-channel\"")
+                && source.contains("sparkle_feed_url=\"${release_channel_base_url}/appcast.xml\""),
             "release script should embed the public Switch Commit appcast URL"
         )
         try expect(
@@ -1560,6 +1561,78 @@ let tests: [(String, () throws -> Void)] = [
         try expect(source.contains("Sparkle.framework"), "release script should copy Sparkle.framework into the app bundle")
         try expect(source.contains("@executable_path/../Frameworks"), "release script should add an app bundle Frameworks rpath")
         try expect(source.contains("sparkle_framework_destination"), "release script should sign bundled Sparkle.framework explicitly")
+    }),
+    ("release build script keeps appcast and artifact URLs on the public release channel", {
+        let scriptURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("Scripts/build-release.sh")
+        let source = try String(contentsOf: scriptURL, encoding: .utf8)
+
+        try expect(
+            source.contains("release_channel_base_url=\"https://kwiats.github.io/switch-commit-release-channel\""),
+            "release script should keep the public channel base URL in one place"
+        )
+        try expect(
+            source.contains("sparkle_feed_url=\"${release_channel_base_url}/appcast.xml\""),
+            "release script should derive appcast URL from the public channel base URL"
+        )
+        try expect(
+            source.contains("sparkle_artifact_url=\"${release_channel_base_url}/GitAccountSwitcher-v${version}-macOS.zip\""),
+            "release script should derive artifact URL from the public channel base URL"
+        )
+        try expect(
+            source.contains("release-url.txt"),
+            "release script should write the public artifact URL next to release artifacts"
+        )
+    }),
+    ("release channel publisher signs appcast with Sparkle EdDSA key from standard input", {
+        let scriptURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("Scripts/publish-release-channel.sh")
+        let source = try String(contentsOf: scriptURL, encoding: .utf8)
+
+        try expect(source.contains("SPARKLE_PRIVATE_ED_KEY"), "publisher should require the Sparkle private EdDSA key from the environment")
+        try expect(source.contains("generate_appcast"), "publisher should invoke Sparkle generate_appcast")
+        try expect(source.contains("--ed-key-file -"), "publisher should pass the EdDSA key via standard input")
+        try expect(source.contains("GitAccountSwitcher-v${version}-macOS.zip"), "publisher should copy the release ZIP")
+        try expect(source.contains("checksum_name=\"${artifact_name}.sha256\""), "publisher should copy the checksum")
+        try expect(source.contains("docs/release-notes/v${version}.md"), "publisher should copy matching release notes when present")
+    }),
+    ("tag release workflow publishes public GitHub Pages appcast channel", {
+        let workflowURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent(".github/workflows/release.yml")
+        let source = try String(contentsOf: workflowURL, encoding: .utf8)
+
+        try expect(source.contains("tags:"), "release workflow should run for tags")
+        try expect(source.contains("'v*'"), "release workflow should limit publishing to v-prefixed tags")
+        try expect(source.contains("Scripts/pr-checks.sh"), "release workflow should run local checks before publishing")
+        try expect(source.contains("Scripts/build-release.sh"), "release workflow should build the release artifact")
+        try expect(source.contains("repository: kwiats/switch-commit-release-channel"), "release workflow should checkout the public release channel")
+        try expect(source.contains("RELEASE_CHANNEL_TOKEN"), "release workflow should use a token scoped to the public release channel")
+        try expect(source.contains("SPARKLE_PRIVATE_ED_KEY"), "release workflow should provide Sparkle signing material only from secrets")
+        try expect(source.contains("Scripts/publish-release-channel.sh"), "release workflow should publish through the checked-in publisher script")
+        try expect(source.contains("git push"), "release workflow should push the release channel update")
+    }),
+    ("README documents tag release CD and release channel secrets", {
+        let readmeURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("README.md")
+        let source = try String(contentsOf: readmeURL, encoding: .utf8)
+
+        try expect(source.contains("git tag v0.2.0"), "README should show how to tag a release")
+        try expect(source.contains("RELEASE_CHANNEL_TOKEN"), "README should document the release channel token secret")
+        try expect(source.contains("SPARKLE_PRIVATE_ED_KEY"), "README should document the Sparkle private key secret")
+        try expect(source.contains("https://kwiats.github.io/switch-commit-release-channel/appcast.xml"), "README should document the public appcast URL")
+    }),
+    ("menu bar app omits diagnostics shortcut and uses Switch Commit chrome", {
+        let appURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("Sources/GitAccountSwitcherApp/GitAccountSwitcherApp.swift")
+        let windowURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("Sources/GitAccountSwitcherApp/SettingsWindowController.swift")
+        let appSource = try String(contentsOf: appURL, encoding: .utf8)
+        let windowSource = try String(contentsOf: windowURL, encoding: .utf8)
+
+        try expect(!appSource.contains("Run Local Diagnostics"), "menu should not expose the local diagnostics shortcut")
+        try expect(!appSource.contains("#selector(runLocalDiagnostics)"), "menu should not wire a diagnostics menu action")
+        try expect(appSource.contains("accessibilityDescription: \"Switch Commit\""), "status item should use Switch Commit in app chrome")
+        try expect(windowSource.contains("createdWindow.title = \"Switch Commit Settings\""), "settings window header should use Switch Commit")
     }),
     ("run local diagnostics requests settings presentation", {
         try MainActor.assumeIsolated {

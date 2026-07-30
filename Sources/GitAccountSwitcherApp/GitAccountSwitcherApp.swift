@@ -29,7 +29,7 @@ final class GitAccountSwitcherApp: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         print("GitAccountSwitcherApp did finish launching")
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        item.button?.image = NSImage(systemSymbolName: "person.crop.circle.badge.checkmark", accessibilityDescription: "Git Account Switcher")
+        item.button?.image = NSImage(systemSymbolName: "person.crop.circle.badge.checkmark", accessibilityDescription: "Switch Commit")
         item.button?.imagePosition = .imageOnly
         item.menu = buildMenu()
         statusItem = item
@@ -59,11 +59,6 @@ final class GitAccountSwitcherApp: NSObject, NSApplicationDelegate {
             emptyItem.isEnabled = false
             menu.addItem(emptyItem)
         }
-
-        menu.addItem(.separator())
-        let diagnosticsItem = NSMenuItem(title: "Run Local Diagnostics", action: #selector(runLocalDiagnostics), keyEquivalent: "")
-        diagnosticsItem.target = self
-        menu.addItem(diagnosticsItem)
 
         let settingsItem = NSMenuItem(title: "Settings", action: #selector(showSettings), keyEquivalent: ",")
         settingsItem.target = self
@@ -111,11 +106,6 @@ final class GitAccountSwitcherApp: NSObject, NSApplicationDelegate {
         }
         viewModel.switchGlobalProfile(to: profile)
         statusItem?.menu = buildMenu()
-    }
-
-    @objc private func runLocalDiagnostics() {
-        viewModel.runLocalDiagnostics()
-        presentRequestedWindow()
     }
 
     @objc private func showSettings() {
