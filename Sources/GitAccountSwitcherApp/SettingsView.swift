@@ -7,6 +7,7 @@ struct SettingsView: View {
     private enum SettingsTab: Hashable {
         case accounts
         case detection
+        case updates
     }
 
     @ObservedObject var viewModel: AppViewModel
@@ -26,6 +27,12 @@ struct SettingsView: View {
                     Label("Detection", systemImage: "magnifyingglass")
                 }
                 .tag(SettingsTab.detection)
+
+            updatesTab
+                .tabItem {
+                    Label("Updates", systemImage: "arrow.down.circle")
+                }
+                .tag(SettingsTab.updates)
         }
         .frame(width: 760, height: 500)
         .alert(DeleteAccountConfirmationContent.title, isPresented: $isShowingDeleteConfirmation) {
@@ -141,6 +148,40 @@ struct SettingsView: View {
             }
 
             detectedAccountsSection
+            Spacer()
+            footer
+        }
+        .padding(20)
+    }
+
+    private var updatesTab: some View {
+        let presentation = viewModel.updatePresentation
+        return VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(presentation.productName)
+                    .font(.title2)
+                Text("Version \(presentation.installedVersion)")
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Button {
+                        viewModel.checkForUpdates()
+                    } label: {
+                        Label("Check for Updates", systemImage: "arrow.clockwise")
+                    }
+                    .disabled(!presentation.canCheckForUpdates)
+
+                    Spacer()
+                }
+
+                Text(presentation.privacyNote)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             Spacer()
             footer
         }
