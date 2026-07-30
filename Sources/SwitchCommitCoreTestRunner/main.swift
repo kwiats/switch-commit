@@ -1,6 +1,6 @@
 import Foundation
-import GitAccountSwitcherAppLogic
-import GitAccountSwitcherCore
+import SwitchCommitAppLogic
+import SwitchCommitCore
 
 enum TestFailure: Error, CustomStringConvertible {
     case expectationFailed(String)
@@ -432,7 +432,7 @@ let tests: [(String, () throws -> Void)] = [
         try expect(signals.isEmpty, "manual scan must not read git config symlinked outside selected folder")
     }),
     ("profile rejects empty commit identity", {
-        try expectThrows(GitAccountSwitcherError.emptyGitUserName, {
+        try expectThrows(SwitchCommitError.emptyGitUserName, {
             _ = try GitProfile(
                 id: "personal",
                 displayName: "Personal",
@@ -485,7 +485,7 @@ let tests: [(String, () throws -> Void)] = [
         try expect(profile.sshKeyPath == "", "https profile should allow empty ssh key path")
     }),
     ("ssh profile still rejects empty ssh key path", {
-        try expectThrows(GitAccountSwitcherError.emptySSHKeyPath, {
+        try expectThrows(SwitchCommitError.emptySSHKeyPath, {
             _ = try GitProfile(
                 id: "personal-ssh",
                 displayName: "Personal SSH",
@@ -500,7 +500,7 @@ let tests: [(String, () throws -> Void)] = [
         }, "ssh profiles should require an ssh key path")
     }),
     ("profile rejects config injection characters", {
-        try expectThrows(GitAccountSwitcherError.unsafeConfigValue, {
+        try expectThrows(SwitchCommitError.unsafeConfigValue, {
             _ = try GitProfile(
                 id: "personal",
                 displayName: "Personal",
@@ -513,7 +513,7 @@ let tests: [(String, () throws -> Void)] = [
             )
         }, "newlines in git user name should be rejected")
 
-        try expectThrows(GitAccountSwitcherError.unsafeConfigValue, {
+        try expectThrows(SwitchCommitError.unsafeConfigValue, {
             _ = try GitProfile(
                 id: "personal",
                 displayName: "Personal",
@@ -527,7 +527,7 @@ let tests: [(String, () throws -> Void)] = [
         }, "newlines in ssh hosts should be rejected")
     }),
     ("profile rejects identifiers that can escape managed filenames", {
-        try expectThrows(GitAccountSwitcherError.unsafeIdentifier, {
+        try expectThrows(SwitchCommitError.unsafeIdentifier, {
             _ = try GitProfile(
                 id: "../work",
                 displayName: "Work",
@@ -628,7 +628,7 @@ let tests: [(String, () throws -> Void)] = [
         try expect(decoded.profileConnectionStates.isEmpty, "legacy store should default connection states to empty")
     }),
     ("folder rule rejects unsafe config paths and identifiers", {
-        try expectThrows(GitAccountSwitcherError.unsafeConfigValue, {
+        try expectThrows(SwitchCommitError.unsafeConfigValue, {
             _ = try FolderRule(
                 id: "work-folder",
                 path: "/Users/me/Work\n[alias]\n    leak = !env",
@@ -638,7 +638,7 @@ let tests: [(String, () throws -> Void)] = [
             )
         }, "folder paths should not allow newline injection")
 
-        try expectThrows(GitAccountSwitcherError.unsafeIdentifier, {
+        try expectThrows(SwitchCommitError.unsafeIdentifier, {
             _ = try FolderRule(
                 id: "work-folder",
                 path: "/Users/me/Work",
@@ -775,7 +775,7 @@ let tests: [(String, () throws -> Void)] = [
         try expect(backupFiles.contains { $0.contains("global.gitconfig") }, "writer should backup previous file")
 
         let outside = root.appendingPathComponent("outside.gitconfig")
-        try expectThrows(GitAccountSwitcherError.writeOutsideManagedRoots, {
+        try expectThrows(SwitchCommitError.writeOutsideManagedRoots, {
             try writer.write("bad", to: outside)
         }, "outside writes should be rejected")
     }),
@@ -791,7 +791,7 @@ let tests: [(String, () throws -> Void)] = [
 
         let writer = SafeFileWriter(allowedRoots: [managed], backupDirectory: backups)
         let target = linked.appendingPathComponent("escaped.gitconfig")
-        try expectThrows(GitAccountSwitcherError.writeOutsideManagedRoots, {
+        try expectThrows(SwitchCommitError.writeOutsideManagedRoots, {
             try writer.write("bad", to: target)
         }, "symlinked parent directories should not escape managed roots")
         try expect(!FileManager.default.fileExists(atPath: outside.appendingPathComponent("escaped.gitconfig").path), "outside file should not be written")
@@ -1017,7 +1017,7 @@ let tests: [(String, () throws -> Void)] = [
             warnings: []
         )
 
-        try expectThrows(GitAccountSwitcherError.emptyGitUserEmail, {
+        try expectThrows(SwitchCommitError.emptyGitUserEmail, {
             try manager.importDetectedAccount(account)
         }, "incomplete detected account should not be saved as profile")
         try expect(manager.profiles.isEmpty, "incomplete detected account should not mutate profiles")
@@ -1521,7 +1521,7 @@ let tests: [(String, () throws -> Void)] = [
     }),
     ("sparkle adapter does not start automatic update cycle at initialization", {
         let adapterURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-            .appendingPathComponent("Sources/GitAccountSwitcherApp/SparkleAppUpdateChecker.swift")
+            .appendingPathComponent("Sources/SwitchCommitApp/SparkleAppUpdateChecker.swift")
         let source = try String(contentsOf: adapterURL, encoding: .utf8)
 
         try expect(source.contains("startingUpdater: false"), "sparkle adapter should not start updater during initialization")
@@ -1575,10 +1575,15 @@ let tests: [(String, () throws -> Void)] = [
             source.contains("sparkle_feed_url=\"${release_channel_base_url}/appcast.xml\""),
             "release script should derive appcast URL from the public channel base URL"
         )
+        try expect(source.contains("app_name=\"Switch Commit\""), "release script should ship Switch Commit.app")
+        try expect(source.contains("binary_name=\"SwitchCommitApp\""), "release script should build SwitchCommitApp")
         try expect(
-            source.contains("sparkle_artifact_url=\"${release_channel_base_url}/release/GitAccountSwitcher-v${version}-macOS.zip\""),
-            "release script should derive artifact URL from the public channel release folder"
+            source.contains("sparkle_artifact_url=\"${release_channel_base_url}/release/SwitchCommit-v${version}-macOS.dmg\""),
+            "release script should derive DMG artifact URL from the public channel release folder"
         )
+        try expect(source.contains("hdiutil create"), "release script should create a DMG with hdiutil")
+        try expect(source.contains("Applications"), "release script should include an Applications symlink in the DMG")
+        try expect(!source.contains("macOS.zip"), "release script should not publish a ZIP artifact")
         try expect(
             source.contains("release-url.txt"),
             "release script should write the public artifact URL next to release artifacts"
@@ -1598,7 +1603,8 @@ let tests: [(String, () throws -> Void)] = [
         try expect(source.contains("--ed-key-file -"), "publisher should pass the EdDSA key via standard input")
         try expect(source.contains("release_channel_assets_dir=\"${release_channel_dir}/release\""), "publisher should copy artifacts under the public release folder")
         try expect(source.contains("mkdir -p \"${release_channel_assets_dir}\""), "publisher should create the public release folder")
-        try expect(source.contains("GitAccountSwitcher-v${version}-macOS.zip"), "publisher should copy the release ZIP")
+        try expect(source.contains("SwitchCommit-v${version}-macOS.dmg"), "publisher should copy the release DMG")
+        try expect(!source.contains("macOS.zip"), "publisher should not copy a ZIP artifact")
         try expect(source.contains("checksum_name=\"${artifact_name}.sha256\""), "publisher should copy the checksum")
         try expect(source.contains("docs/release-notes/v${version}.md"), "publisher should copy matching release notes when present")
         try expect(source.contains("--download-url-prefix \"${release_channel_base_url}/release\""), "publisher should put release folder URLs inside appcast downloads")
@@ -1631,12 +1637,16 @@ let tests: [(String, () throws -> Void)] = [
         try expect(source.contains("generate_keys -x /tmp/sparkle-private-key.txt"), "README should show how to export the Sparkle private key")
         try expect(source.contains("Do not use the public SUPublicEDKey value"), "README should warn against using the public key as the private secret")
         try expect(source.contains("https://kwiats.github.io/switch-commit-release-channel/appcast.xml"), "README should document the public appcast URL")
+        try expect(source.contains("SwitchCommit-v"), "README should document SwitchCommit DMG artifact naming")
+        try expect(source.contains("macOS.dmg"), "README should document DMG release artifacts")
+        try expect(source.contains("swift run SwitchCommitCoreTestRunner"), "README should document the renamed test runner")
+        try expect(!source.contains("macOS.zip"), "README should not document ZIP release artifacts")
     }),
     ("menu bar app omits diagnostics shortcut and uses Switch Commit chrome", {
         let appURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-            .appendingPathComponent("Sources/GitAccountSwitcherApp/GitAccountSwitcherApp.swift")
+            .appendingPathComponent("Sources/SwitchCommitApp/SwitchCommitApp.swift")
         let windowURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-            .appendingPathComponent("Sources/GitAccountSwitcherApp/SettingsWindowController.swift")
+            .appendingPathComponent("Sources/SwitchCommitApp/SettingsWindowController.swift")
         let appSource = try String(contentsOf: appURL, encoding: .utf8)
         let windowSource = try String(contentsOf: windowURL, encoding: .utf8)
 

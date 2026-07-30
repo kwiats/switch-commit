@@ -1,6 +1,6 @@
 import Foundation
 
-public enum GitAccountSwitcherError: Error, Equatable {
+public enum SwitchCommitError: Error, Equatable {
     case emptyDisplayName
     case emptyGitUserName
     case emptyGitUserEmail
@@ -56,21 +56,21 @@ public struct GitProfile: Codable, Equatable, Identifiable, Sendable {
             try SecurityValidation.requireSafeIdentifier(httpsCredentialRef)
         }
         guard !displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw GitAccountSwitcherError.emptyDisplayName
+            throw SwitchCommitError.emptyDisplayName
         }
         guard !gitUserName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw GitAccountSwitcherError.emptyGitUserName
+            throw SwitchCommitError.emptyGitUserName
         }
         guard !gitUserEmail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw GitAccountSwitcherError.emptyGitUserEmail
+            throw SwitchCommitError.emptyGitUserEmail
         }
         if accessMethod == .ssh {
             guard !sshKeyPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                throw GitAccountSwitcherError.emptySSHKeyPath
+                throw SwitchCommitError.emptySSHKeyPath
             }
         }
         guard hosts.allSatisfy({ !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else {
-            throw GitAccountSwitcherError.emptyHost
+            throw SwitchCommitError.emptyHost
         }
         try SecurityValidation.requireSafeConfigValues([
             displayName,
@@ -136,7 +136,7 @@ public struct FolderRule: Codable, Equatable, Identifiable, Sendable {
         try SecurityValidation.requireSafeIdentifier(id)
         try SecurityValidation.requireSafeIdentifier(profileId)
         guard !path.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw GitAccountSwitcherError.emptyFolderRulePath
+            throw SwitchCommitError.emptyFolderRulePath
         }
         try SecurityValidation.requireSafeConfigValues([path])
 
@@ -231,14 +231,14 @@ enum SecurityValidation {
               value != "..",
               !value.hasPrefix("."),
               !value.contains("..") else {
-            throw GitAccountSwitcherError.unsafeIdentifier
+            throw SwitchCommitError.unsafeIdentifier
         }
     }
 
     static func requireSafeConfigValues(_ values: [String]) throws {
         for value in values {
             if value.unicodeScalars.contains(where: { $0.value == 0 || $0.value == 10 || $0.value == 13 }) {
-                throw GitAccountSwitcherError.unsafeConfigValue
+                throw SwitchCommitError.unsafeConfigValue
             }
         }
     }

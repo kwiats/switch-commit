@@ -3,26 +3,26 @@
 import PackageDescription
 
 let package = Package(
-    name: "GitAccountSwitcher",
+    name: "SwitchCommit",
     platforms: [
         .macOS(.v14)
     ],
     products: [
         .library(
-            name: "GitAccountSwitcherCore",
-            targets: ["GitAccountSwitcherCore"]
+            name: "SwitchCommitCore",
+            targets: ["SwitchCommitCore"]
         ),
         .library(
-            name: "GitAccountSwitcherAppLogic",
-            targets: ["GitAccountSwitcherAppLogic"]
+            name: "SwitchCommitAppLogic",
+            targets: ["SwitchCommitAppLogic"]
         ),
         .executable(
-            name: "GitAccountSwitcherApp",
-            targets: ["GitAccountSwitcherApp"]
+            name: "SwitchCommitApp",
+            targets: ["SwitchCommitApp"]
         ),
         .executable(
-            name: "GitAccountSwitcherCoreTestRunner",
-            targets: ["GitAccountSwitcherCoreTestRunner"]
+            name: "SwitchCommitCoreTestRunner",
+            targets: ["SwitchCommitCoreTestRunner"]
         )
     ],
     dependencies: [
@@ -30,25 +30,25 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "GitAccountSwitcherCore"
+            name: "SwitchCommitCore"
         ),
         .target(
-            name: "GitAccountSwitcherAppLogic",
-            dependencies: ["GitAccountSwitcherCore"]
+            name: "SwitchCommitAppLogic",
+            dependencies: ["SwitchCommitCore"]
         ),
         .executableTarget(
-            name: "GitAccountSwitcherApp",
+            name: "SwitchCommitApp",
             dependencies: [
-                "GitAccountSwitcherAppLogic",
-                "GitAccountSwitcherCore",
+                "SwitchCommitAppLogic",
+                "SwitchCommitCore",
                 .product(name: "Sparkle", package: "Sparkle")
             ]
         ),
         .executableTarget(
-            name: "GitAccountSwitcherCoreTestRunner",
+            name: "SwitchCommitCoreTestRunner",
             dependencies: [
-                "GitAccountSwitcherAppLogic",
-                "GitAccountSwitcherCore"
+                "SwitchCommitAppLogic",
+                "SwitchCommitCore"
             ]
         )
     ]

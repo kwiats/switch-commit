@@ -1,5 +1,5 @@
 import Foundation
-import GitAccountSwitcherAppLogic
+import SwitchCommitAppLogic
 import ServiceManagement
 
 struct SystemLaunchAtLoginManager: LaunchAtLoginManaging {

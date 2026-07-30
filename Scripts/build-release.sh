@@ -6,13 +6,13 @@ version="${1:-0.1.1}"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 dist_root="${repo_root}/dist"
 release_dir="${dist_root}/v${version}"
-app_name="Git Account Switcher"
+app_name="Switch Commit"
 app_bundle="${release_dir}/${app_name}.app"
-binary_name="GitAccountSwitcherApp"
+binary_name="SwitchCommitApp"
 bundle_id="com.git-account-switcher.app"
 release_channel_base_url="https://kwiats.github.io/switch-commit-release-channel"
 sparkle_feed_url="${release_channel_base_url}/appcast.xml"
-sparkle_artifact_url="${release_channel_base_url}/release/GitAccountSwitcher-v${version}-macOS.zip"
+sparkle_artifact_url="${release_channel_base_url}/release/SwitchCommit-v${version}-macOS.dmg"
 sparkle_public_ed_key="x4XXCgBb5YuShR9DnY81L9bPJ+6vFaKeL46WK/fEte8="
 frameworks_dir="${app_bundle}/Contents/Frameworks"
 
@@ -73,7 +73,7 @@ cat > "${app_bundle}/Contents/Info.plist" <<PLIST
     <key>LSUIElement</key>
     <true/>
     <key>NSHumanReadableCopyright</key>
-    <string>Copyright 2026 Git Account Switcher contributors</string>
+    <string>Copyright 2026 Switch Commit contributors</string>
     <key>SUEnableAutomaticChecks</key>
     <false/>
     <key>SUFeedURL</key>
@@ -88,15 +88,32 @@ echo "==> Signing app bundle"
 codesign --force --deep --sign - "${sparkle_framework_destination}"
 codesign --force --deep --sign - "${app_bundle}"
 
-echo "==> Creating ZIP artifact"
-(
-    cd "${release_dir}"
-    ditto -c -k --norsrc --keepParent "${app_name}.app" "GitAccountSwitcher-v${version}-macOS.zip"
-    shasum -a 256 "GitAccountSwitcher-v${version}-macOS.zip" > "GitAccountSwitcher-v${version}-macOS.zip.sha256"
-    printf '%s\n' "${sparkle_artifact_url}" > "release-url.txt"
-)
+echo "==> Creating DMG artifact"
+dmg_name="SwitchCommit-v${version}-macOS.dmg"
+staging_dir="$(mktemp -d "${TMPDIR:-/tmp}/switch-commit-dmg.XXXXXX")"
+cleanup_staging() {
+    rm -rf "${staging_dir}"
+}
+trap cleanup_staging EXIT
+
+ditto "${app_bundle}" "${staging_dir}/${app_name}.app"
+ln -s /Applications "${staging_dir}/Applications"
+
+rm -f "${release_dir}/${dmg_name}"
+hdiutil create \
+    -volname "${app_name}" \
+    -srcfolder "${staging_dir}" \
+    -ov \
+    -format UDZO \
+    "${release_dir}/${dmg_name}"
+
+shasum -a 256 "${release_dir}/${dmg_name}" > "${release_dir}/${dmg_name}.sha256"
+printf '%s\n' "${sparkle_artifact_url}" > "${release_dir}/release-url.txt"
+
+trap - EXIT
+cleanup_staging
 
 echo "==> Release artifacts"
-printf '%s\n' "${release_dir}/GitAccountSwitcher-v${version}-macOS.zip"
-printf '%s\n' "${release_dir}/GitAccountSwitcher-v${version}-macOS.zip.sha256"
+printf '%s\n' "${release_dir}/${dmg_name}"
+printf '%s\n' "${release_dir}/${dmg_name}.sha256"
 printf '%s\n' "${release_dir}/release-url.txt"

@@ -1,6 +1,6 @@
 import AppKit
-import GitAccountSwitcherAppLogic
-import GitAccountSwitcherCore
+import SwitchCommitAppLogic
+import SwitchCommitCore
 import SwiftUI
 
 struct SettingsView: View {
