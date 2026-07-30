@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add tag-triggered CD that builds Switch Commit releases, updates the public GitHub Pages appcast channel, and keeps release URLs consistent.
+**Goal:** Add tag-triggered CD that builds Switch Commit releases, updates the public GitHub Pages appcast channel, stores assets under `release/`, and keeps release URLs consistent.
 
 **Architecture:** Keep app bundle construction in `Scripts/build-release.sh`, add `Scripts/publish-release-channel.sh` for public channel mutation, and add `.github/workflows/release.yml` as orchestration. Existing local tests read these release files as text to enforce the publishing contract without making network calls.
 
@@ -33,11 +33,11 @@ Expected: FAIL because `.github/workflows/release.yml` and `Scripts/publish-rele
 
 - [ ] **Step 1: Update release build URL constants**
 
-Derive `sparkle_feed_url` and `sparkle_artifact_url` from `https://kwiats.github.io/switch-commit-release-channel`, and write the artifact URL to `dist/vX.Y.Z/release-url.txt`.
+Derive `sparkle_feed_url` and `sparkle_artifact_url` from `https://kwiats.github.io/switch-commit-release-channel`, include `/release/` in the artifact URL, and write the artifact URL to `dist/vX.Y.Z/release-url.txt`.
 
 - [ ] **Step 2: Add publisher script**
 
-Create a script that validates inputs, copies ZIP/checksum/release notes into a checked-out release channel directory, finds Sparkle `generate_appcast`, and invokes it with `--ed-key-file -`.
+Create a script that validates inputs, copies ZIP/checksum/release notes into `release/` inside a checked-out release channel directory, finds Sparkle `generate_appcast`, and invokes it with `--ed-key-file -`, `--download-url-prefix .../release`, and `-o <release-channel-dir>/appcast.xml`.
 
 - [ ] **Step 3: Verify tests pass for scripts**
 
@@ -70,4 +70,3 @@ swift build
 ```
 
 Expected: both commands pass.
-

@@ -1576,8 +1576,8 @@ let tests: [(String, () throws -> Void)] = [
             "release script should derive appcast URL from the public channel base URL"
         )
         try expect(
-            source.contains("sparkle_artifact_url=\"${release_channel_base_url}/GitAccountSwitcher-v${version}-macOS.zip\""),
-            "release script should derive artifact URL from the public channel base URL"
+            source.contains("sparkle_artifact_url=\"${release_channel_base_url}/release/GitAccountSwitcher-v${version}-macOS.zip\""),
+            "release script should derive artifact URL from the public channel release folder"
         )
         try expect(
             source.contains("release-url.txt"),
@@ -1590,11 +1590,20 @@ let tests: [(String, () throws -> Void)] = [
         let source = try String(contentsOf: scriptURL, encoding: .utf8)
 
         try expect(source.contains("SPARKLE_PRIVATE_ED_KEY"), "publisher should require the Sparkle private EdDSA key from the environment")
+        try expect(source.contains("normalized_private_key"), "publisher should normalize the private key secret before signing")
+        try expect(source.contains("tr -d '[:space:]'"), "publisher should tolerate accidental whitespace in the private key secret")
+        try expect(source.contains("base64 --decode"), "publisher should validate the private key secret before invoking Sparkle")
+        try expect(source.contains("must be the base64 contents exported by Sparkle generate_keys -x"), "publisher should explain the expected secret format")
         try expect(source.contains("generate_appcast"), "publisher should invoke Sparkle generate_appcast")
         try expect(source.contains("--ed-key-file -"), "publisher should pass the EdDSA key via standard input")
+        try expect(source.contains("release_channel_assets_dir=\"${release_channel_dir}/release\""), "publisher should copy artifacts under the public release folder")
+        try expect(source.contains("mkdir -p \"${release_channel_assets_dir}\""), "publisher should create the public release folder")
         try expect(source.contains("GitAccountSwitcher-v${version}-macOS.zip"), "publisher should copy the release ZIP")
         try expect(source.contains("checksum_name=\"${artifact_name}.sha256\""), "publisher should copy the checksum")
         try expect(source.contains("docs/release-notes/v${version}.md"), "publisher should copy matching release notes when present")
+        try expect(source.contains("--download-url-prefix \"${release_channel_base_url}/release\""), "publisher should put release folder URLs inside appcast downloads")
+        try expect(source.contains("--release-notes-url-prefix \"${release_channel_base_url}/release\""), "publisher should put release folder URLs inside appcast release notes")
+        try expect(source.contains("-o \"${release_channel_dir}/appcast.xml\""), "publisher should keep appcast.xml at the release channel root")
     }),
     ("tag release workflow publishes public GitHub Pages appcast channel", {
         let workflowURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
@@ -1619,6 +1628,8 @@ let tests: [(String, () throws -> Void)] = [
         try expect(source.contains("git tag v0.2.0"), "README should show how to tag a release")
         try expect(source.contains("RELEASE_CHANNEL_TOKEN"), "README should document the release channel token secret")
         try expect(source.contains("SPARKLE_PRIVATE_ED_KEY"), "README should document the Sparkle private key secret")
+        try expect(source.contains("generate_keys -x /tmp/sparkle-private-key.txt"), "README should show how to export the Sparkle private key")
+        try expect(source.contains("Do not use the public SUPublicEDKey value"), "README should warn against using the public key as the private secret")
         try expect(source.contains("https://kwiats.github.io/switch-commit-release-channel/appcast.xml"), "README should document the public appcast URL")
     }),
     ("menu bar app omits diagnostics shortcut and uses Switch Commit chrome", {
