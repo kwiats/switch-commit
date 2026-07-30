@@ -1,11 +1,11 @@
 import AppKit
 import Combine
-import GitAccountSwitcherAppLogic
+import SwitchCommitAppLogic
 
 @main
 @MainActor
-final class GitAccountSwitcherApp: NSObject, NSApplicationDelegate {
-    private static var sharedDelegate: GitAccountSwitcherApp?
+final class SwitchCommitApp: NSObject, NSApplicationDelegate {
+    private static var sharedDelegate: SwitchCommitApp?
 
     private let updateChecker = SparkleAppUpdateChecker()
     private lazy var viewModel = AppViewModel(
@@ -18,23 +18,23 @@ final class GitAccountSwitcherApp: NSObject, NSApplicationDelegate {
 
     static func main() {
         let app = NSApplication.shared
-        let delegate = GitAccountSwitcherApp()
+        let delegate = SwitchCommitApp()
         sharedDelegate = delegate
         app.delegate = delegate
         app.setActivationPolicy(.accessory)
-        print("GitAccountSwitcherApp starting AppKit run loop")
+        print("SwitchCommitApp starting AppKit run loop")
         app.run()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        print("GitAccountSwitcherApp did finish launching")
+        print("SwitchCommitApp did finish launching")
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.image = NSImage(systemSymbolName: "person.crop.circle.badge.checkmark", accessibilityDescription: "Switch Commit")
         item.button?.imagePosition = .imageOnly
         item.menu = buildMenu()
         statusItem = item
         observeMenuContentChanges()
-        print("GitAccountSwitcherApp status item installed")
+        print("SwitchCommitApp status item installed")
     }
 
     private func buildMenu() -> NSMenu {

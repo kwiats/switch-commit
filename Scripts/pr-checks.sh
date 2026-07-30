@@ -3,8 +3,7 @@
 set -euo pipefail
 
 echo "==> Running core test runner"
-swift run GitAccountSwitcherCoreTestRunner
+swift run SwitchCommitCoreTestRunner
 
 echo "==> Building package"
 swift build
-

@@ -1,4 +1,4 @@
-# Git Account Switcher
+# Switch Commit
 
 Local-only macOS menu bar tool for switching Git identities globally and per folder.
 
@@ -25,7 +25,7 @@ The app checks for updates only when the user clicks `Check for Updates` in Sett
 
 ### Local GitHub Discovery
 
-Git Account Switcher can suggest a GitHub account from local-only signals such as GitHub CLI configuration, global Git identity, SSH configuration, and GitHub remotes in a folder selected by the user.
+Switch Commit can suggest a GitHub account from local-only signals such as GitHub CLI configuration, global Git identity, SSH configuration, and GitHub remotes in a folder selected by the user.
 
 Discovery does not call the GitHub API, does not log in to GitHub, does not read token values into app data, and does not scan the home directory automatically. A detected account is only a suggestion until the user imports it as a profile.
 
@@ -87,7 +87,7 @@ Open Settings, choose `General`, and switch `Launch at Login` on or off. The app
 
 ```bash
 Scripts/pr-checks.sh
-swift run GitAccountSwitcherCoreTestRunner
+swift run SwitchCommitCoreTestRunner
 swift build
 ```
 
@@ -95,21 +95,21 @@ This repository currently uses a local test runner because the available Command
 
 ## Release Build
 
-Create a distributable macOS app ZIP:
+Create a distributable macOS installer DMG:
 
 ```bash
-Scripts/build-release.sh 0.1.1
+Scripts/build-release.sh 0.2.5
 ```
 
-The release artifacts are written to `dist/v0.1.1/`:
+The release artifacts are written to `dist/v0.2.5/`:
 
 ```text
-GitAccountSwitcher-v0.1.1-macOS.zip
-GitAccountSwitcher-v0.1.1-macOS.zip.sha256
+SwitchCommit-v0.2.5-macOS.dmg
+SwitchCommit-v0.2.5-macOS.dmg.sha256
 release-url.txt
 ```
 
-Install by unzipping the archive and moving `Git Account Switcher.app` to `Applications`.
+Install by opening the DMG and dragging `Switch Commit.app` to Applications.
 
 ## Release Channel CD
 
@@ -120,7 +120,7 @@ git tag v0.2.0
 git push origin v0.2.0
 ```
 
-The tag workflow builds the app, copies the ZIP/checksum/release notes into `kwiats/switch-commit-release-channel/release/`, regenerates `appcast.xml`, and pushes the public channel repository. The app reads update metadata from:
+The tag workflow builds the app, copies the DMG/checksum/release notes into `kwiats/switch-commit-release-channel/release/`, regenerates `appcast.xml`, and pushes the public channel repository. The app reads update metadata from:
 
 ```text
 https://kwiats.github.io/switch-commit-release-channel/appcast.xml
@@ -148,5 +148,5 @@ Use the exact contents printed by `cat` as the secret value. Do not use the publ
 Generated appcast download URLs point at the public release folder, for example:
 
 ```text
-https://kwiats.github.io/switch-commit-release-channel/release/GitAccountSwitcher-v0.2.0-macOS.zip
+https://kwiats.github.io/switch-commit-release-channel/release/SwitchCommit-v0.2.5-macOS.dmg
 ```

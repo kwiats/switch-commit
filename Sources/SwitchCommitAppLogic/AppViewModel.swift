@@ -1,6 +1,6 @@
 import Combine
 import Foundation
-import GitAccountSwitcherCore
+import SwitchCommitCore
 
 public enum AppPresentationRequest: Equatable, Sendable {
     case settings

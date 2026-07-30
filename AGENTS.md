@@ -2,7 +2,7 @@
 
 ## Project Context
 
-Git Account Switcher is a local-only macOS menu bar app for switching Git identities globally and per folder. The app is implemented as a Swift Package using Swift 6.2 and targets macOS 14.
+Switch Commit is a local-only macOS menu bar app for switching Git identities globally and per folder. The app is implemented as a Swift Package using Swift 6.2 and targets macOS 14.
 
 The project is intentionally privacy-preserving:
 
@@ -14,10 +14,10 @@ The project is intentionally privacy-preserving:
 ## Repository Layout
 
 - `Package.swift`: Swift package manifest.
-- `Sources/GitAccountSwitcherCore/`: pure core logic for models, config generation, persistence, safe writes, diagnostics, and Keychain abstractions.
-- `Sources/GitAccountSwitcherAppLogic/`: UI-facing view model and presentation state.
-- `Sources/GitAccountSwitcherApp/`: SwiftUI/AppKit menu bar app and settings window.
-- `Sources/GitAccountSwitcherCoreTestRunner/`: local test runner used instead of XCTest or Swift Testing.
+- `Sources/SwitchCommitCore/`: pure core logic for models, config generation, persistence, safe writes, diagnostics, and Keychain abstractions.
+- `Sources/SwitchCommitAppLogic/`: UI-facing view model and presentation state.
+- `Sources/SwitchCommitApp/`: SwiftUI/AppKit menu bar app and settings window.
+- `Sources/SwitchCommitCoreTestRunner/`: local test runner used instead of XCTest or Swift Testing.
 - `docs/superpowers/specs/`: design notes.
 - `docs/superpowers/plans/`: implementation plans.
 - `docs/release-notes/`: release notes.
@@ -27,11 +27,11 @@ The project is intentionally privacy-preserving:
 Use these commands from the repository root:
 
 ```bash
-swift run GitAccountSwitcherCoreTestRunner
+swift run SwitchCommitCoreTestRunner
 swift build
 ```
 
-This repository currently uses `GitAccountSwitcherCoreTestRunner` because the available Command Line Tools installation does not expose XCTest or Swift Testing modules. Do not add XCTest-based tests unless the toolchain constraint has been verified again.
+This repository currently uses `SwitchCommitCoreTestRunner` because the available Command Line Tools installation does not expose XCTest or Swift Testing modules. Do not add XCTest-based tests unless the toolchain constraint has been verified again.
 
 ## Default Task Workflow
 
@@ -39,7 +39,7 @@ Unless the user explicitly asks for a different flow, handle implementation task
 
 - Start each task from a dedicated Git branch using the `codex/` prefix.
 - Inspect relevant files before editing and keep changes focused on the requested behavior.
-- Run `swift run GitAccountSwitcherCoreTestRunner` and `swift build` before claiming the work is complete.
+- Run `swift run SwitchCommitCoreTestRunner` and `swift build` before claiming the work is complete.
 - Commit completed work with a clear message after verification passes.
 - Push the branch to the repository remote.
 - Open a pull request for the pushed branch, using draft status unless the user asks for a ready PR.
@@ -58,7 +58,7 @@ Preserve these constraints in every change:
 
 ## Implementation Guidance
 
-- Prefer deterministic, pure functions in `GitAccountSwitcherCore`.
+- Prefer deterministic, pure functions in `SwitchCommitCore`.
 - Keep AppKit and SwiftUI concerns out of the core target.
 - Keep shelling out isolated behind `CommandRunning`.
 - Use `Sendable` where public model and service types cross UI or concurrency boundaries.

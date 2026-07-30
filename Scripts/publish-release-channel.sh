@@ -7,13 +7,13 @@ release_channel_dir="${2:?usage: Scripts/publish-release-channel.sh <version> <r
 repo_root="${3:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 release_channel_base_url="https://kwiats.github.io/switch-commit-release-channel"
 release_channel_assets_dir="${release_channel_dir}/release"
-artifact_name="GitAccountSwitcher-v${version}-macOS.zip"
+artifact_name="SwitchCommit-v${version}-macOS.dmg"
 checksum_name="${artifact_name}.sha256"
 release_dir="${repo_root}/dist/v${version}"
 artifact_path="${release_dir}/${artifact_name}"
 checksum_path="${release_dir}/${checksum_name}"
 notes_source="${repo_root}/docs/release-notes/v${version}.md"
-notes_destination="${release_channel_assets_dir}/GitAccountSwitcher-v${version}-macOS.md"
+notes_destination="${release_channel_assets_dir}/SwitchCommit-v${version}-macOS.md"
 
 if [[ ! "${version}" =~ ^[0-9]+[.][0-9]+[.][0-9]+$ ]]; then
     echo "error: version must use X.Y.Z format without a leading v" >&2

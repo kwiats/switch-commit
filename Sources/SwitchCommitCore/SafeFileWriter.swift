@@ -19,7 +19,7 @@ public struct SafeFileWriter {
         let standardizedTarget = targetURL.standardizedFileURL
         guard isAllowed(standardizedTarget),
               isAllowedResolvedLocation(standardizedTarget) else {
-            throw GitAccountSwitcherError.writeOutsideManagedRoots
+            throw SwitchCommitError.writeOutsideManagedRoots
         }
 
         try fileManager.createDirectory(

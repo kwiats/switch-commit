@@ -2,21 +2,21 @@
 
 ## Working In This Repo
 
-This repository contains Git Account Switcher, a Swift 6.2 macOS 14 menu bar app for safely switching Git identities. Treat it as a local-first security-sensitive tool.
+This repository contains Switch Commit, a Swift 6.2 macOS 14 menu bar app for safely switching Git identities. Treat it as a local-first security-sensitive tool.
 
 Before editing, inspect the relevant source files and preserve the existing split:
 
-- Core logic belongs in `Sources/GitAccountSwitcherCore/`.
-- UI state belongs in `Sources/GitAccountSwitcherAppLogic/`.
-- Menu bar and settings UI belong in `Sources/GitAccountSwitcherApp/`.
-- Focused executable tests belong in `Sources/GitAccountSwitcherCoreTestRunner/`.
+- Core logic belongs in `Sources/SwitchCommitCore/`.
+- UI state belongs in `Sources/SwitchCommitAppLogic/`.
+- Menu bar and settings UI belong in `Sources/SwitchCommitApp/`.
+- Focused executable tests belong in `Sources/SwitchCommitCoreTestRunner/`.
 
 ## Required Commands
 
 Run these before claiming a change is complete:
 
 ```bash
-swift run GitAccountSwitcherCoreTestRunner
+swift run SwitchCommitCoreTestRunner
 swift build
 ```
 
@@ -28,7 +28,7 @@ Unless the user explicitly asks for a different flow, handle implementation task
 
 - Start each task from a dedicated Git branch using the `codex/` prefix.
 - Inspect relevant files before editing and keep changes focused on the requested behavior.
-- Run `swift run GitAccountSwitcherCoreTestRunner` and `swift build` before claiming the work is complete.
+- Run `swift run SwitchCommitCoreTestRunner` and `swift build` before claiming the work is complete.
 - Commit completed work with a clear message after verification passes.
 - Push the branch to the repository remote.
 - Open a pull request for the pushed branch, using draft status unless the user asks for a ready PR.

@@ -1,5 +1,5 @@
 import AppKit
-import GitAccountSwitcherAppLogic
+import SwitchCommitAppLogic
 import SwiftUI
 
 @MainActor
