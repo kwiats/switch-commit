@@ -534,6 +534,15 @@ let tests: [(String, () throws -> Void)] = [
         )
         let generator = GitConfigGenerator()
         let profileConfig = generator.profileConfig(for: profile)
+        let expectedProfileConfig = """
+        [user]
+            name = Work User
+            email = work@example.com
+        [core]
+            sshCommand = ssh -i '~/.ssh/id_work' -F ~/.ssh/config
+
+        """
+        try expect(profileConfig == expectedProfileConfig, "ssh profile config should remain byte stable")
         try expect(profileConfig.contains("[user]"), "profile config should contain user section")
         try expect(profileConfig.contains("name = Work User"), "profile config should contain name")
         try expect(profileConfig.contains("email = work@example.com"), "profile config should contain email")
@@ -565,6 +574,27 @@ let tests: [(String, () throws -> Void)] = [
         )
         let config = GitConfigGenerator().profileConfig(for: profile)
         try expect(config.contains("sshCommand = ssh -i '/Users/me/My Keys/id_work'\\''; env' -F ~/.ssh/config"), "ssh key path should be shell quoted")
+    }),
+    ("git config generator omits ssh command for https profiles", {
+        let profile = try GitProfile(
+            id: "personal-https",
+            displayName: "Personal HTTPS",
+            gitUserName: "Personal User",
+            gitUserEmail: "me@example.com",
+            accessMethod: .https,
+            sshKeyPath: "",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+
+        let config = GitConfigGenerator().profileConfig(for: profile)
+
+        try expect(config.contains("[user]"), "https profile config should include user section")
+        try expect(config.contains("name = Personal User"), "https profile config should include git name")
+        try expect(config.contains("email = me@example.com"), "https profile config should include git email")
+        try expect(!config.contains("[core]"), "https profile config should not include core section")
+        try expect(!config.contains("sshCommand"), "https profile config should not include ssh command")
     }),
     ("ssh config generator emits managed identity blocks", {
         let profile = try GitProfile(
