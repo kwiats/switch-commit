@@ -1403,6 +1403,27 @@ let tests: [(String, () throws -> Void)] = [
             )
         }
     }),
+    ("https profile reports neutral credential status", {
+        try MainActor.assumeIsolated {
+            let profile = try GitProfile(
+                id: "personal-https",
+                displayName: "Personal HTTPS",
+                gitUserName: "Personal User",
+                gitUserEmail: "me@example.com",
+                accessMethod: .https,
+                sshKeyPath: "",
+                hosts: ["github.com"],
+                httpsCredentialRef: nil,
+                isDefault: true
+            )
+            let viewModel = AppViewModel(profiles: [profile])
+
+            let status = viewModel.connectionStatus(for: profile)
+
+            try expect(status.message == "Uses HTTPS credentials.", "https status should not ask for ssh")
+            try expect(status.displayColorName == "green", "https profile should be locally complete")
+        }
+    }),
     ("app view model connection status starts red and turns green after manual test", {
         final class SuccessfulConnectionRunner: CommandRunning {
             func run(_ command: String, arguments: [String], workingDirectory: URL?) throws -> CommandResult {
@@ -1436,6 +1457,93 @@ let tests: [(String, () throws -> Void)] = [
                 waitUntil { viewModel.connectionStatus(for: profile).displayColorName == "green" },
                 "successful manual test should turn status green"
             )
+        }
+    }),
+    ("app view model clears ssh connection status after access method changes", {
+        final class SuccessfulConnectionRunner: CommandRunning {
+            func run(_ command: String, arguments: [String], workingDirectory: URL?) throws -> CommandResult {
+                CommandResult(exitCode: 0, standardOutput: "connected", standardError: "")
+            }
+        }
+
+        try MainActor.assumeIsolated {
+            let profile = try GitProfile(
+                id: "switching",
+                displayName: "Switching",
+                gitUserName: "Switching User",
+                gitUserEmail: "switching@example.com",
+                sshKeyPath: "~/.ssh/id_switching",
+                hosts: ["github.com"],
+                httpsCredentialRef: nil,
+                isDefault: true
+            )
+            let viewModel = AppViewModel(
+                profiles: [profile],
+                diagnosticsService: DiagnosticsService(commandRunner: SuccessfulConnectionRunner())
+            )
+
+            viewModel.testConnectionForSelectedProfile()
+            try expect(
+                waitUntil { viewModel.connectionStatus(for: profile).displayColorName == "green" },
+                "successful manual test should turn status green before access changes"
+            )
+
+            viewModel.updateSelectedProfileAccessMethod(.https)
+            viewModel.updateSelectedProfileAccessMethod(.ssh)
+
+            guard let selectedProfile = viewModel.selectedProfile else {
+                throw TestFailure.expectationFailed("selected profile should still exist after access changes")
+            }
+            let status = viewModel.connectionStatus(for: selectedProfile)
+            try expect(status.message == "Connection not tested.", "switching back to ssh should require a fresh test")
+            try expect(status.displayColorName == "red", "switching back to ssh should not keep stale green status")
+        }
+    }),
+    ("app view model discards in-flight ssh test results after switching to https", {
+        final class DelayedSuccessfulConnectionRunner: CommandRunning {
+            func run(_ command: String, arguments: [String], workingDirectory: URL?) throws -> CommandResult {
+                Thread.sleep(forTimeInterval: 0.15)
+                return CommandResult(exitCode: 0, standardOutput: "connected", standardError: "")
+            }
+        }
+
+        try MainActor.assumeIsolated {
+            let profile = try GitProfile(
+                id: "delayed-switch",
+                displayName: "Delayed Switch",
+                gitUserName: "Delayed User",
+                gitUserEmail: "delayed@example.com",
+                sshKeyPath: "~/.ssh/id_delayed",
+                hosts: ["github.com"],
+                httpsCredentialRef: nil,
+                isDefault: true
+            )
+            let viewModel = AppViewModel(
+                profiles: [profile],
+                diagnosticsService: DiagnosticsService(commandRunner: DelayedSuccessfulConnectionRunner())
+            )
+
+            viewModel.testConnectionForSelectedProfile()
+            viewModel.updateSelectedProfileAccessMethod(.https)
+            viewModel.testConnectionForSelectedProfile()
+
+            try expect(
+                viewModel.settingsMessage == "HTTPS access uses Git credentials.",
+                "https no-op should set credential status message"
+            )
+            RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+            try expect(
+                viewModel.settingsMessage == "HTTPS access uses Git credentials.",
+                "in-flight ssh test should not overwrite https status message"
+            )
+
+            viewModel.updateSelectedProfileAccessMethod(.ssh)
+            guard let selectedProfile = viewModel.selectedProfile else {
+                throw TestFailure.expectationFailed("selected profile should still exist after switching back to ssh")
+            }
+            let status = viewModel.connectionStatus(for: selectedProfile)
+            try expect(status.message == "Connection not tested.", "discarded in-flight result should not become stale ssh status")
+            try expect(status.displayColorName == "red", "discarded in-flight result should not turn ssh status green")
         }
     }),
     ("app view model connection status turns orange after failed manual test", {

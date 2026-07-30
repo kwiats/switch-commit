@@ -182,6 +182,9 @@ public final class AppViewModel: ObservableObject {
         guard !hosts.isEmpty else {
             return .needsAttention(message: "No host configured.")
         }
+        guard profile.accessMethod == .ssh else {
+            return .connected(message: "Uses HTTPS credentials.")
+        }
         guard !profile.sshKeyPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return .needsAttention(message: "No SSH key configured.")
         }
@@ -203,6 +206,12 @@ public final class AppViewModel: ObservableObject {
             settingsMessage = "Select an account before testing connection."
             return
         }
+        guard profile.accessMethod == .ssh else {
+            settingsMessage = "HTTPS access uses Git credentials."
+            connectionTestResultsByProfileId[profile.id] = []
+            menuContentRevision += 1
+            return
+        }
         let hosts = normalizedHosts(for: profile)
         guard !hosts.isEmpty else {
             connectionTestResultsByProfileId[profile.id] = [
@@ -219,8 +228,15 @@ public final class AppViewModel: ObservableObject {
             guard let self else {
                 return
             }
+            guard let currentProfile = selectedProfile,
+                  currentProfile.id == profile.id,
+                  currentProfile.accessMethod == profile.accessMethod,
+                  currentProfile.accessMethod == .ssh
+            else {
+                return
+            }
             connectionTestResultsByProfileId[profile.id] = results
-            settingsMessage = connectionStatus(for: profile).message
+            settingsMessage = connectionStatus(for: currentProfile).message
             menuContentRevision += 1
         }
     }
@@ -275,8 +291,12 @@ public final class AppViewModel: ObservableObject {
     }
 
     public func updateSelectedProfileAccessMethod(_ accessMethod: GitAccessMethod) {
+        let profileId = selectedProfile?.id
         performSettingsUpdate {
             try profileSettingsManager.updateSelectedProfileAccessMethod(accessMethod)
+            if let profileId {
+                connectionTestResultsByProfileId.removeValue(forKey: profileId)
+            }
         }
     }
 
