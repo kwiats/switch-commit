@@ -468,6 +468,27 @@
 
     .steps strong { color: var(--fg); font-weight: 500; }
 
+    .gate-note {
+      margin-top: 1.25rem;
+      padding: 0.85rem 1rem;
+      border-left: 2px solid var(--amber);
+      background: rgba(240, 163, 90, 0.06);
+      color: var(--muted);
+      font-size: 0.8rem;
+      line-height: 1.55;
+    }
+
+    .gate-note strong {
+      color: var(--fg);
+      font-weight: 500;
+    }
+
+    .gate-note code {
+      color: var(--amber);
+      font-family: inherit;
+      font-size: 0.92em;
+    }
+
     footer {
       padding: 1.25rem clamp(1.25rem, 4vw, 3rem) 2rem;
       display: flex;
@@ -636,12 +657,20 @@
     <section class="install" id="install">
       <div class="install-inner">
         <h2>Instalacja</h2>
-        <ol class="steps">
-          <li><span class="n">01</span><span>Otwórz DMG i przeciągnij <strong>Switch Commit.app</strong> do Aplikacji.</span></li>
-          <li><span class="n">02</span><span>Wyrzuć DMG do Kosza po instalacji.</span></li>
-          <li><span class="n">03</span><span>Uruchom — ikona pojawi się na pasku menu.</span></li>
-          <li><span class="n">04</span><span>Aktualizacje: Settings → <strong>Check for Updates</strong>.</span></li>
-        </ol>
+        <div>
+          <ol class="steps">
+            <li><span class="n">01</span><span>Otwórz DMG i przeciągnij <strong>Switch Commit.app</strong> do Aplikacji.</span></li>
+            <li><span class="n">02</span><span>Wyrzuć DMG do Kosza po instalacji.</span></li>
+            <li><span class="n">03</span><span>Uruchom — ikona pojawi się na pasku menu.</span></li>
+            <li><span class="n">04</span><span>Aktualizacje: Settings → <strong>Check for Updates</strong>.</span></li>
+          </ol>
+          <p class="gate-note">
+            <strong>macOS blokuje pierwsze uruchomienie?</strong>
+            Zamknij dialog, w Finderze kliknij appkę prawym przyciskiem →
+            <code>Open</code> → potwierdź <code>Open</code>.
+            Wydanie nie jest jeszcze notarized przez Apple.
+          </p>
+        </div>
       </div>
     </section>
 

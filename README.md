@@ -111,6 +111,44 @@ release-url.txt
 
 Install by opening the DMG and dragging `Switch Commit.app` to Applications.
 
+### First Launch (Gatekeeper)
+
+Current release builds are signed ad-hoc and are not notarized with an Apple Developer ID certificate. On first open, macOS may show:
+
+> "Switch Commit" Not Opened  
+> Apple could not verify "Switch Commit" is free of malware...
+
+This is expected until Developer ID signing and notarization are in place. It does not mean the download was corrupted.
+
+**Recommended: Open from Finder**
+
+1. Click **Done** on the Gatekeeper dialog (do not choose Move to Trash).
+2. Open **Applications** (or wherever you placed `Switch Commit.app`).
+3. Control-click (or right-click) **Switch Commit**.
+4. Choose **Open**.
+5. In the confirmation dialog, choose **Open** again.
+
+macOS remembers this exception. Later launches from Spotlight, Launchpad, or the Dock should work normally.
+
+**Alternative: System Settings**
+
+1. Click **Done** on the dialog.
+2. Open **System Settings → Privacy & Security**.
+3. Scroll to the message about Switch Commit being blocked.
+4. Click **Open Anyway**, then confirm with password or Touch ID.
+
+**If the app still will not open**
+
+Remove the download quarantine attribute (use the real path to your copy):
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/Switch Commit.app"
+```
+
+Then open the app again from Finder.
+
+Do not disable Gatekeeper system-wide. Prefer the per-app **Open** exception above.
+
 ## Release Channel CD
 
 Pushing a version tag publishes the public Sparkle release channel:
