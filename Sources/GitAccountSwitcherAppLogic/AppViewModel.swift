@@ -197,10 +197,10 @@ public final class AppViewModel: ObservableObject {
 
     public var updatePresentation: AppUpdatePresentation {
         AppUpdatePresentation(
-            productName: "GitPersona",
+            productName: "Switch Commit",
             installedVersion: formattedInstalledVersion,
             canCheckForUpdates: updateChecker.canCheckForUpdates,
-            privacyNote: "Checks the public GitPersona release channel only after you click."
+            privacyNote: "Checks the public Switch Commit release channel only after you click."
         )
     }
 
@@ -227,7 +227,7 @@ public final class AppViewModel: ObservableObject {
             settingsMessage = "Updates are not available in this build."
             return
         }
-        settingsMessage = "Checking GitPersona updates..."
+        settingsMessage = "Checking Switch Commit updates..."
         updateChecker.checkForUpdates()
     }
 

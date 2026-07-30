@@ -1,23 +1,23 @@
-# GitPersona Manual Updates Design
+# Switch Commit Manual Updates Design
 
 ## Goal
 
-Add a customer-facing update path for GitPersona while preserving the app's local-first privacy model. Source code remains in a private repository. Public distribution uses a separate release channel that hosts only signed application artifacts, update metadata, and release notes.
+Add a customer-facing update path for Switch Commit while preserving the app's local-first privacy model. Source code remains in a private repository. Public distribution uses a separate release channel that hosts only signed application artifacts, update metadata, and release notes.
 
 The first version of this feature should support manual update checks only. The app must not check for updates automatically at launch, on a timer, or in the background.
 
 ## Product Name
 
-The customer-facing product name is `GitPersona`.
+The customer-facing product name is `Switch Commit`.
 
-The current package and module names can remain `GitAccountSwitcher` until a separate rename plan exists. User-facing release materials, update copy, and public distribution assets should use `GitPersona`.
+The current package and module names can remain `GitAccountSwitcher` until a separate rename plan exists. User-facing release materials, update copy, and public distribution assets should use `Switch Commit`.
 
 ## Release Channel
 
 Use a separate public GitHub repository as the update channel. The exact repository name can be chosen during release setup, but it should be customer-facing and aligned with the product name, for example:
 
 ```text
-gitpersona-release-channel
+switch-commit-release-channel
 ```
 
 The public repository contains only distribution assets:
@@ -47,7 +47,7 @@ Add an `Updates` area in Settings. This can be a dedicated tab or a compact sect
 
 The UI should show:
 
-- product name: `GitPersona`,
+- product name: `Switch Commit`,
 - installed version,
 - `Check for Updates` button,
 - short privacy note explaining that update checks contact the public release channel only after the user clicks,
@@ -67,7 +67,7 @@ The feature must preserve these invariants:
 - no automatic network calls,
 - update network access happens only after the user clicks `Check for Updates`.
 
-The README safety contract should be updated to make the manual update exception explicit: GitPersona performs an update request only when the user asks it to check for updates.
+The README safety contract should be updated to make the manual update exception explicit: Switch Commit performs an update request only when the user asks it to check for updates.
 
 ## Private Repository Handling
 

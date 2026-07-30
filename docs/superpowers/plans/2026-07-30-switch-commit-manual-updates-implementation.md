@@ -1,8 +1,8 @@
-# GitPersona Manual Updates Implementation Plan
+# Switch Commit Manual Updates Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add a manual GitPersona update check path backed by Sparkle while preserving the no automatic network calls safety contract.
+**Goal:** Add a manual Switch Commit update check path backed by Sparkle while preserving the no automatic network calls safety contract.
 
 **Architecture:** Keep Sparkle isolated in the App target. AppLogic owns update presentation state and calls a small injected update-checking protocol, so tests can verify behavior without importing Sparkle or touching the network. Settings gets a dedicated Updates tab with product/version display, privacy copy, and a user-initiated update button.
 
@@ -18,8 +18,8 @@
 - Modify `Sources/GitAccountSwitcherApp/GitAccountSwitcherApp.swift`: construct the view model with a Sparkle-backed update checker.
 - Create `Sources/GitAccountSwitcherApp/SparkleAppUpdateChecker.swift`: isolate Sparkle imports, suppress automatic-check permission prompts, and expose manual update invocation.
 - Modify `Sources/GitAccountSwitcherCoreTestRunner/main.swift`: add app logic tests for update presentation and manual button behavior.
-- Modify `README.md`: document GitPersona, the public release channel, and the manual update network exception.
-- Create `docs/release-notes/v0.2.0.md`: document the customer-facing GitPersona update direction.
+- Modify `README.md`: document Switch Commit, the public release channel, and the manual update network exception.
+- Create `docs/release-notes/v0.2.0.md`: document the customer-facing Switch Commit update direction.
 
 The implementation intentionally does not add a runtime GitHub token path, GitHub API access, automatic update checks, or release publishing automation.
 
@@ -34,7 +34,7 @@ The implementation intentionally does not add a runtime GitHub token path, GitHu
 Add these tests near the other `AppViewModel` tests in `Sources/GitAccountSwitcherCoreTestRunner/main.swift`:
 
 ```swift
-("app view model exposes GitPersona update presentation", {
+("app view model exposes Switch Commit update presentation", {
     final class RecordingUpdateChecker: AppUpdateChecking {
         var canCheckForUpdates = true
         private(set) var checkCount = 0
@@ -55,15 +55,15 @@ Add these tests near the other `AppViewModel` tests in `Sources/GitAccountSwitch
         )
     )
 
-    try expect(viewModel.updatePresentation.productName == "GitPersona", "updates should use the customer-facing product name")
+    try expect(viewModel.updatePresentation.productName == "Switch Commit", "updates should use the customer-facing product name")
     try expect(viewModel.updatePresentation.installedVersion == "1.2.3 (45)", "updates should show semantic version and build")
     try expect(viewModel.updatePresentation.canCheckForUpdates, "manual update checks should be enabled when checker allows it")
-    try expect(viewModel.updatePresentation.privacyNote == "Checks the public GitPersona release channel only after you click.", "privacy note should explain manual network access")
+    try expect(viewModel.updatePresentation.privacyNote == "Checks the public Switch Commit release channel only after you click.", "privacy note should explain manual network access")
 
     viewModel.checkForUpdates()
 
     try expect(checker.checkCount == 1, "manual update check should call the injected checker once")
-    try expect(viewModel.settingsMessage == "Checking GitPersona updates...", "manual check should show a user-initiated status message")
+    try expect(viewModel.settingsMessage == "Checking Switch Commit updates...", "manual check should show a user-initiated status message")
 }),
 ("app view model reports disabled update checker without network access", {
     final class DisabledRecordingUpdateChecker: AppUpdateChecking {
@@ -191,10 +191,10 @@ Add these public APIs inside `AppViewModel`:
 ```swift
 public var updatePresentation: AppUpdatePresentation {
     AppUpdatePresentation(
-        productName: "GitPersona",
+        productName: "Switch Commit",
         installedVersion: formattedInstalledVersion,
         canCheckForUpdates: updateChecker.canCheckForUpdates,
-        privacyNote: "Checks the public GitPersona release channel only after you click."
+        privacyNote: "Checks the public Switch Commit release channel only after you click."
     )
 }
 
@@ -203,7 +203,7 @@ public func checkForUpdates() {
         settingsMessage = "Updates are not available in this build."
         return
     }
-    settingsMessage = "Checking GitPersona updates..."
+    settingsMessage = "Checking Switch Commit updates..."
     updateChecker.checkForUpdates()
 }
 
@@ -255,7 +255,7 @@ Run:
 swift run GitAccountSwitcherCoreTestRunner
 ```
 
-Expected: all tests pass, including `app view model exposes GitPersona update presentation`, which verifies that clicking the UI button can safely call `viewModel.checkForUpdates()`.
+Expected: all tests pass, including `app view model exposes Switch Commit update presentation`, which verifies that clicking the UI button can safely call `viewModel.checkForUpdates()`.
 
 - [ ] **Step 2: Add the Updates tab**
 
@@ -482,7 +482,7 @@ Modify the Safety Contract list in `README.md`:
 
 ```markdown
 - No automatic network calls.
-- Manual update checks contact the public GitPersona release channel only after the user clicks `Check for Updates`.
+- Manual update checks contact the public Switch Commit release channel only after the user clicks `Check for Updates`.
 ```
 
 Add this section after the Safety Contract:
@@ -490,7 +490,7 @@ Add this section after the Safety Contract:
 ```markdown
 ### Manual Updates
 
-GitPersona uses a public release channel for update metadata and signed app artifacts. The source repository can remain private because the app never downloads updates from the private repository and never embeds GitHub tokens.
+Switch Commit uses a public release channel for update metadata and signed app artifacts. The source repository can remain private because the app never downloads updates from the private repository and never embeds GitHub tokens.
 
 The app checks for updates only when the user clicks `Check for Updates` in Settings. Update artifacts must be signed before publication, and Sparkle verifies the downloaded update before installation.
 ```
@@ -500,11 +500,11 @@ The app checks for updates only when the user clicks `Check for Updates` in Sett
 Create `docs/release-notes/v0.2.0.md`:
 
 ```markdown
-# GitPersona v0.2.0
+# Switch Commit v0.2.0
 
 ## Planned
 
-- Introduces GitPersona as the customer-facing product name.
+- Introduces Switch Commit as the customer-facing product name.
 - Adds a manual update path backed by a public release channel.
 - Keeps source code private while publishing only signed distribution artifacts.
 - Preserves the no automatic network calls safety contract by checking for updates only after a user click.
@@ -515,7 +515,7 @@ Create `docs/release-notes/v0.2.0.md`:
 Run:
 
 ```bash
-rg -n "No automatic network calls|Manual Updates|GitPersona|token|private repository" README.md docs/release-notes/v0.2.0.md docs/superpowers/specs/2026-07-30-gitpersona-manual-updates-design.md
+rg -n "No automatic network calls|Manual Updates|Switch Commit|token|private repository" README.md docs/release-notes/v0.2.0.md docs/superpowers/specs/2026-07-30-switch-commit-manual-updates-design.md
 ```
 
 Expected: output shows the explicit manual update exception and does not suggest runtime GitHub token usage.
@@ -537,7 +537,7 @@ Run:
 
 ```bash
 git add README.md docs/release-notes/v0.2.0.md
-git commit -m "docs: document GitPersona update channel"
+git commit -m "docs: document Switch Commit update channel"
 ```
 
 ## Task 5: Final Verification And PR Update
@@ -585,7 +585,7 @@ Run:
 ```bash
 gh pr edit 22 --body "## Summary
 
-- Adds GitPersona update presentation state and Settings UI.
+- Adds Switch Commit update presentation state and Settings UI.
 - Wires manual Sparkle update checks through an App-target adapter.
 - Documents the public release channel model and manual network-access exception.
 
