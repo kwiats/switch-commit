@@ -1568,6 +1568,19 @@ let tests: [(String, () throws -> Void)] = [
         try expect(source.contains("SPARKLE_PRIVATE_ED_KEY"), "README should document the Sparkle private key secret")
         try expect(source.contains("https://kwiats.github.io/switch-commit-release-channel/appcast.xml"), "README should document the public appcast URL")
     }),
+    ("menu bar app omits diagnostics shortcut and uses Switch Commit chrome", {
+        let appURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("Sources/GitAccountSwitcherApp/GitAccountSwitcherApp.swift")
+        let windowURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("Sources/GitAccountSwitcherApp/SettingsWindowController.swift")
+        let appSource = try String(contentsOf: appURL, encoding: .utf8)
+        let windowSource = try String(contentsOf: windowURL, encoding: .utf8)
+
+        try expect(!appSource.contains("Run Local Diagnostics"), "menu should not expose the local diagnostics shortcut")
+        try expect(!appSource.contains("#selector(runLocalDiagnostics)"), "menu should not wire a diagnostics menu action")
+        try expect(appSource.contains("accessibilityDescription: \"Switch Commit\""), "status item should use Switch Commit in app chrome")
+        try expect(windowSource.contains("createdWindow.title = \"Switch Commit Settings\""), "settings window header should use Switch Commit")
+    }),
     ("run local diagnostics requests settings presentation", {
         try MainActor.assumeIsolated {
             let viewModel = AppViewModel(profiles: [])
