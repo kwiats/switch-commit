@@ -20,6 +20,8 @@ Git Account Switcher can suggest a GitHub account from local-only signals such a
 
 Discovery does not call the GitHub API, does not log in to GitHub, does not read token values into app data, and does not scan the home directory automatically. A detected account is only a suggestion until the user imports it as a profile.
 
+Profiles use an explicit access method: SSH or HTTPS. SSH profiles generate a managed `core.sshCommand` and can run a manual SSH connection test. HTTPS profiles rely on local Git credentials or GitHub CLI-configured credentials and do not require an SSH key.
+
 ## Managed Files
 
 The app is designed to manage only these paths:
