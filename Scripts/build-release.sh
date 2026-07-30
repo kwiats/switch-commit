@@ -56,6 +56,9 @@ cat > "${app_bundle}/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
+echo "==> Signing app bundle"
+codesign --force --deep --sign - "${app_bundle}"
+
 echo "==> Creating ZIP artifact"
 (
     cd "${release_dir}"
