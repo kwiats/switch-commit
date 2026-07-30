@@ -12,11 +12,17 @@ public enum GitAccountSwitcherError: Error, Equatable {
     case unsafeIdentifier
 }
 
+public enum GitAccessMethod: String, Codable, Equatable, Sendable {
+    case ssh
+    case https
+}
+
 public struct GitProfile: Codable, Equatable, Identifiable, Sendable {
     public let id: String
     public var displayName: String
     public var gitUserName: String
     public var gitUserEmail: String
+    public var accessMethod: GitAccessMethod
     public var sshKeyPath: String
     public var hosts: [String]
     public var httpsCredentialRef: String?
@@ -27,6 +33,7 @@ public struct GitProfile: Codable, Equatable, Identifiable, Sendable {
         case displayName
         case gitUserName
         case gitUserEmail
+        case accessMethod
         case sshKeyPath
         case hosts
         case httpsCredentialRef
@@ -38,6 +45,7 @@ public struct GitProfile: Codable, Equatable, Identifiable, Sendable {
         displayName: String,
         gitUserName: String,
         gitUserEmail: String,
+        accessMethod: GitAccessMethod = .ssh,
         sshKeyPath: String,
         hosts: [String],
         httpsCredentialRef: String?,
@@ -56,8 +64,10 @@ public struct GitProfile: Codable, Equatable, Identifiable, Sendable {
         guard !gitUserEmail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw GitAccountSwitcherError.emptyGitUserEmail
         }
-        guard !sshKeyPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw GitAccountSwitcherError.emptySSHKeyPath
+        if accessMethod == .ssh {
+            guard !sshKeyPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw GitAccountSwitcherError.emptySSHKeyPath
+            }
         }
         guard hosts.allSatisfy({ !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else {
             throw GitAccountSwitcherError.emptyHost
@@ -73,6 +83,7 @@ public struct GitProfile: Codable, Equatable, Identifiable, Sendable {
         self.displayName = displayName
         self.gitUserName = gitUserName
         self.gitUserEmail = gitUserEmail
+        self.accessMethod = accessMethod
         self.sshKeyPath = sshKeyPath
         self.hosts = hosts
         self.httpsCredentialRef = httpsCredentialRef
@@ -86,6 +97,7 @@ public struct GitProfile: Codable, Equatable, Identifiable, Sendable {
             displayName: try container.decode(String.self, forKey: .displayName),
             gitUserName: try container.decode(String.self, forKey: .gitUserName),
             gitUserEmail: try container.decode(String.self, forKey: .gitUserEmail),
+            accessMethod: try container.decodeIfPresent(GitAccessMethod.self, forKey: .accessMethod) ?? .ssh,
             sshKeyPath: try container.decode(String.self, forKey: .sshKeyPath),
             hosts: try container.decode([String].self, forKey: .hosts),
             httpsCredentialRef: try container.decodeIfPresent(String.self, forKey: .httpsCredentialRef),

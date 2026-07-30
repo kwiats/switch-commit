@@ -431,6 +431,7 @@ public final class AppViewModel: ObservableObject {
                 displayName: "Personal",
                 gitUserName: "Personal User",
                 gitUserEmail: "me@example.com",
+                accessMethod: .ssh,
                 sshKeyPath: "~/.ssh/id_ed25519",
                 hosts: ["github.com"],
                 httpsCredentialRef: nil,

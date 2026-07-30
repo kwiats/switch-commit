@@ -371,6 +371,60 @@ let tests: [(String, () throws -> Void)] = [
             )
         }, "empty git user name should be rejected")
     }),
+    ("profile defaults decoded access method to ssh for existing data", {
+        let json = """
+        {
+          "profiles": [
+            {
+              "id": "personal",
+              "displayName": "Personal",
+              "gitUserName": "Personal User",
+              "gitUserEmail": "me@example.com",
+              "sshKeyPath": "~/.ssh/id_ed25519",
+              "hosts": ["github.com"],
+              "httpsCredentialRef": null,
+              "isDefault": true
+            }
+          ],
+          "rules": []
+        }
+        """.data(using: .utf8)!
+
+        let decoded = try JSONDecoder().decode(ProfileStoreData.self, from: json)
+
+        try expect(decoded.profiles[0].accessMethod == .ssh, "missing access method should decode as ssh")
+    }),
+    ("https profile allows empty ssh key path", {
+        let profile = try GitProfile(
+            id: "personal-https",
+            displayName: "Personal HTTPS",
+            gitUserName: "Personal User",
+            gitUserEmail: "me@example.com",
+            accessMethod: .https,
+            sshKeyPath: "",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+
+        try expect(profile.accessMethod == .https, "profile should store https access method")
+        try expect(profile.sshKeyPath == "", "https profile should allow empty ssh key path")
+    }),
+    ("ssh profile still rejects empty ssh key path", {
+        try expectThrows(GitAccountSwitcherError.emptySSHKeyPath, {
+            _ = try GitProfile(
+                id: "personal-ssh",
+                displayName: "Personal SSH",
+                gitUserName: "Personal User",
+                gitUserEmail: "me@example.com",
+                accessMethod: .ssh,
+                sshKeyPath: "",
+                hosts: ["github.com"],
+                httpsCredentialRef: nil,
+                isDefault: true
+            )
+        }, "ssh profiles should require an ssh key path")
+    }),
     ("profile rejects config injection characters", {
         try expectThrows(GitAccountSwitcherError.unsafeConfigValue, {
             _ = try GitProfile(
