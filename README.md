@@ -6,13 +6,14 @@ Local-only macOS menu bar tool for switching Git identities globally and per fol
 
 - No telemetry.
 - No analytics.
-- No automatic network calls.
+- No broad automatic network calls.
 - Manual update checks contact the public Switch Commit release channel only after the user clicks `Check for Updates`.
 - No secrets in JSON profile files.
 - Managed writes are constrained to app-owned config files.
 - `~/.gitconfig` only receives explicit include lines for managed Git config files.
-- SSH/GitHub checks are manual diagnostics only.
-- Host connection status updates only after the user clicks `Test Connection`; no connection checks run in the background.
+- SSH/GitHub discovery and diagnostics remain manual.
+- Host connection status updates after the user clicks `Test Connection` and after the user switches the active SSH profile.
+- Persisted host connection status stores only host names, status, messages, and timestamps; it does not store secrets.
 - Launch at login is opt-in and controlled from Settings.
 - Existing `~/.gitconfig` and `~/.ssh/config` are never replaced wholesale.
 
@@ -28,7 +29,7 @@ Git Account Switcher can suggest a GitHub account from local-only signals such a
 
 Discovery does not call the GitHub API, does not log in to GitHub, does not read token values into app data, and does not scan the home directory automatically. A detected account is only a suggestion until the user imports it as a profile.
 
-Profiles use an explicit access method: SSH or HTTPS. SSH profiles generate a managed `core.sshCommand` and can run a manual SSH connection test. HTTPS profiles rely on local Git credentials or GitHub CLI-configured credentials and do not require an SSH key.
+Profiles use an explicit access method: SSH or HTTPS. SSH profiles generate a managed `core.sshCommand` and can run an SSH connection test. HTTPS profiles rely on local Git credentials or GitHub CLI-configured credentials and do not require an SSH key.
 
 ## Managed Files
 
@@ -68,15 +69,15 @@ git config --includes --show-origin user.email
 cat ~/.config/git-account-switcher/global.gitconfig
 ```
 
-## Manual Host Connection Check
+## Host Connection Check
 
 The settings window shows a provider icon and connection status for each account:
 
-- red: connection has not been tested or no usable host is configured,
-- orange: a manual test was attempted but SSH or local configuration reported a problem,
-- green: the latest manual test succeeded for every host in the profile.
+- red: connection has not been tested, or no usable host is configured,
+- orange: the latest test reported an SSH or local configuration problem,
+- green: the latest test succeeded for every host in the profile.
 
-Click `Test Connection` in the selected account header to run the SSH check. The app never starts these network checks automatically.
+Click `Test Connection` in the selected account header to run the SSH check. Switching the active profile from the menu bar also refreshes the switched SSH profile in the background, so profile status stays current across profile changes and app restarts.
 
 ## Launch at Login
 

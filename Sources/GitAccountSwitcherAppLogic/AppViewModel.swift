@@ -230,7 +230,9 @@ public final class AppViewModel: ObservableObject {
         self.updateChecker = updateChecker
         self.bundleInfo = bundleInfo
         self.launchAtLoginManager = launchAtLoginManager
-        self.connectionTestResultsByProfileId = [:]
+        self.connectionTestResultsByProfileId = Self.runtimeConnectionResults(
+            from: manager.profileConnectionStates
+        )
         self.detectedAccounts = []
         self.menuContentRevision = 0
         self.isLaunchAtLoginEnabled = launchAtLoginManager.status.isEnabled
@@ -262,8 +264,14 @@ public final class AppViewModel: ObservableObject {
     }
 
     public func switchGlobalProfile(to profile: GitProfile) {
+        var switchedProfileId: String?
         performSettingsUpdate {
             try profileSettingsManager.switchGlobalProfile(to: profile)
+            switchedProfileId = profile.id
+        }
+        if let switchedProfileId,
+           let switchedProfile = profiles.first(where: { $0.id == switchedProfileId }) {
+            testConnection(for: switchedProfile, source: .automatic)
         }
     }
 
@@ -338,23 +346,7 @@ public final class AppViewModel: ObservableObject {
             return
         }
         settingsMessage = "Testing connection for \(profile.displayName)..."
-        let worker = hostConnectionTestWorker
-        Task { [weak self, worker, profile, hosts] in
-            let results = await worker.test(hosts: hosts)
-            guard let self else {
-                return
-            }
-            guard let currentProfile = selectedProfile,
-                  currentProfile.id == profile.id,
-                  currentProfile.accessMethod == profile.accessMethod,
-                  currentProfile.accessMethod == .ssh
-            else {
-                return
-            }
-            connectionTestResultsByProfileId[profile.id] = results
-            settingsMessage = connectionStatus(for: currentProfile).message
-            menuContentRevision += 1
-        }
+        testConnection(for: profile, source: .manual)
     }
 
     public func providerSystemImageName(for profile: GitProfile) -> String {
@@ -587,6 +579,86 @@ public final class AppViewModel: ObservableObject {
         profile.hosts
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
+    }
+
+    private enum ConnectionTestSource {
+        case manual
+        case automatic
+    }
+
+    private func testConnection(for profile: GitProfile, source: ConnectionTestSource) {
+        guard profile.accessMethod == .ssh,
+              !profile.sshKeyPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else {
+            return
+        }
+        let hosts = normalizedHosts(for: profile)
+        guard !hosts.isEmpty else {
+            return
+        }
+        let worker = hostConnectionTestWorker
+        Task { [weak self, worker, profile, hosts, source] in
+            let results = await worker.test(hosts: hosts)
+            guard let self else {
+                return
+            }
+            guard let currentProfile = profiles.first(where: { $0.id == profile.id }),
+                  currentProfile.accessMethod == profile.accessMethod,
+                  currentProfile.accessMethod == .ssh
+            else {
+                return
+            }
+
+            connectionTestResultsByProfileId[profile.id] = results
+            do {
+                try profileSettingsManager.saveConnectionState(
+                    Self.persistedConnectionState(profileId: profile.id, results: results),
+                    forProfileId: profile.id
+                )
+            } catch {
+                if source == .manual || selectedProfileId == profile.id || activeProfileId == profile.id {
+                    settingsMessage = "Could not save connection status: \(error.localizedDescription)"
+                }
+                menuContentRevision += 1
+                return
+            }
+
+            if source == .manual || selectedProfileId == profile.id || activeProfileId == profile.id {
+                settingsMessage = connectionStatus(for: currentProfile).message
+            }
+            menuContentRevision += 1
+        }
+    }
+
+    private static func runtimeConnectionResults(
+        from states: [String: PersistedProfileConnectionState]
+    ) -> [String: [HostConnectionTestResult]] {
+        states.mapValues { state in
+            state.results.map { result in
+                HostConnectionTestResult(
+                    host: result.host,
+                    status: result.status == .connected ? .connected : .failed,
+                    message: result.message
+                )
+            }
+        }
+    }
+
+    private static func persistedConnectionState(
+        profileId: String,
+        results: [HostConnectionTestResult]
+    ) -> PersistedProfileConnectionState {
+        PersistedProfileConnectionState(
+            profileId: profileId,
+            testedAt: ISO8601DateFormatter().string(from: Date()),
+            results: results.map { result in
+                PersistedHostConnectionTestResult(
+                    host: result.host,
+                    status: result.status == .connected ? .connected : .failed,
+                    message: result.message
+                )
+            }
+        )
     }
 
     private var formattedInstalledVersion: String {

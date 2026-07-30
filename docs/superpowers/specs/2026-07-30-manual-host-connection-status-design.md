@@ -2,15 +2,15 @@
 
 ## Goal
 
-Add visible host connection status for each account while preserving the app's local-first privacy model. The app must not run automatic network checks. A host connection check only runs when the user explicitly clicks `Test Connection`.
+Add visible host connection status for each account while preserving the app's local-first privacy model. This original manual-only design was later amended by `2026-07-30-persistent-auto-connection-status-design.md` to persist status and refresh the switched SSH profile after user-triggered profile switches.
 
 ## Status Model
 
-Each account has a presentation status derived from the latest manual host test results and local profile completeness:
+Each account has a presentation status derived from the latest host test results and local profile completeness:
 
-- Red: not connected. This is the initial state before any manual test, or when no usable host can be tested.
-- Orange: a manual test was attempted but failed, or the profile is locally incomplete or misconfigured enough that a connection test cannot run.
-- Green: the latest manual test succeeded for every host in the selected profile.
+- Red: not connected. This is the initial state before any test, or when no usable host can be tested.
+- Orange: a test was attempted but failed, or the profile is locally incomplete or misconfigured enough that a connection test cannot run.
+- Green: the latest test succeeded for every host in the selected profile.
 
 For profiles with multiple hosts, the aggregate status is green only when all tested hosts succeed. One failed or untestable host makes the account orange after a test attempt.
 
@@ -35,14 +35,14 @@ Provider icon scope is intentionally small for this change. Profiles with `githu
 
 ## Persistence
 
-Connection test results are runtime presentation state only. They are not written to `profiles.json` and do not include secret payloads.
+Connection test results are persisted as a separate non-secret status map in `profiles.json`. They include host names, result statuses, diagnostic messages, and timestamps, but no secret payloads.
 
 ## Safety
 
 The feature must preserve these invariants:
 
-- no automatic network checks,
-- no telemetry or background calls,
+- no telemetry, analytics, or broad automatic network checks,
+- no background network calls except the amended user-triggered switched-profile SSH refresh,
 - no secret storage in profile JSON,
 - no replacement of user-owned Git or SSH config files,
 - shell execution remains isolated behind injected command runners.
@@ -60,4 +60,4 @@ App logic tests cover:
 
 - `Test Connection` updates selected profile status,
 - sidebar-visible status can be queried for any profile,
-- status results are runtime state and do not mutate profile metadata.
+- status results do not mutate profile metadata.
