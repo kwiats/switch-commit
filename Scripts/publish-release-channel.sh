@@ -25,6 +25,14 @@ if [[ -z "${SPARKLE_PRIVATE_ED_KEY:-}" ]]; then
     exit 1
 fi
 
+normalized_private_key="$(printf '%s' "${SPARKLE_PRIVATE_ED_KEY}" | tr -d '[:space:]')"
+
+if [[ -z "${normalized_private_key}" ]] || ! printf '%s' "${normalized_private_key}" | base64 --decode >/dev/null 2>&1; then
+    echo "error: SPARKLE_PRIVATE_ED_KEY must be the base64 contents exported by Sparkle generate_keys -x" >&2
+    echo "error: do not use SUPublicEDKey, XML plist snippets, a file path, or shell assignment text" >&2
+    exit 1
+fi
+
 if [[ ! -d "${release_channel_dir}/.git" ]]; then
     echo "error: release channel directory must be a checked-out git repository" >&2
     exit 1
@@ -61,7 +69,7 @@ else
 fi
 
 echo "==> Generating Sparkle appcast"
-printf '%s' "${SPARKLE_PRIVATE_ED_KEY}" | "${generate_appcast_tool}" \
+printf '%s' "${normalized_private_key}" | "${generate_appcast_tool}" \
     --ed-key-file - \
     --download-url-prefix "${release_channel_base_url}/release" \
     --release-notes-url-prefix "${release_channel_base_url}/release" \
