@@ -77,3 +77,20 @@ swift build
 ```
 
 This repository currently uses a local test runner because the available Command Line Tools install does not expose XCTest or Swift Testing modules.
+
+## Release Build
+
+Create a distributable macOS app ZIP:
+
+```bash
+Scripts/build-release.sh 0.1.1
+```
+
+The release artifacts are written to `dist/v0.1.1/`:
+
+```text
+GitAccountSwitcher-v0.1.1-macOS.zip
+GitAccountSwitcher-v0.1.1-macOS.zip.sha256
+```
+
+Install by unzipping the archive and moving `Git Account Switcher.app` to `Applications`.
