@@ -120,7 +120,7 @@ git tag v0.2.0
 git push origin v0.2.0
 ```
 
-The tag workflow builds the app, copies the DMG/checksum/release notes into `kwiats/switch-commit-release-channel/release/`, regenerates `appcast.xml`, and pushes the public channel repository. The app reads update metadata from:
+The tag workflow builds the DMG, creates a GitHub Release on `kwiats/switch-commit-release-channel`, regenerates a latest-only `appcast.xml`, writes `version.txt`, renders `docs/release-channel/index.html` into the Pages landing page, and pushes the public channel repository. The app reads update metadata from:
 
 ```text
 https://kwiats.github.io/switch-commit-release-channel/appcast.xml
@@ -133,7 +133,7 @@ RELEASE_CHANNEL_TOKEN
 SPARKLE_PRIVATE_ED_KEY
 ```
 
-`RELEASE_CHANNEL_TOKEN` needs write access to the public release channel repository. `SPARKLE_PRIVATE_ED_KEY` must match the `SUPublicEDKey` embedded by `Scripts/build-release.sh`.
+`RELEASE_CHANNEL_TOKEN` needs write access to the public release channel repository (Contents + Releases). `SPARKLE_PRIVATE_ED_KEY` must match the `SUPublicEDKey` embedded by `Scripts/build-release.sh`.
 
 Export the Sparkle private key from the local Keychain before setting `SPARKLE_PRIVATE_ED_KEY`:
 
@@ -145,8 +145,8 @@ rm /tmp/sparkle-private-key.txt
 
 Use the exact contents printed by `cat` as the secret value. Do not use the public SUPublicEDKey value, the Info.plist XML snippet, the `/tmp/...` file path, or `SPARKLE_PRIVATE_ED_KEY=...` assignment text.
 
-Generated appcast download URLs point at the public release folder, for example:
+Generated appcast and landing download URLs point at GitHub Releases, for example:
 
 ```text
-https://kwiats.github.io/switch-commit-release-channel/release/SwitchCommit-v0.2.5-macOS.dmg
+https://github.com/kwiats/switch-commit-release-channel/releases/download/v0.2.5/SwitchCommit-v0.2.5-macOS.dmg
 ```

@@ -49,6 +49,7 @@ jobs:
       - name: Publish appcast channel
         env:
           SPARKLE_PRIVATE_ED_KEY: ${{ secrets.SPARKLE_PRIVATE_ED_KEY }}
+          GH_TOKEN: ${{ secrets.RELEASE_CHANNEL_TOKEN }}
         run: Scripts/publish-release-channel.sh "${{ steps.version.outputs.version }}" release-channel "$PWD"
 
       - name: Commit public release channel
