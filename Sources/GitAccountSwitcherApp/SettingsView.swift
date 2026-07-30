@@ -4,18 +4,30 @@ import GitAccountSwitcherCore
 import SwiftUI
 
 struct SettingsView: View {
+    private enum SettingsTab: Hashable {
+        case accounts
+        case detection
+    }
+
     @ObservedObject var viewModel: AppViewModel
     @State private var isShowingDeleteConfirmation = false
+    @State private var selectedTab: SettingsTab = .accounts
 
     var body: some View {
-        HStack(spacing: 0) {
-            accountList
-                .frame(width: 220)
-            Divider()
-            accountDetail
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        TabView(selection: $selectedTab) {
+            accountsTab
+                .tabItem {
+                    Label("Accounts", systemImage: "person.2")
+                }
+                .tag(SettingsTab.accounts)
+
+            detectionTab
+                .tabItem {
+                    Label("Detection", systemImage: "magnifyingglass")
+                }
+                .tag(SettingsTab.detection)
         }
-        .frame(width: 700, height: 440)
+        .frame(width: 760, height: 500)
         .alert(DeleteAccountConfirmationContent.title, isPresented: $isShowingDeleteConfirmation) {
             Button(DeleteAccountConfirmationContent.confirmButtonTitle, role: .destructive) {
                 viewModel.deleteSelectedProfile()
@@ -23,6 +35,16 @@ struct SettingsView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(DeleteAccountConfirmationContent.message)
+        }
+    }
+
+    private var accountsTab: some View {
+        HStack(spacing: 0) {
+            accountList
+                .frame(width: 220)
+            Divider()
+            accountDetail
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
@@ -91,21 +113,33 @@ struct SettingsView: View {
             if let profile = viewModel.selectedProfile {
                 header(for: profile)
                 accountForm
-                detectedAccountsSection
                 Spacer()
                 footer
             } else {
-                VStack(alignment: .leading, spacing: 16) {
-                    emptyState
-                    detectedAccountsSection
-                }
+                emptyState
             }
         }
         .padding(20)
     }
 
+    private var detectionTab: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Account Detection")
+                    .font(.title2)
+                Text("Find local GitHub account suggestions from Git, SSH, GitHub CLI, and a folder you choose.")
+                    .foregroundStyle(.secondary)
+            }
+
+            detectedAccountsSection
+            Spacer()
+            footer
+        }
+        .padding(20)
+    }
+
     private var detectedAccountsSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Detected Accounts")
                     .font(.headline)
@@ -131,51 +165,72 @@ struct SettingsView: View {
             }
 
             if viewModel.detectedAccounts.isEmpty {
-                Text("No local GitHub account was detected.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("No local GitHub account was detected.")
+                    Text("Use local detection or scan a repository folder to look for account hints.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, minHeight: 220, alignment: .center)
             } else {
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 6) {
+                    LazyVStack(alignment: .leading, spacing: 8) {
                         ForEach(viewModel.detectedAccounts) { account in
-                            HStack(alignment: .center, spacing: 10) {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(account.username ?? account.gitUserName ?? "GitHub Account")
-                                        .lineLimit(1)
-                                    Text(detectedAccountSubtitle(account))
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(1)
-                                }
-                                Spacer()
-                                Text(account.confidence.rawValue.capitalized)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                if account.gitUserEmail == nil {
-                                    Button {
-                                        viewModel.completeDetectedAccount(id: account.id)
-                                    } label: {
-                                        Label("Complete", systemImage: "square.and.pencil")
-                                    }
-                                    .help("Complete this detected account before importing")
-                                } else {
-                                    Button {
-                                        viewModel.importDetectedAccount(id: account.id)
-                                    } label: {
-                                        Label("Add", systemImage: "plus.circle")
-                                    }
-                                    .help("Add detected account")
-                                }
-                            }
-                            .padding(8)
-                            .background(Color(nsColor: .controlBackgroundColor))
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            detectedAccountRow(account)
                         }
                     }
                 }
-                .frame(minHeight: 0, maxHeight: 88)
+                .frame(minHeight: 260)
             }
         }
+    }
+
+    private func detectedAccountRow(_ account: DetectedGitAccount) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(account.username ?? account.gitUserName ?? "GitHub Account")
+                    .font(.headline)
+                    .lineLimit(1)
+                Text(detectedAccountSubtitle(account))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    metadataLabel("Provider: \(providerLabel(account.provider))", systemImage: "person.crop.circle")
+                    metadataLabel("Sources: \(detectionSourcesText(account.sources))", systemImage: "point.3.connected.trianglepath.dotted")
+                }
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 8) {
+                Text(account.confidence.rawValue.capitalized)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if account.gitUserEmail == nil {
+                    Button {
+                        viewModel.completeDetectedAccount(id: account.id)
+                    } label: {
+                        Label("Complete", systemImage: "square.and.pencil")
+                    }
+                    .help("Complete this detected account before importing")
+                } else {
+                    Button {
+                        viewModel.importDetectedAccount(id: account.id)
+                    } label: {
+                        Label("Add", systemImage: "plus.circle")
+                    }
+                    .help("Add detected account")
+                }
+            }
+        }
+        .padding(12)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func metadataLabel(_ text: String, systemImage: String) -> some View {
+        Label(text, systemImage: systemImage)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .lineLimit(2)
     }
 
     private func detectedAccountSubtitle(_ account: DetectedGitAccount) -> String {
@@ -186,6 +241,38 @@ struct SettingsView: View {
             return "Local GitHub configuration found"
         }
         return account.warnings[0]
+    }
+
+    private func providerLabel(_ provider: GitAccountProvider) -> String {
+        switch provider {
+        case .github:
+            return "GitHub"
+        }
+    }
+
+    private func detectionSourcesText(_ sources: [DetectionSource]) -> String {
+        let labels = sources.map(detectionSourceLabel)
+        if labels.isEmpty {
+            return "Unknown source"
+        }
+        return labels.joined(separator: ", ")
+    }
+
+    private func detectionSourceLabel(_ source: DetectionSource) -> String {
+        switch source {
+        case .githubCliHostsFile, .githubCliInstalled:
+            return "GitHub CLI"
+        case .globalGitConfig:
+            return "Global Git config"
+        case .gitCredentialUsername:
+            return "Git credentials"
+        case .sshConfig:
+            return "SSH config"
+        case .sshResolvedConfig:
+            return "SSH resolved config"
+        case .repositoryRemote:
+            return "Repository remote"
+        }
     }
 
     private func header(for profile: GitProfile) -> some View {
