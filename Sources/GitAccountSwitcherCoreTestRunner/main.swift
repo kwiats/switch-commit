@@ -1473,13 +1473,36 @@ let tests: [(String, () throws -> Void)] = [
 
         try expect(source.contains("startingUpdater: false"), "sparkle adapter should not start updater during initialization")
         try expect(!source.contains("startingUpdater: true"), "sparkle adapter must not start Sparkle automatically")
-        try expect(source.contains("var canCheckForUpdates: Bool {\n        false\n    }"), "sparkle adapter should disable checks until real update config exists")
-        try expect(!source.contains("!hasStartedUpdater ||"), "sparkle adapter must not enable checks before update config exists")
+        try expect(source.contains("hasReleaseChannelConfiguration"), "sparkle adapter should gate checks on release channel configuration")
+        try expect(source.contains("SUFeedURL"), "sparkle adapter should require an appcast URL before enabling checks")
+        try expect(source.contains("SUPublicEDKey"), "sparkle adapter should require a public EdDSA key before enabling checks")
+        try expect(
+            source.contains("hasReleaseChannelConfiguration && (!hasStartedUpdater || updaterController.updater.canCheckForUpdates)"),
+            "sparkle adapter should only enable checks before updater startup when release channel config exists"
+        )
         try expect(source.contains("automaticallyChecksForUpdates = false"), "sparkle adapter should keep automatic checks disabled")
         try expect(source.contains("automaticallyDownloadsUpdates = false"), "sparkle adapter should keep automatic downloads disabled")
         try expect(source.contains("updaterShouldPromptForPermissionToCheck"), "sparkle adapter should suppress permission prompts")
         try expect(source.contains("feedParameters"), "sparkle adapter should return no feed parameters")
         try expect(!source.contains("checkForUpdatesInBackground"), "sparkle adapter must not perform background update checks")
+    }),
+    ("release build script embeds Switch Commit Sparkle channel configuration", {
+        let scriptURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("Scripts/build-release.sh")
+        let source = try String(contentsOf: scriptURL, encoding: .utf8)
+
+        try expect(
+            source.contains("https://kwiats.github.io/switch-commit-release-channel/appcast.xml"),
+            "release script should embed the public Switch Commit appcast URL"
+        )
+        try expect(
+            source.contains("x4XXCgBb5YuShR9DnY81L9bPJ+6vFaKeL46WK/fEte8="),
+            "release script should embed the Sparkle public EdDSA key"
+        )
+        try expect(source.contains("<key>SUFeedURL</key>"), "release Info.plist should include SUFeedURL")
+        try expect(source.contains("<key>SUPublicEDKey</key>"), "release Info.plist should include SUPublicEDKey")
+        try expect(source.contains("<key>SUEnableAutomaticChecks</key>"), "release Info.plist should explicitly configure automatic checks")
+        try expect(source.contains("<false/>"), "release Info.plist should keep automatic checks disabled")
     }),
     ("run local diagnostics requests settings presentation", {
         try MainActor.assumeIsolated {
