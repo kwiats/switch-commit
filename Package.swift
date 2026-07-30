@@ -25,6 +25,9 @@ let package = Package(
             targets: ["GitAccountSwitcherCoreTestRunner"]
         )
     ],
+    dependencies: [
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.7.0")
+    ],
     targets: [
         .target(
             name: "GitAccountSwitcherCore"
@@ -37,7 +40,8 @@ let package = Package(
             name: "GitAccountSwitcherApp",
             dependencies: [
                 "GitAccountSwitcherAppLogic",
-                "GitAccountSwitcherCore"
+                "GitAccountSwitcherCore",
+                .product(name: "Sparkle", package: "Sparkle")
             ]
         ),
         .executableTarget(
