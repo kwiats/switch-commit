@@ -7,12 +7,19 @@ Local-only macOS menu bar tool for switching Git identities globally and per fol
 - No telemetry.
 - No analytics.
 - No automatic network calls.
+- Manual update checks contact the public GitPersona release channel only after the user clicks `Check for Updates`.
 - No secrets in JSON profile files.
 - Managed writes are constrained to app-owned config files.
 - `~/.gitconfig` only receives explicit include lines for managed Git config files.
 - SSH/GitHub checks are manual diagnostics only.
 - Host connection status updates only after the user clicks `Test Connection`; no connection checks run in the background.
 - Existing `~/.gitconfig` and `~/.ssh/config` are never replaced wholesale.
+
+### Manual Updates
+
+GitPersona uses a public release channel for update metadata and signed app artifacts. The source repository can remain private because the app never downloads updates from the private repository and never embeds GitHub tokens.
+
+The app checks for updates only when the user clicks `Check for Updates` in Settings. Update artifacts must be signed before publication, and Sparkle verifies the downloaded update before installation.
 
 ### Local GitHub Discovery
 
