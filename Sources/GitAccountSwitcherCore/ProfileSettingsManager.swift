@@ -210,11 +210,17 @@ public final class ProfileSettingsManager {
             isDefault: draft.isDefault
         )
 
-        try applyGitConfig(
-            profiles: draftProfiles,
-            activeProfile: draftProfiles.first { $0.id == activeProfileId }
-        )
+        let originalProfiles = profiles
         try profileStore.save(ProfileStoreData(profiles: draftProfiles, rules: rules))
+        do {
+            try applyGitConfig(
+                profiles: draftProfiles,
+                activeProfile: draftProfiles.first { $0.id == activeProfileId }
+            )
+        } catch {
+            try? profileStore.save(ProfileStoreData(profiles: originalProfiles, rules: rules))
+            throw error
+        }
         profiles = draftProfiles
     }
 

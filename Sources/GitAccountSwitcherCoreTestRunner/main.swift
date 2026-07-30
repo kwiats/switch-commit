@@ -1055,6 +1055,50 @@ let tests: [(String, () throws -> Void)] = [
         let loaded = try ProfileStore(fileURL: storeURL).load()
         try expect(loaded.profiles == originalProfiles, "failed access method update should preserve persisted profiles")
     }),
+    ("profile settings manager preserves access method state when save fails", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: temporaryDirectory,
+            withIntermediateDirectories: true
+        )
+        let storageURL = temporaryDirectory.appendingPathComponent("storage", isDirectory: true)
+        let storeURL = storageURL.appendingPathComponent("profiles.json")
+        let profile = try GitProfile(
+            id: "personal",
+            displayName: "Personal",
+            gitUserName: "Personal User",
+            gitUserEmail: "me@example.com",
+            sshKeyPath: "~/.ssh/id_ed25519",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let manager = try ProfileSettingsManager(
+            profileStore: ProfileStore(fileURL: storeURL),
+            keychainStore: InMemoryKeychainStore(),
+            seedProfiles: [profile],
+            gitConfigInstaller: ManagedGitConfigInstaller(homeDirectory: temporaryDirectory)
+        )
+        try manager.switchGlobalProfile(to: profile)
+        try FileManager.default.removeItem(at: storageURL)
+        try Data("not a directory".utf8).write(to: storageURL)
+        let originalProfiles = manager.profiles
+        let originalSelectedProfileId = manager.selectedProfileId
+        let originalActiveProfileId = manager.activeProfileId
+
+        try expectThrowsAny({
+            try manager.updateSelectedProfileAccessMethod(.https)
+        }, "save failure should be reported")
+
+        try expect(manager.profiles == originalProfiles, "failed access method save should preserve profiles")
+        try expect(manager.selectedProfileId == originalSelectedProfileId, "failed access method save should preserve selection")
+        try expect(manager.activeProfileId == originalActiveProfileId, "failed access method save should preserve active profile")
+        let globalConfigURL = temporaryDirectory
+            .appendingPathComponent(".config/git-account-switcher/global.gitconfig")
+        let globalConfig = try String(contentsOf: globalConfigURL, encoding: .utf8)
+        try expect(globalConfig.contains("sshCommand"), "failed access method save should keep generated config aligned with persisted ssh profile")
+    }),
     ("profile settings manager applies switched global profile to managed git config", {
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -1291,6 +1335,7 @@ let tests: [(String, () throws -> Void)] = [
             try """
             github.com:
                 user: pawelkwiatkowski
+                git_protocol: https
             """.write(to: ghConfig.appendingPathComponent("hosts.yml"), atomically: true, encoding: .utf8)
 
             final class EmptyDiscoveryRunner: CommandRunning {
@@ -1324,6 +1369,8 @@ let tests: [(String, () throws -> Void)] = [
             try expect(viewModel.profiles[0].displayName == "pawelkwiatkowski", "completion should prefill display name")
             try expect(viewModel.profiles[0].gitUserName == "pawelkwiatkowski", "completion should prefill git user name")
             try expect(viewModel.profiles[0].gitUserEmail == "user1@example.com", "completion should keep the editable default email")
+            try expect(viewModel.profiles[0].accessMethod == .https, "completion should preserve detected https access")
+            try expect(viewModel.profiles[0].sshKeyPath == "", "completion should not synthesize an ssh key for detected https access")
             try expect(viewModel.detectedAccounts.isEmpty, "completed suggestion should be removed")
             try expect(viewModel.settingsMessage == "Complete the detected GitHub account before using it.", "completion should explain next step")
         }

@@ -382,6 +382,9 @@ public final class AppViewModel: ObservableObject {
             if let gitUserName = account.gitUserName ?? account.username {
                 try profileSettingsManager.updateSelectedProfileGitUserName(gitUserName)
             }
+            if let accessMethod = preferredAccessMethod(for: account) {
+                try profileSettingsManager.updateSelectedProfileAccessMethod(accessMethod)
+            }
             if let sshKeyPath = account.sshKeyPath {
                 try profileSettingsManager.updateSelectedProfileSSHKeyPath(sshKeyPath)
             }
@@ -396,6 +399,19 @@ public final class AppViewModel: ObservableObject {
             settingsMessage = "Could not save settings: \(error.localizedDescription)"
             refreshFromProfileSettings()
         }
+    }
+
+    private func preferredAccessMethod(for account: DetectedGitAccount) -> GitAccessMethod? {
+        if account.accessMethods.contains(.ssh), !account.accessMethods.contains(.https) {
+            return .ssh
+        }
+        if account.accessMethods.contains(.ssh), account.sshKeyPath != nil {
+            return .ssh
+        }
+        if account.accessMethods.contains(.https) {
+            return .https
+        }
+        return nil
     }
 
     private func performSettingsUpdate(_ update: () throws -> Void) {
