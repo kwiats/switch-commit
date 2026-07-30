@@ -10,7 +10,7 @@ final class SettingsWindowController {
         if window == nil {
             let hostingController = NSHostingController(rootView: SettingsView(viewModel: viewModel))
             let createdWindow = NSWindow(contentViewController: hostingController)
-            createdWindow.title = "Git Account Switcher Settings"
+            createdWindow.title = "Switch Commit Settings"
             createdWindow.styleMask = [.titled, .closable, .miniaturizable, .resizable]
             createdWindow.isReleasedWhenClosed = false
             createdWindow.center()

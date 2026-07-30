@@ -574,6 +574,59 @@ let tests: [(String, () throws -> Void)] = [
         try expect(loaded.profiles == [profile], "profiles should round trip")
         try expect(loaded.rules == [rule], "rules should round trip")
     }),
+    ("profile store round trips persisted connection states", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        let storeURL = temporaryDirectory.appendingPathComponent("profiles.json")
+        let store = ProfileStore(fileURL: storeURL)
+        let profile = try GitProfile(
+            id: "work",
+            displayName: "Work",
+            gitUserName: "Work User",
+            gitUserEmail: "work@example.com",
+            sshKeyPath: "/Users/me/.ssh/id_work",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let state = PersistedProfileConnectionState(
+            profileId: "work",
+            testedAt: "2026-07-30T12:00:00Z",
+            results: [
+                PersistedHostConnectionTestResult(
+                    host: "github.com",
+                    status: .connected,
+                    message: "successfully authenticated"
+                )
+            ]
+        )
+
+        try store.save(ProfileStoreData(
+            profiles: [profile],
+            rules: [],
+            profileConnectionStates: ["work": state]
+        ))
+
+        let raw = try String(contentsOf: storeURL, encoding: .utf8)
+        try expect(raw.contains("profileConnectionStates"), "connection states should be persisted")
+        try expect(!raw.contains("PRIVATE KEY"), "connection state should not contain secret payloads")
+
+        let loaded = try store.load()
+        try expect(loaded.profileConnectionStates["work"] == state, "connection state should round trip")
+    }),
+    ("profile store decodes legacy json without connection states", {
+        let json = """
+        {
+          "profiles": [],
+          "rules": []
+        }
+        """.data(using: .utf8)!
+
+        let decoded = try JSONDecoder().decode(ProfileStoreData.self, from: json)
+
+        try expect(decoded.profileConnectionStates.isEmpty, "legacy store should default connection states to empty")
+    }),
     ("folder rule rejects unsafe config paths and identifiers", {
         try expectThrows(GitAccountSwitcherError.unsafeConfigValue, {
             _ = try FolderRule(
@@ -1579,6 +1632,19 @@ let tests: [(String, () throws -> Void)] = [
         try expect(source.contains("Do not use the public SUPublicEDKey value"), "README should warn against using the public key as the private secret")
         try expect(source.contains("https://kwiats.github.io/switch-commit-release-channel/appcast.xml"), "README should document the public appcast URL")
     }),
+    ("menu bar app omits diagnostics shortcut and uses Switch Commit chrome", {
+        let appURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("Sources/GitAccountSwitcherApp/GitAccountSwitcherApp.swift")
+        let windowURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("Sources/GitAccountSwitcherApp/SettingsWindowController.swift")
+        let appSource = try String(contentsOf: appURL, encoding: .utf8)
+        let windowSource = try String(contentsOf: windowURL, encoding: .utf8)
+
+        try expect(!appSource.contains("Run Local Diagnostics"), "menu should not expose the local diagnostics shortcut")
+        try expect(!appSource.contains("#selector(runLocalDiagnostics)"), "menu should not wire a diagnostics menu action")
+        try expect(appSource.contains("accessibilityDescription: \"Switch Commit\""), "status item should use Switch Commit in app chrome")
+        try expect(windowSource.contains("createdWindow.title = \"Switch Commit Settings\""), "settings window header should use Switch Commit")
+    }),
     ("run local diagnostics requests settings presentation", {
         try MainActor.assumeIsolated {
             let viewModel = AppViewModel(profiles: [])
@@ -1776,6 +1842,125 @@ let tests: [(String, () throws -> Void)] = [
             try expect(
                 waitUntil { viewModel.connectionStatus(for: profile).displayColorName == "green" },
                 "successful manual test should turn status green"
+            )
+        }
+    }),
+    ("app view model persists manual connection status across restart", {
+        final class SuccessfulConnectionRunner: CommandRunning {
+            func run(_ command: String, arguments: [String], workingDirectory: URL?) throws -> CommandResult {
+                CommandResult(exitCode: 0, standardOutput: "connected", standardError: "")
+            }
+        }
+
+        try MainActor.assumeIsolated {
+            let temporaryDirectory = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            let storeURL = temporaryDirectory.appendingPathComponent("profiles.json")
+            let store = ProfileStore(fileURL: storeURL)
+            let profile = try GitProfile(
+                id: "persistent",
+                displayName: "Persistent",
+                gitUserName: "Persistent User",
+                gitUserEmail: "persistent@example.com",
+                sshKeyPath: "~/.ssh/id_persistent",
+                hosts: ["github.com"],
+                httpsCredentialRef: nil,
+                isDefault: true
+            )
+            let firstViewModel = AppViewModel(
+                profiles: [profile],
+                profileStore: store,
+                diagnosticsService: DiagnosticsService(commandRunner: SuccessfulConnectionRunner())
+            )
+
+            firstViewModel.testConnectionForSelectedProfile()
+            try expect(
+                waitUntil { firstViewModel.connectionStatus(for: profile).displayColorName == "green" },
+                "manual test should turn status green before restart"
+            )
+
+            let reloadedViewModel = AppViewModel(
+                profiles: [],
+                profileStore: store,
+                diagnosticsService: DiagnosticsService(commandRunner: SuccessfulConnectionRunner())
+            )
+            guard let reloadedProfile = reloadedViewModel.profiles.first(where: { $0.id == "persistent" }) else {
+                throw TestFailure.expectationFailed("reloaded profile should exist")
+            }
+
+            try expect(
+                reloadedViewModel.connectionStatus(for: reloadedProfile).displayColorName == "green",
+                "persisted manual test should survive a new view model"
+            )
+            let loaded = try ProfileStore(fileURL: storeURL).load()
+            try expect(
+                loaded.profileConnectionStates["persistent"]?.results.first?.message == "connected",
+                "manual test result should be written to profile store"
+            )
+        }
+    }),
+    ("app view model automatically tests switched ssh profile and persists result", {
+        final class RecordingSuccessfulConnectionRunner: CommandRunning {
+            var hosts: [String] = []
+
+            func run(_ command: String, arguments: [String], workingDirectory: URL?) throws -> CommandResult {
+                hosts.append(arguments.last ?? "")
+                return CommandResult(exitCode: 0, standardOutput: "auto connected", standardError: "")
+            }
+        }
+
+        try MainActor.assumeIsolated {
+            let temporaryDirectory = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            let storeURL = temporaryDirectory.appendingPathComponent("profiles.json")
+            let store = ProfileStore(fileURL: storeURL)
+            let personal = try GitProfile(
+                id: "personal",
+                displayName: "Personal",
+                gitUserName: "Personal User",
+                gitUserEmail: "me@example.com",
+                sshKeyPath: "~/.ssh/id_personal",
+                hosts: ["github.com"],
+                httpsCredentialRef: nil,
+                isDefault: true
+            )
+            let work = try GitProfile(
+                id: "work",
+                displayName: "Work",
+                gitUserName: "Work User",
+                gitUserEmail: "work@example.com",
+                sshKeyPath: "~/.ssh/id_work",
+                hosts: ["gitlab.com"],
+                httpsCredentialRef: nil,
+                isDefault: false
+            )
+            let runner = RecordingSuccessfulConnectionRunner()
+            let viewModel = AppViewModel(
+                profiles: [personal, work],
+                profileStore: store,
+                diagnosticsService: DiagnosticsService(commandRunner: runner)
+            )
+
+            viewModel.switchGlobalProfile(to: work)
+
+            try expect(
+                waitUntil {
+                    let loaded = (try? ProfileStore(fileURL: storeURL).load())
+                    return loaded?.profileConnectionStates["work"]?.results.first?.message == "auto connected"
+                },
+                "switching global profile should persist an automatic connection result"
+            )
+            try expect(
+                viewModel.selectedProfileId == "personal",
+                "switching global profile from menu should not require selected settings profile to change"
+            )
+            try expect(
+                viewModel.connectionStatus(for: work).displayColorName == "green",
+                "automatic connection result should update switched profile status"
+            )
+            try expect(
+                runner.hosts.contains("git@gitlab.com"),
+                "automatic test should run against the switched profile host"
             )
         }
     }),
