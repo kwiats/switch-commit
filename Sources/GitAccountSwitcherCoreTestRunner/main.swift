@@ -586,6 +586,7 @@ let tests: [(String, () throws -> Void)] = [
         let report = service.inspectGitIdentity(at: URL(fileURLWithPath: "/tmp/repo"))
         try expect(runner.commands.count == 3, "diagnostics should run three local git config commands")
         try expect(runner.commands.allSatisfy { $0.first == "git" }, "diagnostics should only call git")
+        try expect(runner.commands.allSatisfy { $0.contains("--includes") }, "diagnostics should resolve managed includes")
         try expect(runner.commands.allSatisfy { $0.contains("--show-origin") }, "diagnostics should show origin")
         try expect(report.warnings.contains { $0.contains("core.sshCommand") }, "failed command should become warning")
     }),
