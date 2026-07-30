@@ -142,7 +142,34 @@ let tests: [(String, () throws -> Void)] = [
         try expect(signals[0].confidence == .high, "gh hosts username should be high confidence")
         try expect(signals[0].source == .githubCliHostsFile, "source should be gh hosts file")
         try expect(signals[0].warnings.isEmpty, "valid hosts file should not warn")
+        try expect(signals[0].accessMethods == [.ssh], "gh ssh protocol should suggest ssh access")
         try expect(!String(describing: signals).contains("super-secret-token"), "token should never appear in parsed output")
+    }),
+    ("github cli hosts parser extracts https protocol as access method", {
+        let yaml = """
+        github.com:
+            oauth_token: super-secret-token
+            user: pawelkwiatkowski
+            git_protocol: https
+        """
+
+        let signals = GitHubCLIHostsParser().signals(from: yaml)
+
+        try expect(signals.count == 1, "parser should emit one signal")
+        try expect(signals[0].accessMethods == [.https], "gh https protocol should suggest https access")
+    }),
+    ("github cli hosts parser ignores non-exact protocol casing", {
+        let yaml = """
+        github.com:
+            oauth_token: super-secret-token
+            user: pawelkwiatkowski
+            git_protocol: SSH
+        """
+
+        let signals = GitHubCLIHostsParser().signals(from: yaml)
+
+        try expect(signals.count == 1, "parser should emit one signal")
+        try expect(signals[0].accessMethods == [], "non-exact gh protocol casing should not suggest an access method")
     }),
     ("github cli hosts parser returns warning for github host without username", {
         let yaml = """
@@ -179,13 +206,18 @@ let tests: [(String, () throws -> Void)] = [
         try expect(query == nil, "repository query should not parse")
     }),
     ("git remote parser emits a privacy-safe signal", {
-        let signal = GitRemoteParser().signal(from: "https://github.com/pawelkwiatkowski/project.git")
+        let parser = GitRemoteParser()
+        let signal = parser.signal(from: "https://github.com/pawelkwiatkowski/project.git")
+        let sshSignal = parser.signal(from: "git@github.com:pawelkwiatkowski/project.git")
+        let httpsSignal = parser.signal(from: "https://github.com/pawelkwiatkowski/project.git")
 
         try expect(signal?.confidence == .medium, "remote signal should have medium confidence")
         try expect(signal?.source == .repositoryRemote, "remote signal should identify repository remote source")
         try expect(signal?.hosts == ["github.com"], "remote signal should identify github.com")
         try expect(signal?.username == nil, "remote owner should not become a username")
         try expect(signal?.warnings == ["Remote owner 'pawelkwiatkowski' may be a user or an organization."], "remote signal should warn about owner ambiguity")
+        try expect(sshSignal?.accessMethods == [.ssh], "ssh remote should suggest ssh access")
+        try expect(httpsSignal?.accessMethods == [.https], "https remote should suggest https access")
     }),
     ("detected account merger combines github signals into one candidate", {
         let signals = [
@@ -203,6 +235,17 @@ let tests: [(String, () throws -> Void)] = [
         try expect(accounts[0].sshKeyPath == "~/.ssh/id_ed25519", "ssh path should merge")
         try expect(accounts[0].confidence == .high, "highest confidence should win")
         try expect(accounts[0].sources == [.githubCliHostsFile, .globalGitConfig, .sshResolvedConfig], "sources should be stable and unique")
+    }),
+    ("detected account merger combines access methods and warns on conflict", {
+        let signals = [
+            DetectionSignal(provider: .github, username: "pawel", accessMethods: [.ssh], confidence: .high, source: .githubCliHostsFile),
+            DetectionSignal(provider: .github, username: "pawel", accessMethods: [.https], confidence: .medium, source: .repositoryRemote)
+        ]
+
+        let account = DetectedAccountMerger().merge(signals: signals, existingProfiles: []).first
+
+        try expect(account?.accessMethods == [.ssh, .https], "merged account should preserve stable access method order")
+        try expect(account?.warnings.contains("Local data points to both SSH and HTTPS access. Choose the method before import.") == true, "conflicting access methods should warn")
     }),
     ("detected account merger falls back to email id for unsafe username", {
         let signals = [
@@ -402,6 +445,60 @@ let tests: [(String, () throws -> Void)] = [
             )
         }, "empty git user name should be rejected")
     }),
+    ("profile defaults decoded access method to ssh for existing data", {
+        let json = """
+        {
+          "profiles": [
+            {
+              "id": "personal",
+              "displayName": "Personal",
+              "gitUserName": "Personal User",
+              "gitUserEmail": "me@example.com",
+              "sshKeyPath": "~/.ssh/id_ed25519",
+              "hosts": ["github.com"],
+              "httpsCredentialRef": null,
+              "isDefault": true
+            }
+          ],
+          "rules": []
+        }
+        """.data(using: .utf8)!
+
+        let decoded = try JSONDecoder().decode(ProfileStoreData.self, from: json)
+
+        try expect(decoded.profiles[0].accessMethod == .ssh, "missing access method should decode as ssh")
+    }),
+    ("https profile allows empty ssh key path", {
+        let profile = try GitProfile(
+            id: "personal-https",
+            displayName: "Personal HTTPS",
+            gitUserName: "Personal User",
+            gitUserEmail: "me@example.com",
+            accessMethod: .https,
+            sshKeyPath: "",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+
+        try expect(profile.accessMethod == .https, "profile should store https access method")
+        try expect(profile.sshKeyPath == "", "https profile should allow empty ssh key path")
+    }),
+    ("ssh profile still rejects empty ssh key path", {
+        try expectThrows(GitAccountSwitcherError.emptySSHKeyPath, {
+            _ = try GitProfile(
+                id: "personal-ssh",
+                displayName: "Personal SSH",
+                gitUserName: "Personal User",
+                gitUserEmail: "me@example.com",
+                accessMethod: .ssh,
+                sshKeyPath: "",
+                hosts: ["github.com"],
+                httpsCredentialRef: nil,
+                isDefault: true
+            )
+        }, "ssh profiles should require an ssh key path")
+    }),
     ("profile rejects config injection characters", {
         try expectThrows(GitAccountSwitcherError.unsafeConfigValue, {
             _ = try GitProfile(
@@ -511,6 +608,15 @@ let tests: [(String, () throws -> Void)] = [
         )
         let generator = GitConfigGenerator()
         let profileConfig = generator.profileConfig(for: profile)
+        let expectedProfileConfig = """
+        [user]
+            name = Work User
+            email = work@example.com
+        [core]
+            sshCommand = ssh -i '~/.ssh/id_work' -F ~/.ssh/config
+
+        """
+        try expect(profileConfig == expectedProfileConfig, "ssh profile config should remain byte stable")
         try expect(profileConfig.contains("[user]"), "profile config should contain user section")
         try expect(profileConfig.contains("name = Work User"), "profile config should contain name")
         try expect(profileConfig.contains("email = work@example.com"), "profile config should contain email")
@@ -543,6 +649,27 @@ let tests: [(String, () throws -> Void)] = [
         let config = GitConfigGenerator().profileConfig(for: profile)
         try expect(config.contains("sshCommand = ssh -i '/Users/me/My Keys/id_work'\\''; env' -F ~/.ssh/config"), "ssh key path should be shell quoted")
     }),
+    ("git config generator omits ssh command for https profiles", {
+        let profile = try GitProfile(
+            id: "personal-https",
+            displayName: "Personal HTTPS",
+            gitUserName: "Personal User",
+            gitUserEmail: "me@example.com",
+            accessMethod: .https,
+            sshKeyPath: "",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+
+        let config = GitConfigGenerator().profileConfig(for: profile)
+
+        try expect(config.contains("[user]"), "https profile config should include user section")
+        try expect(config.contains("name = Personal User"), "https profile config should include git name")
+        try expect(config.contains("email = me@example.com"), "https profile config should include git email")
+        try expect(!config.contains("[core]"), "https profile config should not include core section")
+        try expect(!config.contains("sshCommand"), "https profile config should not include ssh command")
+    }),
     ("ssh config generator emits managed identity blocks", {
         let profile = try GitProfile(
             id: "work",
@@ -559,6 +686,23 @@ let tests: [(String, () throws -> Void)] = [
         try expect(config.contains("Host github.com"), "config should contain host")
         try expect(config.contains("IdentityFile ~/.ssh/id_work"), "config should contain identity file")
         try expect(config.contains("IdentitiesOnly yes"), "config should force selected identity")
+    }),
+    ("ssh config generator skips https profiles", {
+        let profile = try GitProfile(
+            id: "personal-https",
+            displayName: "Personal HTTPS",
+            gitUserName: "Personal User",
+            gitUserEmail: "me@example.com",
+            accessMethod: .https,
+            sshKeyPath: "",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+
+        let config = SSHConfigGenerator().managedConfig(for: [profile])
+
+        try expect(config.isEmpty, "https profiles should not emit managed ssh config blocks")
     }),
     ("safe file writer constrains writes and creates backups", {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -742,6 +886,62 @@ let tests: [(String, () throws -> Void)] = [
         try expect(loaded.profiles[0].hosts == ["github.com"], "persisted profile should retain hosts")
         try expect(loaded.profiles[0].isDefault, "persisted imported profile should be default")
     }),
+    ("profile settings import keeps https access without synthetic ssh key", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        let manager = try ProfileSettingsManager(
+            profileStore: ProfileStore(fileURL: temporaryDirectory.appendingPathComponent("profiles.json")),
+            keychainStore: InMemoryKeychainStore(),
+            seedProfiles: []
+        )
+        let account = DetectedGitAccount(
+            id: "github-pawel",
+            provider: .github,
+            username: "pawel",
+            gitUserName: "Pawel",
+            gitUserEmail: "pawel@example.com",
+            sshKeyPath: nil,
+            accessMethods: [.https],
+            hosts: ["github.com"],
+            confidence: .high,
+            sources: [.githubCliHostsFile],
+            warnings: []
+        )
+
+        try manager.importDetectedAccount(account)
+
+        try expect(manager.profiles[0].accessMethod == .https, "imported profile should use https")
+        try expect(manager.profiles[0].sshKeyPath == "", "https import should not synthesize ssh key")
+    }),
+    ("profile settings import keeps pure ssh access with default ssh key", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        let manager = try ProfileSettingsManager(
+            profileStore: ProfileStore(fileURL: temporaryDirectory.appendingPathComponent("profiles.json")),
+            keychainStore: InMemoryKeychainStore(),
+            seedProfiles: []
+        )
+        let account = DetectedGitAccount(
+            id: "github-pawel",
+            provider: .github,
+            username: "pawel",
+            gitUserName: "Pawel",
+            gitUserEmail: "pawel@example.com",
+            sshKeyPath: nil,
+            accessMethods: [.ssh],
+            hosts: ["github.com"],
+            confidence: .high,
+            sources: [.githubCliHostsFile],
+            warnings: []
+        )
+
+        try manager.importDetectedAccount(account)
+
+        try expect(manager.profiles[0].accessMethod == .ssh, "pure ssh import should use ssh")
+        try expect(manager.profiles[0].sshKeyPath == "~/.ssh/id_ed25519", "pure ssh import without a key should use default ssh key")
+    }),
     ("profile settings manager refuses incomplete detected github account", {
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -845,6 +1045,90 @@ let tests: [(String, () throws -> Void)] = [
         try manager.updateSelectedProfileDisplayName("Top Name")
 
         try expect(manager.activeProfile?.displayName == "Top Name", "active profile display name should update")
+    }),
+    ("profile settings manager preserves access method state when apply fails", {
+        struct FailingInstaller: GitConfigInstalling {
+            func apply(profiles: [GitProfile], rules: [FolderRule], activeProfile: GitProfile?) throws {
+                throw TestFailure.expectationFailed("apply failed")
+            }
+        }
+
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let storeURL = temporaryDirectory.appendingPathComponent("profiles.json")
+        let profile = try GitProfile(
+            id: "personal",
+            displayName: "Personal",
+            gitUserName: "Personal User",
+            gitUserEmail: "me@example.com",
+            sshKeyPath: "~/.ssh/id_ed25519",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let manager = try ProfileSettingsManager(
+            profileStore: ProfileStore(fileURL: storeURL),
+            keychainStore: InMemoryKeychainStore(),
+            seedProfiles: [profile],
+            gitConfigInstaller: FailingInstaller()
+        )
+        let originalProfiles = manager.profiles
+        let originalSelectedProfileId = manager.selectedProfileId
+        let originalActiveProfileId = manager.activeProfileId
+
+        try expectThrowsAny({
+            try manager.updateSelectedProfileAccessMethod(.https)
+        }, "apply failure should be reported")
+
+        try expect(manager.profiles == originalProfiles, "failed access method update should preserve profiles")
+        try expect(manager.selectedProfileId == originalSelectedProfileId, "failed access method update should preserve selection")
+        try expect(manager.activeProfileId == originalActiveProfileId, "failed access method update should preserve active profile")
+        let loaded = try ProfileStore(fileURL: storeURL).load()
+        try expect(loaded.profiles == originalProfiles, "failed access method update should preserve persisted profiles")
+    }),
+    ("profile settings manager preserves access method state when save fails", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: temporaryDirectory,
+            withIntermediateDirectories: true
+        )
+        let storageURL = temporaryDirectory.appendingPathComponent("storage", isDirectory: true)
+        let storeURL = storageURL.appendingPathComponent("profiles.json")
+        let profile = try GitProfile(
+            id: "personal",
+            displayName: "Personal",
+            gitUserName: "Personal User",
+            gitUserEmail: "me@example.com",
+            sshKeyPath: "~/.ssh/id_ed25519",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let manager = try ProfileSettingsManager(
+            profileStore: ProfileStore(fileURL: storeURL),
+            keychainStore: InMemoryKeychainStore(),
+            seedProfiles: [profile],
+            gitConfigInstaller: ManagedGitConfigInstaller(homeDirectory: temporaryDirectory)
+        )
+        try manager.switchGlobalProfile(to: profile)
+        try FileManager.default.removeItem(at: storageURL)
+        try Data("not a directory".utf8).write(to: storageURL)
+        let originalProfiles = manager.profiles
+        let originalSelectedProfileId = manager.selectedProfileId
+        let originalActiveProfileId = manager.activeProfileId
+
+        try expectThrowsAny({
+            try manager.updateSelectedProfileAccessMethod(.https)
+        }, "save failure should be reported")
+
+        try expect(manager.profiles == originalProfiles, "failed access method save should preserve profiles")
+        try expect(manager.selectedProfileId == originalSelectedProfileId, "failed access method save should preserve selection")
+        try expect(manager.activeProfileId == originalActiveProfileId, "failed access method save should preserve active profile")
+        let globalConfigURL = temporaryDirectory
+            .appendingPathComponent(".config/git-account-switcher/global.gitconfig")
+        let globalConfig = try String(contentsOf: globalConfigURL, encoding: .utf8)
+        try expect(globalConfig.contains("sshCommand"), "failed access method save should keep generated config aligned with persisted ssh profile")
     }),
     ("profile settings manager applies switched global profile to managed git config", {
         let temporaryDirectory = FileManager.default.temporaryDirectory
@@ -1082,6 +1366,7 @@ let tests: [(String, () throws -> Void)] = [
             try """
             github.com:
                 user: pawelkwiatkowski
+                git_protocol: https
             """.write(to: ghConfig.appendingPathComponent("hosts.yml"), atomically: true, encoding: .utf8)
 
             final class EmptyDiscoveryRunner: CommandRunning {
@@ -1115,6 +1400,8 @@ let tests: [(String, () throws -> Void)] = [
             try expect(viewModel.profiles[0].displayName == "pawelkwiatkowski", "completion should prefill display name")
             try expect(viewModel.profiles[0].gitUserName == "pawelkwiatkowski", "completion should prefill git user name")
             try expect(viewModel.profiles[0].gitUserEmail == "user1@example.com", "completion should keep the editable default email")
+            try expect(viewModel.profiles[0].accessMethod == .https, "completion should preserve detected https access")
+            try expect(viewModel.profiles[0].sshKeyPath == "", "completion should not synthesize an ssh key for detected https access")
             try expect(viewModel.detectedAccounts.isEmpty, "completed suggestion should be removed")
             try expect(viewModel.settingsMessage == "Complete the detected GitHub account before using it.", "completion should explain next step")
         }
@@ -1263,6 +1550,27 @@ let tests: [(String, () throws -> Void)] = [
             )
         }
     }),
+    ("https profile reports neutral credential status", {
+        try MainActor.assumeIsolated {
+            let profile = try GitProfile(
+                id: "personal-https",
+                displayName: "Personal HTTPS",
+                gitUserName: "Personal User",
+                gitUserEmail: "me@example.com",
+                accessMethod: .https,
+                sshKeyPath: "",
+                hosts: ["github.com"],
+                httpsCredentialRef: nil,
+                isDefault: true
+            )
+            let viewModel = AppViewModel(profiles: [profile])
+
+            let status = viewModel.connectionStatus(for: profile)
+
+            try expect(status.message == "Uses HTTPS credentials.", "https status should not ask for ssh")
+            try expect(status.displayColorName == "green", "https profile should be locally complete")
+        }
+    }),
     ("app view model connection status starts red and turns green after manual test", {
         final class SuccessfulConnectionRunner: CommandRunning {
             func run(_ command: String, arguments: [String], workingDirectory: URL?) throws -> CommandResult {
@@ -1296,6 +1604,93 @@ let tests: [(String, () throws -> Void)] = [
                 waitUntil { viewModel.connectionStatus(for: profile).displayColorName == "green" },
                 "successful manual test should turn status green"
             )
+        }
+    }),
+    ("app view model clears ssh connection status after access method changes", {
+        final class SuccessfulConnectionRunner: CommandRunning {
+            func run(_ command: String, arguments: [String], workingDirectory: URL?) throws -> CommandResult {
+                CommandResult(exitCode: 0, standardOutput: "connected", standardError: "")
+            }
+        }
+
+        try MainActor.assumeIsolated {
+            let profile = try GitProfile(
+                id: "switching",
+                displayName: "Switching",
+                gitUserName: "Switching User",
+                gitUserEmail: "switching@example.com",
+                sshKeyPath: "~/.ssh/id_switching",
+                hosts: ["github.com"],
+                httpsCredentialRef: nil,
+                isDefault: true
+            )
+            let viewModel = AppViewModel(
+                profiles: [profile],
+                diagnosticsService: DiagnosticsService(commandRunner: SuccessfulConnectionRunner())
+            )
+
+            viewModel.testConnectionForSelectedProfile()
+            try expect(
+                waitUntil { viewModel.connectionStatus(for: profile).displayColorName == "green" },
+                "successful manual test should turn status green before access changes"
+            )
+
+            viewModel.updateSelectedProfileAccessMethod(.https)
+            viewModel.updateSelectedProfileAccessMethod(.ssh)
+
+            guard let selectedProfile = viewModel.selectedProfile else {
+                throw TestFailure.expectationFailed("selected profile should still exist after access changes")
+            }
+            let status = viewModel.connectionStatus(for: selectedProfile)
+            try expect(status.message == "Connection not tested.", "switching back to ssh should require a fresh test")
+            try expect(status.displayColorName == "red", "switching back to ssh should not keep stale green status")
+        }
+    }),
+    ("app view model discards in-flight ssh test results after switching to https", {
+        final class DelayedSuccessfulConnectionRunner: CommandRunning {
+            func run(_ command: String, arguments: [String], workingDirectory: URL?) throws -> CommandResult {
+                Thread.sleep(forTimeInterval: 0.15)
+                return CommandResult(exitCode: 0, standardOutput: "connected", standardError: "")
+            }
+        }
+
+        try MainActor.assumeIsolated {
+            let profile = try GitProfile(
+                id: "delayed-switch",
+                displayName: "Delayed Switch",
+                gitUserName: "Delayed User",
+                gitUserEmail: "delayed@example.com",
+                sshKeyPath: "~/.ssh/id_delayed",
+                hosts: ["github.com"],
+                httpsCredentialRef: nil,
+                isDefault: true
+            )
+            let viewModel = AppViewModel(
+                profiles: [profile],
+                diagnosticsService: DiagnosticsService(commandRunner: DelayedSuccessfulConnectionRunner())
+            )
+
+            viewModel.testConnectionForSelectedProfile()
+            viewModel.updateSelectedProfileAccessMethod(.https)
+            viewModel.testConnectionForSelectedProfile()
+
+            try expect(
+                viewModel.settingsMessage == "HTTPS access uses Git credentials.",
+                "https no-op should set credential status message"
+            )
+            RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+            try expect(
+                viewModel.settingsMessage == "HTTPS access uses Git credentials.",
+                "in-flight ssh test should not overwrite https status message"
+            )
+
+            viewModel.updateSelectedProfileAccessMethod(.ssh)
+            guard let selectedProfile = viewModel.selectedProfile else {
+                throw TestFailure.expectationFailed("selected profile should still exist after switching back to ssh")
+            }
+            let status = viewModel.connectionStatus(for: selectedProfile)
+            try expect(status.message == "Connection not tested.", "discarded in-flight result should not become stale ssh status")
+            try expect(status.displayColorName == "red", "discarded in-flight result should not turn ssh status green")
         }
     }),
     ("app view model connection status turns orange after failed manual test", {

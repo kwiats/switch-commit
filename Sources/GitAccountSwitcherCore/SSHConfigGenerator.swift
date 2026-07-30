@@ -5,6 +5,7 @@ public struct SSHConfigGenerator: Sendable {
 
     public func managedConfig(for profiles: [GitProfile]) -> String {
         profiles
+            .filter { $0.accessMethod == .ssh }
             .flatMap { profile in
                 profile.hosts.map { host in
                     """

@@ -232,6 +232,9 @@ public final class AppViewModel: ObservableObject {
         guard !hosts.isEmpty else {
             return .needsAttention(message: "No host configured.")
         }
+        guard profile.accessMethod == .ssh else {
+            return .connected(message: "Uses HTTPS credentials.")
+        }
         guard !profile.sshKeyPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return .needsAttention(message: "No SSH key configured.")
         }
@@ -253,6 +256,12 @@ public final class AppViewModel: ObservableObject {
             settingsMessage = "Select an account before testing connection."
             return
         }
+        guard profile.accessMethod == .ssh else {
+            settingsMessage = "HTTPS access uses Git credentials."
+            connectionTestResultsByProfileId[profile.id] = []
+            menuContentRevision += 1
+            return
+        }
         let hosts = normalizedHosts(for: profile)
         guard !hosts.isEmpty else {
             connectionTestResultsByProfileId[profile.id] = [
@@ -269,8 +278,15 @@ public final class AppViewModel: ObservableObject {
             guard let self else {
                 return
             }
+            guard let currentProfile = selectedProfile,
+                  currentProfile.id == profile.id,
+                  currentProfile.accessMethod == profile.accessMethod,
+                  currentProfile.accessMethod == .ssh
+            else {
+                return
+            }
             connectionTestResultsByProfileId[profile.id] = results
-            settingsMessage = connectionStatus(for: profile).message
+            settingsMessage = connectionStatus(for: currentProfile).message
             menuContentRevision += 1
         }
     }
@@ -321,6 +337,16 @@ public final class AppViewModel: ObservableObject {
     public func updateSelectedProfileSSHKeyPath(_ sshKeyPath: String) {
         performSettingsUpdate {
             try profileSettingsManager.updateSelectedProfileSSHKeyPath(sshKeyPath)
+        }
+    }
+
+    public func updateSelectedProfileAccessMethod(_ accessMethod: GitAccessMethod) {
+        let profileId = selectedProfile?.id
+        performSettingsUpdate {
+            try profileSettingsManager.updateSelectedProfileAccessMethod(accessMethod)
+            if let profileId {
+                connectionTestResultsByProfileId.removeValue(forKey: profileId)
+            }
         }
     }
 
@@ -420,6 +446,9 @@ public final class AppViewModel: ObservableObject {
             if let gitUserName = account.gitUserName ?? account.username {
                 try profileSettingsManager.updateSelectedProfileGitUserName(gitUserName)
             }
+            if let accessMethod = preferredAccessMethod(for: account) {
+                try profileSettingsManager.updateSelectedProfileAccessMethod(accessMethod)
+            }
             if let sshKeyPath = account.sshKeyPath {
                 try profileSettingsManager.updateSelectedProfileSSHKeyPath(sshKeyPath)
             }
@@ -434,6 +463,19 @@ public final class AppViewModel: ObservableObject {
             settingsMessage = "Could not save settings: \(error.localizedDescription)"
             refreshFromProfileSettings()
         }
+    }
+
+    private func preferredAccessMethod(for account: DetectedGitAccount) -> GitAccessMethod? {
+        if account.accessMethods.contains(.ssh), !account.accessMethods.contains(.https) {
+            return .ssh
+        }
+        if account.accessMethods.contains(.ssh), account.sshKeyPath != nil {
+            return .ssh
+        }
+        if account.accessMethods.contains(.https) {
+            return .https
+        }
+        return nil
     }
 
     private func performSettingsUpdate(_ update: () throws -> Void) {
@@ -501,6 +543,7 @@ public final class AppViewModel: ObservableObject {
                 displayName: "Personal",
                 gitUserName: "Personal User",
                 gitUserEmail: "me@example.com",
+                accessMethod: .ssh,
                 sshKeyPath: "~/.ssh/id_ed25519",
                 hosts: ["github.com"],
                 httpsCredentialRef: nil,

@@ -4,10 +4,17 @@ public struct GitConfigGenerator: Sendable {
     public init() {}
 
     public func profileConfig(for profile: GitProfile) -> String {
-        """
+        let userConfig = """
         [user]
             name = \(escape(profile.gitUserName))
             email = \(escape(profile.gitUserEmail))
+        """
+
+        guard profile.accessMethod == .ssh else {
+            return userConfig + "\n"
+        }
+
+        return userConfig + "\n" + """
         [core]
             sshCommand = ssh -i \(shellQuote(profile.sshKeyPath)) -F ~/.ssh/config
 

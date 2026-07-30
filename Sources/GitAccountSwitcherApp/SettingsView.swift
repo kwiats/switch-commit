@@ -235,6 +235,7 @@ struct SettingsView: View {
                     .lineLimit(1)
                 HStack(spacing: 6) {
                     metadataLabel("Provider: \(providerLabel(account.provider))", systemImage: "person.crop.circle")
+                    metadataLabel("Access: \(accessMethodsText(account.accessMethods))", systemImage: "key")
                     metadataLabel("Sources: \(detectionSourcesText(account.sources))", systemImage: "point.3.connected.trianglepath.dotted")
                 }
             }
@@ -287,6 +288,20 @@ struct SettingsView: View {
         case .github:
             return "GitHub"
         }
+    }
+
+    private func accessMethodsText(_ methods: [GitAccessMethod]) -> String {
+        if methods.isEmpty {
+            return "Choose during import"
+        }
+        return methods.map { method in
+            switch method {
+            case .ssh:
+                return "SSH"
+            case .https:
+                return "HTTPS"
+            }
+        }.joined(separator: ", ")
     }
 
     private func detectionSourcesText(_ sources: [DetectionSource]) -> String {
@@ -344,6 +359,8 @@ struct SettingsView: View {
             } label: {
                 Label("Test Connection", systemImage: "bolt.horizontal.circle")
             }
+            .disabled(profile.accessMethod == .https)
+            .help(profile.accessMethod == .https ? "HTTPS access uses Git credentials" : "Test SSH connection")
         }
     }
 
@@ -385,12 +402,27 @@ struct SettingsView: View {
                 ))
             }
             GridRow {
-                Text("SSH key")
+                Text("Access")
                     .foregroundStyle(.secondary)
-                TextField("SSH key", text: Binding(
-                    get: { viewModel.selectedProfile?.sshKeyPath ?? "" },
-                    set: { viewModel.updateSelectedProfileSSHKeyPath($0) }
-                ))
+                Picker("Access", selection: Binding(
+                    get: { viewModel.selectedProfile?.accessMethod ?? .ssh },
+                    set: { viewModel.updateSelectedProfileAccessMethod($0) }
+                )) {
+                    Text("SSH").tag(GitAccessMethod.ssh)
+                    Text("HTTPS").tag(GitAccessMethod.https)
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+            }
+            if viewModel.selectedProfile?.accessMethod != .https {
+                GridRow {
+                    Text("SSH key")
+                        .foregroundStyle(.secondary)
+                    TextField("SSH key", text: Binding(
+                        get: { viewModel.selectedProfile?.sshKeyPath ?? "" },
+                        set: { viewModel.updateSelectedProfileSSHKeyPath($0) }
+                    ))
+                }
             }
             GridRow {
                 Text("Hosts")
@@ -401,7 +433,7 @@ struct SettingsView: View {
                 ))
             }
             GridRow {
-                Text("Access")
+                Text("Credentials")
                     .foregroundStyle(.secondary)
                 HStack {
                     Button {
