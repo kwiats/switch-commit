@@ -1503,6 +1503,10 @@ let tests: [(String, () throws -> Void)] = [
         try expect(source.contains("<key>SUPublicEDKey</key>"), "release Info.plist should include SUPublicEDKey")
         try expect(source.contains("<key>SUEnableAutomaticChecks</key>"), "release Info.plist should explicitly configure automatic checks")
         try expect(source.contains("<false/>"), "release Info.plist should keep automatic checks disabled")
+        try expect(source.contains("Contents/Frameworks"), "release script should create a Frameworks directory in the app bundle")
+        try expect(source.contains("Sparkle.framework"), "release script should copy Sparkle.framework into the app bundle")
+        try expect(source.contains("@executable_path/../Frameworks"), "release script should add an app bundle Frameworks rpath")
+        try expect(source.contains("sparkle_framework_destination"), "release script should sign bundled Sparkle.framework explicitly")
     }),
     ("run local diagnostics requests settings presentation", {
         try MainActor.assumeIsolated {

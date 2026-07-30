@@ -12,6 +12,7 @@ binary_name="GitAccountSwitcherApp"
 bundle_id="com.git-account-switcher.app"
 sparkle_feed_url="https://kwiats.github.io/switch-commit-release-channel/appcast.xml"
 sparkle_public_ed_key="x4XXCgBb5YuShR9DnY81L9bPJ+6vFaKeL46WK/fEte8="
+frameworks_dir="${app_bundle}/Contents/Frameworks"
 
 echo "==> Building release binary"
 cd "${repo_root}"
@@ -21,9 +22,26 @@ echo "==> Preparing app bundle"
 rm -rf "${release_dir}"
 mkdir -p "${app_bundle}/Contents/MacOS"
 mkdir -p "${app_bundle}/Contents/Resources"
+mkdir -p "${frameworks_dir}"
 
 cp "${repo_root}/.build/release/${binary_name}" "${app_bundle}/Contents/MacOS/${binary_name}"
 chmod 755 "${app_bundle}/Contents/MacOS/${binary_name}"
+
+sparkle_framework_source="$(
+    find "${repo_root}/.build/artifacts" "${repo_root}/.build/release" -name Sparkle.framework -type d 2>/dev/null | sort | head -n 1
+)"
+sparkle_framework_destination="${frameworks_dir}/Sparkle.framework"
+
+if [[ -z "${sparkle_framework_source}" ]]; then
+    echo "error: Sparkle.framework was not found in .build artifacts" >&2
+    exit 1
+fi
+
+ditto "${sparkle_framework_source}" "${sparkle_framework_destination}"
+
+if ! otool -l "${app_bundle}/Contents/MacOS/${binary_name}" | grep -q "@executable_path/../Frameworks"; then
+    install_name_tool -add_rpath "@executable_path/../Frameworks" "${app_bundle}/Contents/MacOS/${binary_name}"
+fi
 
 cat > "${app_bundle}/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -65,6 +83,7 @@ cat > "${app_bundle}/Contents/Info.plist" <<PLIST
 PLIST
 
 echo "==> Signing app bundle"
+codesign --force --deep --sign - "${sparkle_framework_destination}"
 codesign --force --deep --sign - "${app_bundle}"
 
 echo "==> Creating ZIP artifact"
