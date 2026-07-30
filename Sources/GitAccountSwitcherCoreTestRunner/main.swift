@@ -111,7 +111,34 @@ let tests: [(String, () throws -> Void)] = [
         try expect(signals[0].confidence == .high, "gh hosts username should be high confidence")
         try expect(signals[0].source == .githubCliHostsFile, "source should be gh hosts file")
         try expect(signals[0].warnings.isEmpty, "valid hosts file should not warn")
+        try expect(signals[0].accessMethods == [.ssh], "gh ssh protocol should suggest ssh access")
         try expect(!String(describing: signals).contains("super-secret-token"), "token should never appear in parsed output")
+    }),
+    ("github cli hosts parser extracts https protocol as access method", {
+        let yaml = """
+        github.com:
+            oauth_token: super-secret-token
+            user: pawelkwiatkowski
+            git_protocol: https
+        """
+
+        let signals = GitHubCLIHostsParser().signals(from: yaml)
+
+        try expect(signals.count == 1, "parser should emit one signal")
+        try expect(signals[0].accessMethods == [.https], "gh https protocol should suggest https access")
+    }),
+    ("github cli hosts parser ignores non-exact protocol casing", {
+        let yaml = """
+        github.com:
+            oauth_token: super-secret-token
+            user: pawelkwiatkowski
+            git_protocol: SSH
+        """
+
+        let signals = GitHubCLIHostsParser().signals(from: yaml)
+
+        try expect(signals.count == 1, "parser should emit one signal")
+        try expect(signals[0].accessMethods == [], "non-exact gh protocol casing should not suggest an access method")
     }),
     ("github cli hosts parser returns warning for github host without username", {
         let yaml = """
@@ -148,13 +175,18 @@ let tests: [(String, () throws -> Void)] = [
         try expect(query == nil, "repository query should not parse")
     }),
     ("git remote parser emits a privacy-safe signal", {
-        let signal = GitRemoteParser().signal(from: "https://github.com/pawelkwiatkowski/project.git")
+        let parser = GitRemoteParser()
+        let signal = parser.signal(from: "https://github.com/pawelkwiatkowski/project.git")
+        let sshSignal = parser.signal(from: "git@github.com:pawelkwiatkowski/project.git")
+        let httpsSignal = parser.signal(from: "https://github.com/pawelkwiatkowski/project.git")
 
         try expect(signal?.confidence == .medium, "remote signal should have medium confidence")
         try expect(signal?.source == .repositoryRemote, "remote signal should identify repository remote source")
         try expect(signal?.hosts == ["github.com"], "remote signal should identify github.com")
         try expect(signal?.username == nil, "remote owner should not become a username")
         try expect(signal?.warnings == ["Remote owner 'pawelkwiatkowski' may be a user or an organization."], "remote signal should warn about owner ambiguity")
+        try expect(sshSignal?.accessMethods == [.ssh], "ssh remote should suggest ssh access")
+        try expect(httpsSignal?.accessMethods == [.https], "https remote should suggest https access")
     }),
     ("detected account merger combines github signals into one candidate", {
         let signals = [
