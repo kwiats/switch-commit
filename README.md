@@ -105,6 +105,31 @@ The release artifacts are written to `dist/v0.1.1/`:
 ```text
 GitAccountSwitcher-v0.1.1-macOS.zip
 GitAccountSwitcher-v0.1.1-macOS.zip.sha256
+release-url.txt
 ```
 
 Install by unzipping the archive and moving `Git Account Switcher.app` to `Applications`.
+
+## Release Channel CD
+
+Pushing a version tag publishes the public Sparkle release channel:
+
+```bash
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+The tag workflow builds the app, copies the ZIP/checksum/release notes into `kwiats/switch-commit-release-channel`, regenerates `appcast.xml`, and pushes the public channel repository. The app reads update metadata from:
+
+```text
+https://kwiats.github.io/switch-commit-release-channel/appcast.xml
+```
+
+Configure these source-repository secrets before tagging a release:
+
+```text
+RELEASE_CHANNEL_TOKEN
+SPARKLE_PRIVATE_ED_KEY
+```
+
+`RELEASE_CHANNEL_TOKEN` needs write access to the public release channel repository. `SPARKLE_PRIVATE_ED_KEY` must match the `SUPublicEDKey` embedded by `Scripts/build-release.sh`.

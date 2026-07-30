@@ -1,0 +1,67 @@
+name: Release Channel
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  publish-release-channel:
+    name: Build and publish release channel
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out source repository
+        uses: actions/checkout@v7
+
+      - name: Validate tag version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+          if [[ "${tag}" == "${version}" || ! "${version}" =~ ^[0-9]+[.][0-9]+[.][0-9]+$ ]]; then
+            echo "Expected a vX.Y.Z tag, got ${tag}" >&2
+            exit 1
+          fi
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+
+      - name: Show Swift version
+        run: swift --version
+
+      - name: Run PR checks
+        run: Scripts/pr-checks.sh
+
+      - name: Build release artifacts
+        run: Scripts/build-release.sh "${{ steps.version.outputs.version }}"
+
+      - name: Check out public release channel
+        uses: actions/checkout@v7
+        with:
+          repository: kwiats/switch-commit-release-channel
+          token: ${{ secrets.RELEASE_CHANNEL_TOKEN }}
+          path: release-channel
+
+      - name: Publish appcast channel
+        env:
+          SPARKLE_PRIVATE_ED_KEY: ${{ secrets.SPARKLE_PRIVATE_ED_KEY }}
+        run: Scripts/publish-release-channel.sh "${{ steps.version.outputs.version }}" release-channel "$PWD"
+
+      - name: Commit public release channel
+        working-directory: release-channel
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          if git diff --cached --quiet; then
+            echo "No release channel changes to publish."
+            exit 0
+          fi
+          git commit -m "Release Switch Commit v${{ steps.version.outputs.version }}"
+          git push
