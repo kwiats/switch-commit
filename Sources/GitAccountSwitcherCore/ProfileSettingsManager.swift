@@ -9,14 +9,17 @@ public final class ProfileSettingsManager {
 
     private let profileStore: ProfileStore
     private let keychainStore: KeychainStoring
+    private let gitConfigInstaller: GitConfigInstalling?
 
     public init(
         profileStore: ProfileStore,
         keychainStore: KeychainStoring,
-        seedProfiles: [GitProfile]
+        seedProfiles: [GitProfile],
+        gitConfigInstaller: GitConfigInstalling? = nil
     ) throws {
         self.profileStore = profileStore
         self.keychainStore = keychainStore
+        self.gitConfigInstaller = gitConfigInstaller
 
         let loaded = try profileStore.load()
         if loaded.profiles.isEmpty {
@@ -62,6 +65,7 @@ public final class ProfileSettingsManager {
             profiles[index].isDefault = profiles[index].id == profile.id
         }
         try persist()
+        try applyGitConfig()
     }
 
     public func addProfile() throws {
@@ -83,6 +87,7 @@ public final class ProfileSettingsManager {
             activeProfileId = profile.id
         }
         try persist()
+        try applyGitConfig()
     }
 
     public func importDetectedAccount(_ account: DetectedGitAccount) throws {
@@ -117,6 +122,7 @@ public final class ProfileSettingsManager {
         selectedProfileId = profile.id
         activeProfileId = updatedActiveProfileId
         statusMessage = "Added detected GitHub account \(profile.displayName)."
+        try applyGitConfig()
     }
 
     public func deleteSelectedProfile() throws {
@@ -140,6 +146,7 @@ public final class ProfileSettingsManager {
 
         normalizeDefaultFlags()
         try persist()
+        try applyGitConfig()
     }
 
     public func updateSelectedProfileDisplayName(_ displayName: String) throws {
@@ -195,6 +202,7 @@ public final class ProfileSettingsManager {
 
         profiles[index].httpsCredentialRef = nil
         try persist()
+        try applyGitConfig()
     }
 
     public func hostsText(for profile: GitProfile) -> String {
@@ -226,6 +234,7 @@ public final class ProfileSettingsManager {
             isDefault: draft.isDefault
         )
         try persist()
+        try applyGitConfig()
     }
 
     private func normalizeDefaultFlags() {
@@ -236,6 +245,14 @@ public final class ProfileSettingsManager {
 
     private func persist() throws {
         try profileStore.save(ProfileStoreData(profiles: profiles, rules: rules))
+    }
+
+    private func applyGitConfig() throws {
+        try gitConfigInstaller?.apply(
+            profiles: profiles,
+            rules: rules,
+            activeProfile: activeProfile
+        )
     }
 
     private func uniqueProfileId(base: String) -> String {

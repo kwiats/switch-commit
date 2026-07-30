@@ -771,6 +771,53 @@ let tests: [(String, () throws -> Void)] = [
 
         try expect(manager.activeProfile?.displayName == "Top Name", "active profile display name should update")
     }),
+    ("profile settings manager applies switched global profile to managed git config", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let storeURL = temporaryDirectory.appendingPathComponent("profiles.json")
+        let personal = try GitProfile(
+            id: "personal",
+            displayName: "Personal",
+            gitUserName: "Personal User",
+            gitUserEmail: "me@example.com",
+            sshKeyPath: "~/.ssh/id_ed25519",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let work = try GitProfile(
+            id: "work",
+            displayName: "Work",
+            gitUserName: "Work User",
+            gitUserEmail: "work@example.com",
+            sshKeyPath: "~/.ssh/id_work",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: false
+        )
+        let manager = try ProfileSettingsManager(
+            profileStore: ProfileStore(fileURL: storeURL),
+            keychainStore: InMemoryKeychainStore(),
+            seedProfiles: [personal, work],
+            gitConfigInstaller: ManagedGitConfigInstaller(homeDirectory: temporaryDirectory)
+        )
+
+        try manager.switchGlobalProfile(to: work)
+
+        let globalConfigURL = temporaryDirectory
+            .appendingPathComponent(".config/git-account-switcher/global.gitconfig")
+        let globalConfig = try String(contentsOf: globalConfigURL, encoding: .utf8)
+        try expect(globalConfig.contains("name = Work User"), "global config should contain switched git user name")
+        try expect(globalConfig.contains("email = work@example.com"), "global config should contain switched git user email")
+        try expect(!globalConfig.contains("me@example.com"), "global config should not retain previous global email")
+
+        let rootConfig = try String(
+            contentsOf: temporaryDirectory.appendingPathComponent(".gitconfig"),
+            encoding: .utf8
+        )
+        try expect(rootConfig.contains("path = ~/.config/git-account-switcher/global.gitconfig"), "root git config should include managed global config")
+        try expect(rootConfig.contains("path = ~/.config/git-account-switcher/rules.gitconfig"), "root git config should include managed rules config")
+    }),
     ("profile settings manager keeps selection valid when deleting profiles", {
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)

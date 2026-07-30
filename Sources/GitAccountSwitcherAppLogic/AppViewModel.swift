@@ -59,10 +59,12 @@ public final class AppViewModel: ObservableObject {
         presentationRequest: AppPresentationRequest? = nil,
         profileStore: ProfileStore? = nil,
         keychainStore: KeychainStoring = SystemKeychainStore(),
+        gitConfigInstaller: GitConfigInstalling? = nil,
         githubDiscoveryService: GitHubLocalDiscoveryService? = nil
     ) {
         let seedProfiles = profiles ?? AppViewModel.previewProfiles()
         let resolvedProfileStore = profileStore ?? ProfileStore(fileURL: profiles == nil ? AppViewModel.defaultProfilesURL() : AppViewModel.temporaryProfilesURL())
+        let resolvedGitConfigInstaller = gitConfigInstaller ?? (profiles == nil ? ManagedGitConfigInstaller() : nil)
         let manager: ProfileSettingsManager
         var startupMessage: String?
 
@@ -70,14 +72,16 @@ public final class AppViewModel: ObservableObject {
             manager = try ProfileSettingsManager(
                 profileStore: resolvedProfileStore,
                 keychainStore: keychainStore,
-                seedProfiles: seedProfiles
+                seedProfiles: seedProfiles,
+                gitConfigInstaller: resolvedGitConfigInstaller
             )
         } catch {
             startupMessage = "Could not load saved profiles: \(error.localizedDescription)"
             manager = try! ProfileSettingsManager(
                 profileStore: ProfileStore(fileURL: AppViewModel.temporaryProfilesURL()),
                 keychainStore: InMemoryKeychainStore(),
-                seedProfiles: seedProfiles
+                seedProfiles: seedProfiles,
+                gitConfigInstaller: nil
             )
         }
 
