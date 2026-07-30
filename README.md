@@ -119,7 +119,7 @@ git tag v0.2.0
 git push origin v0.2.0
 ```
 
-The tag workflow builds the app, copies the ZIP/checksum/release notes into `kwiats/switch-commit-release-channel`, regenerates `appcast.xml`, and pushes the public channel repository. The app reads update metadata from:
+The tag workflow builds the app, copies the ZIP/checksum/release notes into `kwiats/switch-commit-release-channel/release/`, regenerates `appcast.xml`, and pushes the public channel repository. The app reads update metadata from:
 
 ```text
 https://kwiats.github.io/switch-commit-release-channel/appcast.xml
@@ -133,3 +133,9 @@ SPARKLE_PRIVATE_ED_KEY
 ```
 
 `RELEASE_CHANNEL_TOKEN` needs write access to the public release channel repository. `SPARKLE_PRIVATE_ED_KEY` must match the `SUPublicEDKey` embedded by `Scripts/build-release.sh`.
+
+Generated appcast download URLs point at the public release folder, for example:
+
+```text
+https://kwiats.github.io/switch-commit-release-channel/release/GitAccountSwitcher-v0.2.0-macOS.zip
+```

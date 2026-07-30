@@ -1523,8 +1523,8 @@ let tests: [(String, () throws -> Void)] = [
             "release script should derive appcast URL from the public channel base URL"
         )
         try expect(
-            source.contains("sparkle_artifact_url=\"${release_channel_base_url}/GitAccountSwitcher-v${version}-macOS.zip\""),
-            "release script should derive artifact URL from the public channel base URL"
+            source.contains("sparkle_artifact_url=\"${release_channel_base_url}/release/GitAccountSwitcher-v${version}-macOS.zip\""),
+            "release script should derive artifact URL from the public channel release folder"
         )
         try expect(
             source.contains("release-url.txt"),
@@ -1539,9 +1539,14 @@ let tests: [(String, () throws -> Void)] = [
         try expect(source.contains("SPARKLE_PRIVATE_ED_KEY"), "publisher should require the Sparkle private EdDSA key from the environment")
         try expect(source.contains("generate_appcast"), "publisher should invoke Sparkle generate_appcast")
         try expect(source.contains("--ed-key-file -"), "publisher should pass the EdDSA key via standard input")
+        try expect(source.contains("release_channel_assets_dir=\"${release_channel_dir}/release\""), "publisher should copy artifacts under the public release folder")
+        try expect(source.contains("mkdir -p \"${release_channel_assets_dir}\""), "publisher should create the public release folder")
         try expect(source.contains("GitAccountSwitcher-v${version}-macOS.zip"), "publisher should copy the release ZIP")
         try expect(source.contains("checksum_name=\"${artifact_name}.sha256\""), "publisher should copy the checksum")
         try expect(source.contains("docs/release-notes/v${version}.md"), "publisher should copy matching release notes when present")
+        try expect(source.contains("--download-url-prefix \"${release_channel_base_url}/release\""), "publisher should put release folder URLs inside appcast downloads")
+        try expect(source.contains("--release-notes-url-prefix \"${release_channel_base_url}/release\""), "publisher should put release folder URLs inside appcast release notes")
+        try expect(source.contains("-o \"${release_channel_dir}/appcast.xml\""), "publisher should keep appcast.xml at the release channel root")
     }),
     ("tag release workflow publishes public GitHub Pages appcast channel", {
         let workflowURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)

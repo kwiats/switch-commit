@@ -6,13 +6,14 @@ version="${1:?usage: Scripts/publish-release-channel.sh <version> <release-chann
 release_channel_dir="${2:?usage: Scripts/publish-release-channel.sh <version> <release-channel-dir> [repo-root]}"
 repo_root="${3:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 release_channel_base_url="https://kwiats.github.io/switch-commit-release-channel"
+release_channel_assets_dir="${release_channel_dir}/release"
 artifact_name="GitAccountSwitcher-v${version}-macOS.zip"
 checksum_name="${artifact_name}.sha256"
 release_dir="${repo_root}/dist/v${version}"
 artifact_path="${release_dir}/${artifact_name}"
 checksum_path="${release_dir}/${checksum_name}"
 notes_source="${repo_root}/docs/release-notes/v${version}.md"
-notes_destination="${release_channel_dir}/GitAccountSwitcher-v${version}-macOS.md"
+notes_destination="${release_channel_assets_dir}/GitAccountSwitcher-v${version}-macOS.md"
 
 if [[ ! "${version}" =~ ^[0-9]+[.][0-9]+[.][0-9]+$ ]]; then
     echo "error: version must use X.Y.Z format without a leading v" >&2
@@ -49,8 +50,9 @@ if [[ -z "${generate_appcast_tool}" ]]; then
 fi
 
 echo "==> Copying release artifacts into public release channel"
-cp "${artifact_path}" "${release_channel_dir}/${artifact_name}"
-cp "${checksum_path}" "${release_channel_dir}/${checksum_name}"
+mkdir -p "${release_channel_assets_dir}"
+cp "${artifact_path}" "${release_channel_assets_dir}/${artifact_name}"
+cp "${checksum_path}" "${release_channel_assets_dir}/${checksum_name}"
 
 if [[ -f "${notes_source}" ]]; then
     cp "${notes_source}" "${notes_destination}"
@@ -61,9 +63,10 @@ fi
 echo "==> Generating Sparkle appcast"
 printf '%s' "${SPARKLE_PRIVATE_ED_KEY}" | "${generate_appcast_tool}" \
     --ed-key-file - \
-    --download-url-prefix "${release_channel_base_url}" \
-    --release-notes-url-prefix "${release_channel_base_url}" \
+    --download-url-prefix "${release_channel_base_url}/release" \
+    --release-notes-url-prefix "${release_channel_base_url}/release" \
     --versions "${version}" \
-    "${release_channel_dir}"
+    -o "${release_channel_dir}/appcast.xml" \
+    "${release_channel_assets_dir}"
 
 echo "==> Public release channel contents updated"

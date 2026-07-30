@@ -12,7 +12,7 @@ binary_name="GitAccountSwitcherApp"
 bundle_id="com.git-account-switcher.app"
 release_channel_base_url="https://kwiats.github.io/switch-commit-release-channel"
 sparkle_feed_url="${release_channel_base_url}/appcast.xml"
-sparkle_artifact_url="${release_channel_base_url}/GitAccountSwitcher-v${version}-macOS.zip"
+sparkle_artifact_url="${release_channel_base_url}/release/GitAccountSwitcher-v${version}-macOS.zip"
 sparkle_public_ed_key="x4XXCgBb5YuShR9DnY81L9bPJ+6vFaKeL46WK/fEte8="
 frameworks_dir="${app_bundle}/Contents/Frameworks"
 
