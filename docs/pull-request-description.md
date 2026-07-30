@@ -11,6 +11,7 @@ Ten PR dodaje pierwszą działającą bazę aplikacji macOS do przełączania ko
 - Modele profili Git i reguł folderów/repozytoriów.
 - Secret-free `ProfileStore`, który zapisuje tylko metadane i referencje do Keychain.
 - Generatory zarządzanych plików Git config i SSH config.
+- Globalne przełączanie profilu z menu zapisujące zarządzany `global.gitconfig` i include'y w `~/.gitconfig`.
 - `SafeFileWriter`, który ogranicza zapis do dozwolonych katalogów i robi backup przed nadpisaniem.
 - Lokalna diagnostyka przez `git config --show-origin`, bez automatycznych wyjść do sieci.
 - Granica Keychain: namespacowane identyfikatory sekretów i fake store do testów.
@@ -22,7 +23,8 @@ Ten PR dodaje pierwszą działającą bazę aplikacji macOS do przełączania ko
 - Sekrety nie trafiają do JSON ani generowanych configów.
 - Automatyczna diagnostyka wykonuje tylko lokalne komendy `git config --show-origin`.
 - Testy używają tymczasowych katalogów i fake Keychain.
-- Zapis plików jest ograniczony do jawnie dozwolonych managed roots.
+- Zapis zarządzanych plików jest ograniczony do jawnie dozwolonych managed roots.
+- `~/.gitconfig` dostaje tylko jawne include'y do zarządzanych plików, z backupem przed zmianą istniejącego pliku.
 
 ## Jak przetestować lokalnie
 
@@ -38,7 +40,7 @@ cd "/Users/pawelkwiatkowski/Documents/New project/.worktrees/build-macos-git-acc
 swift run GitAccountSwitcherCoreTestRunner
 ```
 
-Oczekiwany wynik: `All 7 tests passed.`
+Oczekiwany wynik: `All 42 tests passed.`
 
 3. Zbuduj aplikację:
 
@@ -56,16 +58,17 @@ swift run GitAccountSwitcherApp
 
 Oczekiwany wynik: ikona aplikacji pojawia się w górnym pasku macOS. Po kliknięciu widać aktywny profil, pozycję diagnostyki lokalnej, ustawienia i quit.
 
-5. Sprawdź, że aplikacja nie modyfikuje jeszcze prawdziwych plików `~/.gitconfig` ani `~/.ssh/config`. Ta wersja ma przygotowany bezpieczny rdzeń i UI, ale nie wykonuje jeszcze automatycznego instalowania include files w systemie.
+5. Przełącz konto z listy profili w menu bar.
+
+Oczekiwany wynik: `~/.config/git-account-switcher/global.gitconfig` zawiera `user.name` i `user.email` wybranego profilu, a `~/.gitconfig` zawiera include'y do `global.gitconfig` i `rules.gitconfig`.
 
 ## Weryfikacja wykonana
 
-- `swift run GitAccountSwitcherCoreTestRunner` -> 7/7 testów pass.
+- `swift run GitAccountSwitcherCoreTestRunner` -> 42/42 testy pass.
 - `swift build` -> build zakończony sukcesem.
 
 ## Następne kroki po merge
 
 - Dodać pełny ekran zarządzania profilami.
-- Dodać jawny flow instalowania include files z preview zmian.
 - Dodać diagnostykę wybranego folderu z UI.
 - Dodać manualny test SSH uruchamiany tylko na żądanie użytkownika.

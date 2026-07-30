@@ -9,6 +9,7 @@ Local-only macOS menu bar tool for switching Git identities globally and per fol
 - No automatic network calls.
 - No secrets in JSON profile files.
 - Managed writes are constrained to app-owned config files.
+- `~/.gitconfig` only receives explicit include lines for managed Git config files.
 - SSH/GitHub checks are manual diagnostics only.
 - Existing `~/.gitconfig` and `~/.ssh/config` are never replaced wholesale.
 
@@ -28,6 +29,33 @@ The app is designed to manage only these paths:
 ```
 
 When existing files must be touched, the core file writer creates backups before replacement and rejects writes outside configured managed roots.
+
+Switching the global profile from the menu writes the selected Git identity to:
+
+```text
+~/.config/git-account-switcher/global.gitconfig
+```
+
+The app adds include lines to `~/.gitconfig` when they are missing, after backing up any existing file to `~/.config/git-account-switcher/backups/`.
+
+## Manual Global Switch Check
+
+1. Check the current global identity:
+
+```bash
+git config --global --show-origin user.name
+git config --global --show-origin user.email
+```
+
+2. Switch accounts from the menu bar profile list.
+
+3. Confirm Git now resolves the selected profile:
+
+```bash
+git config --global --show-origin user.name
+git config --global --show-origin user.email
+cat ~/.config/git-account-switcher/global.gitconfig
+```
 
 ## Development
 
