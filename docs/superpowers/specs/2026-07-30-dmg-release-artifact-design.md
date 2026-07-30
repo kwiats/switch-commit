@@ -25,6 +25,7 @@ These must stay so current users update cleanly and retain data:
 - managed Git config root: `~/.config/git-account-switcher/`
 - managed SSH include: `~/.ssh/git-account-switcher.conf`
 - Keychain reference prefix: `git-account-switcher.<profile-id>.<purpose>`
+- Keychain `kSecAttrService`: `GitAccountSwitcher`
 
 Private source repository remotes and historical docs may keep older names where rewriting history is unnecessary. Runtime product chrome and new release assets must say Switch Commit.
 
