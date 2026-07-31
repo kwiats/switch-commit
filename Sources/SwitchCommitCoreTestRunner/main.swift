@@ -106,6 +106,27 @@ final class FakeLaunchAtLoginManager: LaunchAtLoginManaging, @unchecked Sendable
     }
 }
 
+enum FakeCLIInstallerError: Error {
+    case denied
+}
+
+final class FakeCLIInstaller: CLIInstalling, @unchecked Sendable {
+    var statusMessage: String
+    var installCallCount = 0
+    var errorToThrow: Error?
+
+    init(statusMessage: String) {
+        self.statusMessage = statusMessage
+    }
+
+    func installOrRepair() throws {
+        installCallCount += 1
+        if let errorToThrow {
+            throw errorToThrow
+        }
+    }
+}
+
 let tests: [(String, () throws -> Void)] = [
     ("detected git account exposes stable local-only metadata", {
         let account = DetectedGitAccount(
@@ -2740,6 +2761,46 @@ let tests: [(String, () throws -> Void)] = [
         try expect(json.contains("\"ok\":true"), "JSON doctor output should report success")
         try expect(json.contains("\"values\""), "JSON doctor output should include values")
         try expect(json.contains("\"warnings\""), "JSON doctor output should include warnings")
+    }),
+    ("app view model exposes CLI installer status from injected manager", {
+        try MainActor.assumeIsolated {
+            let installer = FakeCLIInstaller(statusMessage: "CLI is installed at /usr/local/bin/switch-commit.")
+            let viewModel = AppViewModel(profiles: [], cliInstaller: installer)
+
+            try expect(
+                viewModel.cliInstallStatusText == "CLI is installed at /usr/local/bin/switch-commit.",
+                "view model should expose the injected CLI installer status"
+            )
+            try expect(viewModel.isCLIInstalled, "installed status should select the reinstall action")
+        }
+    }),
+    ("app view model installs CLI through injected manager", {
+        try MainActor.assumeIsolated {
+            let installer = FakeCLIInstaller(statusMessage: "CLI is missing from /usr/local/bin/switch-commit.")
+            let viewModel = AppViewModel(profiles: [], cliInstaller: installer)
+
+            viewModel.installCLI()
+
+            try expect(installer.installCallCount == 1, "install should call the injected CLI installer")
+            try expect(
+                viewModel.cliInstallStatusText == "CLI is missing from /usr/local/bin/switch-commit.",
+                "view model should refresh and expose the installer status after install"
+            )
+        }
+    }),
+    ("app view model exposes CLI installation failure", {
+        try MainActor.assumeIsolated {
+            let installer = FakeCLIInstaller(statusMessage: "CLI is missing from /usr/local/bin/switch-commit.")
+            installer.errorToThrow = FakeCLIInstallerError.denied
+            let viewModel = AppViewModel(profiles: [], cliInstaller: installer)
+
+            viewModel.installCLI()
+
+            try expect(
+                viewModel.cliInstallStatusText.contains("Could not install CLI"),
+                "view model should expose a CLI installation failure"
+            )
+        }
     })
 ]
 

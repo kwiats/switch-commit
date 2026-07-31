@@ -10,7 +10,8 @@ final class SwitchCommitApp: NSObject, NSApplicationDelegate {
     private let updateChecker = SparkleAppUpdateChecker()
     private lazy var viewModel = AppViewModel(
         updateChecker: updateChecker,
-        launchAtLoginManager: SystemLaunchAtLoginManager()
+        launchAtLoginManager: SystemLaunchAtLoginManager(),
+        cliInstaller: CLIInstallManager()
     )
     private let settingsWindowController = SettingsWindowController()
     private var statusItem: NSStatusItem?

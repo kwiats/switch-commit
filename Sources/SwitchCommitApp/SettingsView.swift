@@ -69,6 +69,22 @@ struct SettingsView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
+            Divider()
+
+            VStack(alignment: .leading, spacing: 8) {
+                Button(viewModel.isCLIInstalled ? "Reinstall CLI" : "Install CLI") {
+                    viewModel.installCLI()
+                }
+
+                Text("Makes switch-commit available at /usr/local/bin/switch-commit.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Text(viewModel.cliInstallStatusText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Spacer()
             footer
         }

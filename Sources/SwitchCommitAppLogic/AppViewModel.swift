@@ -80,6 +80,21 @@ public protocol LaunchAtLoginManaging: Sendable {
     func disable() throws
 }
 
+public protocol CLIInstalling: Sendable {
+    var statusMessage: String { get }
+    func installOrRepair() throws
+}
+
+public struct UnavailableCLIInstaller: CLIInstalling {
+    public init() {}
+
+    public var statusMessage: String {
+        "CLI installation is unavailable in this runtime."
+    }
+
+    public func installOrRepair() throws {}
+}
+
 public struct UnavailableLaunchAtLoginManager: LaunchAtLoginManaging {
     public init() {}
 
@@ -164,6 +179,8 @@ public final class AppViewModel: ObservableObject {
     @Published public private(set) var menuContentRevision: Int
     @Published public private(set) var isLaunchAtLoginEnabled: Bool
     @Published public private(set) var launchAtLoginStatusText: String
+    @Published public private(set) var cliInstallStatusText: String
+    @Published public private(set) var isCLIInstalled: Bool
 
     private let profileSettingsManager: ProfileSettingsManager
     private let githubDiscoveryWorker: GitHubDiscoveryWorker
@@ -171,6 +188,7 @@ public final class AppViewModel: ObservableObject {
     private let updateChecker: AppUpdateChecking
     private let bundleInfo: AppBundleInfo
     private let launchAtLoginManager: LaunchAtLoginManaging
+    private let cliInstaller: CLIInstalling
     private var connectionTestResultsByProfileId: [String: [HostConnectionTestResult]]
 
     public init(
@@ -185,7 +203,8 @@ public final class AppViewModel: ObservableObject {
         diagnosticsService: DiagnosticsService = DiagnosticsService(),
         updateChecker: AppUpdateChecking = DisabledAppUpdateChecker(),
         bundleInfo: AppBundleInfo = .mainBundle(),
-        launchAtLoginManager: LaunchAtLoginManaging = UnavailableLaunchAtLoginManager()
+        launchAtLoginManager: LaunchAtLoginManaging = UnavailableLaunchAtLoginManager(),
+        cliInstaller: CLIInstalling = UnavailableCLIInstaller()
     ) {
         let seedProfiles = profiles ?? AppViewModel.previewProfiles()
         let resolvedProfileStore = profileStore ?? ProfileStore(fileURL: profiles == nil ? AppViewModel.defaultProfilesURL() : AppViewModel.temporaryProfilesURL())
@@ -230,6 +249,7 @@ public final class AppViewModel: ObservableObject {
         self.updateChecker = updateChecker
         self.bundleInfo = bundleInfo
         self.launchAtLoginManager = launchAtLoginManager
+        self.cliInstaller = cliInstaller
         self.connectionTestResultsByProfileId = Self.runtimeConnectionResults(
             from: manager.profileConnectionStates
         )
@@ -237,6 +257,8 @@ public final class AppViewModel: ObservableObject {
         self.menuContentRevision = 0
         self.isLaunchAtLoginEnabled = launchAtLoginManager.status.isEnabled
         self.launchAtLoginStatusText = launchAtLoginManager.status.displayMessage
+        self.cliInstallStatusText = cliInstaller.statusMessage
+        self.isCLIInstalled = Self.isInstalledCLIStatus(cliInstaller.statusMessage)
     }
 
     public var activeProfile: GitProfile? {
@@ -434,6 +456,16 @@ public final class AppViewModel: ObservableObject {
         }
     }
 
+    public func installCLI() {
+        do {
+            try cliInstaller.installOrRepair()
+            refreshCLIInstallState()
+        } catch {
+            refreshCLIInstallState()
+            cliInstallStatusText = "Could not install CLI: \(error.localizedDescription)"
+        }
+    }
+
     public func refreshDetectedAccounts() {
         let existingProfiles = profiles
         let worker = githubDiscoveryWorker
@@ -557,6 +589,16 @@ public final class AppViewModel: ObservableObject {
         let status = launchAtLoginManager.status
         isLaunchAtLoginEnabled = status.isEnabled
         launchAtLoginStatusText = status.displayMessage
+    }
+
+    private func refreshCLIInstallState() {
+        let statusMessage = cliInstaller.statusMessage
+        cliInstallStatusText = statusMessage
+        isCLIInstalled = Self.isInstalledCLIStatus(statusMessage)
+    }
+
+    private static func isInstalledCLIStatus(_ statusMessage: String) -> Bool {
+        statusMessage.hasPrefix("CLI is installed at ")
     }
 
     private func isDuplicateDetectedAccount(_ account: DetectedGitAccount) -> Bool {
