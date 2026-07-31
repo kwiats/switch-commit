@@ -169,6 +169,7 @@ public final class AppViewModel: ObservableObject {
     @Published public private(set) var menuContentRevision: Int
     @Published public private(set) var isLaunchAtLoginEnabled: Bool
     @Published public private(set) var launchAtLoginStatusText: String
+    @Published public private(set) var availableSSHKeyPaths: [String]
 
     private let profileSettingsManager: ProfileSettingsManager
     private let githubDiscoveryWorker: GitHubDiscoveryWorker
@@ -176,6 +177,7 @@ public final class AppViewModel: ObservableObject {
     private let updateChecker: AppUpdateChecking
     private let bundleInfo: AppBundleInfo
     private let launchAtLoginManager: LaunchAtLoginManaging
+    private let sshKeyDiscovery: SSHKeyDiscovery
     private var connectionTestResultsByProfileId: [String: [HostConnectionTestResult]]
     private var frontmostPath: String?
     private var frontmostUnavailableReason: String?
@@ -192,7 +194,8 @@ public final class AppViewModel: ObservableObject {
         diagnosticsService: DiagnosticsService = DiagnosticsService(),
         updateChecker: AppUpdateChecking = DisabledAppUpdateChecker(),
         bundleInfo: AppBundleInfo = .mainBundle(),
-        launchAtLoginManager: LaunchAtLoginManaging = UnavailableLaunchAtLoginManager()
+        launchAtLoginManager: LaunchAtLoginManaging = UnavailableLaunchAtLoginManager(),
+        sshKeyDiscovery: SSHKeyDiscovery = SSHKeyDiscovery()
     ) {
         let seedProfiles = profiles ?? AppViewModel.previewProfiles()
         let resolvedProfileStore = profileStore ?? ProfileStore(fileURL: profiles == nil ? AppViewModel.defaultProfilesURL() : AppViewModel.temporaryProfilesURL())
@@ -247,6 +250,7 @@ public final class AppViewModel: ObservableObject {
         self.updateChecker = updateChecker
         self.bundleInfo = bundleInfo
         self.launchAtLoginManager = launchAtLoginManager
+        self.sshKeyDiscovery = sshKeyDiscovery
         self.connectionTestResultsByProfileId = Self.runtimeConnectionResults(
             from: manager.profileConnectionStates
         )
@@ -254,6 +258,7 @@ public final class AppViewModel: ObservableObject {
         self.menuContentRevision = 0
         self.isLaunchAtLoginEnabled = launchAtLoginManager.status.isEnabled
         self.launchAtLoginStatusText = launchAtLoginManager.status.displayMessage
+        self.availableSSHKeyPaths = sshKeyDiscovery.discoverKeyPaths()
     }
 
     public var activeProfile: GitProfile? {
@@ -474,6 +479,10 @@ public final class AppViewModel: ObservableObject {
         performSettingsUpdate {
             try profileSettingsManager.updateSelectedProfileSSHKeyPath(sshKeyPath)
         }
+    }
+
+    public func refreshAvailableSSHKeyPaths() {
+        availableSSHKeyPaths = sshKeyDiscovery.discoverKeyPaths()
     }
 
     public func updateSelectedProfileAccessMethod(_ accessMethod: GitAccessMethod) {

@@ -14,6 +14,8 @@ struct SettingsView: View {
     @ObservedObject var viewModel: AppViewModel
     @State private var isShowingDeleteConfirmation = false
     @State private var selectedTab: SettingsTab = .accounts
+    @State private var isShowingSSHKeyPathAlert = false
+    @State private var sshKeyPathDraft = ""
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -49,6 +51,16 @@ struct SettingsView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(DeleteAccountConfirmationContent.message)
+        }
+        .alert("Enter SSH Key Path", isPresented: $isShowingSSHKeyPathAlert) {
+            TextField("SSH key path", text: $sshKeyPathDraft)
+            Button("Cancel", role: .cancel) {}
+            Button("OK") {
+                viewModel.updateSelectedProfileSSHKeyPath(sshKeyPathDraft)
+                viewModel.refreshAvailableSSHKeyPaths()
+            }
+        } message: {
+            Text("Enter a path to a private SSH key.")
         }
     }
 
@@ -470,10 +482,47 @@ struct SettingsView: View {
                 GridRow {
                     Text("SSH key")
                         .foregroundStyle(.secondary)
-                    TextField("SSH key", text: Binding(
-                        get: { viewModel.selectedProfile?.sshKeyPath ?? "" },
-                        set: { viewModel.updateSelectedProfileSSHKeyPath($0) }
-                    ))
+                    Menu {
+                        ForEach(viewModel.availableSSHKeyPaths, id: \.self) { path in
+                            Button {
+                                viewModel.updateSelectedProfileSSHKeyPath(path)
+                            } label: {
+                                HStack {
+                                    Text(path)
+                                    if viewModel.selectedProfile?.sshKeyPath == path {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                        Divider()
+                        Button("Choose File...") {
+                            chooseSSHKeyFile()
+                        }
+                        Button("Enter Path...") {
+                            sshKeyPathDraft = viewModel.selectedProfile?.sshKeyPath ?? ""
+                            isShowingSSHKeyPathAlert = true
+                        }
+                    } label: {
+                        HStack {
+                            Text(sshKeyMenuTitle)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(Color(nsColor: .textBackgroundColor))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 5)
+                                .stroke(Color(nsColor: .separatorColor))
+                        )
+                    }
+                    .menuStyle(.borderlessButton)
+                    .onAppear {
+                        viewModel.refreshAvailableSSHKeyPaths()
+                    }
                 }
             }
             GridRow {
@@ -614,5 +663,33 @@ struct SettingsView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .center)
+    }
+
+    private var sshKeyMenuTitle: String {
+        let path = viewModel.selectedProfile?.sshKeyPath
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return path.isEmpty ? "Choose SSH key" : path
+    }
+
+    private func chooseSSHKeyFile() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".ssh", isDirectory: true)
+        if panel.runModal() == .OK, let url = panel.url {
+            viewModel.updateSelectedProfileSSHKeyPath(displaySSHKeyPath(for: url))
+            viewModel.refreshAvailableSSHKeyPaths()
+        }
+    }
+
+    private func displaySSHKeyPath(for url: URL) -> String {
+        let homePath = FileManager.default.homeDirectoryForCurrentUser.standardizedFileURL.path
+        let path = url.standardizedFileURL.path
+        if path == homePath || path.hasPrefix(homePath + "/") {
+            return "~" + String(path.dropFirst(homePath.count))
+        }
+        return path
     }
 }
