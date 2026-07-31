@@ -157,31 +157,192 @@ swift build --product switch-commit
 .build/debug/switch-commit --help
 ```
 
-### Command cheat sheet
+### Global flags
 
-| Command | Description |
-|---|---|
-| `switch-commit` | Interactive profile menu when run on a TTY; prints usage on non-TTY |
-| `switch-commit list` / `ls` | List profiles; active profile is marked |
-| `switch-commit status` | Active global profile plus folder context for the current directory or `--path` |
-| `switch-commit use <name\|id>` | Switch the global active profile and apply managed Git/SSH config |
-| `switch-commit show <name\|id>` | Show profile metadata (no Keychain secret values) |
-| `switch-commit add ...` | Create a profile |
-| `switch-commit edit <name\|id> ...` | Update profile fields |
-| `switch-commit delete <name\|id>` | Delete a profile (confirm interactively or pass `--yes`) |
-| `switch-commit folder list` | List folder rules |
-| `switch-commit folder add <path> --profile <name\|id>` | Assign a profile to a folder |
-| `switch-commit folder remove <path\|id>` | Remove a folder rule |
-| `switch-commit doctor` | Inspect the local Git identity at the current directory or `--path` |
-
-Run `switch-commit help <command>` for flags and examples.
-
-### Output flags
+These flags work on the root command and every subcommand:
 
 - `--json` — emit machine-readable JSON on stdout with stable field names. Secret payloads are never included.
-- `--no-color` — disable ANSI color output. The CLI also respects the `NO_COLOR` environment variable.
+- `--no-color` — disable ANSI color output.
+- The CLI also respects the `NO_COLOR` environment variable.
 
-Global flags apply to subcommands, for example `switch-commit list --json`.
+Examples: `switch-commit list --json`, `switch-commit status --path ~/Dev/acme --no-color`.
+
+Profile references accept a display name or id. Matching is case-insensitive for names; ambiguous names error with candidates. Run `switch-commit help <command>` for the live ArgumentParser help text.
+
+### Commands
+
+#### `switch-commit` (no arguments)
+
+On a TTY, opens an interactive profile menu:
+
+- ↑ / ↓ move, Enter = `use`, `a` add, `d` delete (with confirm), `q` quit.
+
+On a non-TTY session, prints usage and exits without waiting for input.
+
+```bash
+switch-commit
+```
+
+#### `list` / `ls`
+
+List configured profiles. The active profile is marked.
+
+```bash
+switch-commit list
+switch-commit ls --json
+```
+
+#### `status`
+
+Show the active global profile plus folder-rule context for the current directory, or for `--path`.
+
+| Flag | Description |
+|---|---|
+| `--path <path>` | Path to inspect for a matching folder rule |
+
+```bash
+switch-commit status
+switch-commit status --path ~/Dev/acme
+```
+
+#### `use`
+
+Switch the global active profile and apply managed Git/SSH config.
+
+```bash
+switch-commit use work
+switch-commit use <profile-id>
+```
+
+#### `show`
+
+Show profile metadata (no Keychain secret values).
+
+```bash
+switch-commit show work
+switch-commit show work --json
+```
+
+#### `add`
+
+Create a profile.
+
+| Flag | Description |
+|---|---|
+| `--name <name>` | Profile display name (required) |
+| `--git-name <git-name>` | Git commit author name (required) |
+| `--git-email <git-email>` | Git commit author email (required) |
+| `--access <ssh\|https>` | Access method (default: `https`) |
+| `--ssh-key <path>` | SSH private key path (required when `--access ssh`) |
+| `--host <host>` | Git host; repeat for multiple hosts (default host: `github.com`) |
+| `--https-credential-ref <ref>` | Keychain credential reference identifier |
+
+```bash
+switch-commit add \
+  --name personal \
+  --git-name "Ada Lovelace" \
+  --git-email ada@example.com
+
+switch-commit add \
+  --name work \
+  --git-name "Ada" \
+  --git-email ada@acme.com \
+  --access ssh \
+  --ssh-key ~/.ssh/id_ed25519_work \
+  --host github.com
+```
+
+#### `edit`
+
+Update fields on an existing profile. Only provided flags change.
+
+| Flag | Description |
+|---|---|
+| `--name <name>` | New display name |
+| `--git-name <git-name>` | New Git author name |
+| `--git-email <git-email>` | New Git author email |
+| `--access <ssh\|https>` | Access method |
+| `--ssh-key <path>` | SSH private key path |
+| `--host <host>` | Replace the host list (repeat for multiple) |
+| `--https-credential-ref <ref>` | Keychain credential reference identifier |
+
+```bash
+switch-commit edit work --git-email ada@new-acme.com
+switch-commit edit work --access https --https-credential-ref git-account-switcher.work.https
+```
+
+#### `delete`
+
+Delete a profile. Confirms interactively unless `--yes` is passed.
+
+| Flag | Description |
+|---|---|
+| `--yes` | Delete without prompting |
+
+```bash
+switch-commit delete personal
+switch-commit delete personal --yes
+```
+
+#### `folder list`
+
+List folder-specific profile rules.
+
+```bash
+switch-commit folder list
+switch-commit folder list --json
+```
+
+#### `folder add`
+
+Assign a profile to a folder. Git `includeIf` rules are regenerated so identity applies automatically inside that path.
+
+| Flag | Description |
+|---|---|
+| `--profile <name\|id>` | Profile to assign (required) |
+| `--mode <folder-tree\|single-repo>` | Match mode (default: `folder-tree`) |
+| `--yes` | Take over an existing rule without prompting |
+
+```bash
+switch-commit folder add ~/Dev/acme --profile work
+switch-commit folder add ~/Dev/acme --profile work --mode folder-tree
+switch-commit folder add ~/Dev/solo-repo --profile personal --mode single-repo
+```
+
+#### `folder remove`
+
+Remove a folder rule by path or rule id.
+
+| Flag | Description |
+|---|---|
+| `--yes` | Remove without prompting |
+
+```bash
+switch-commit folder remove ~/Dev/acme
+switch-commit folder remove <rule-id> --yes
+```
+
+#### `doctor`
+
+Inspect the local Git identity at the current directory or `--path`. Runs local Git/config checks only; it does not probe hosts over the network.
+
+| Flag | Description |
+|---|---|
+| `--path <path>` | Path to inspect (default: current directory) |
+
+```bash
+switch-commit doctor
+switch-commit doctor --path ~/Dev/acme --json
+```
+
+#### `version`
+
+Print the CLI version.
+
+```bash
+switch-commit version
+switch-commit version --json
+```
 
 ### Broken symlink repair
 
