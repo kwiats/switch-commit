@@ -38,7 +38,12 @@ struct SwitchCommitCommand: ParsableCommand {
     mutating func run() throws {
         if CommandLine.arguments.count == 1 {
             if isInteractiveSession {
-                print("Interactive menu coming soon")
+                do {
+                    var menu = InteractiveProfileMenu()
+                    try menu.run(session: CLIRuntime.session())
+                } catch {
+                    CLIRuntime.terminate(for: error, json: options.json)
+                }
                 return
             }
 
