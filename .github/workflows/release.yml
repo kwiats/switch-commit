@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   publish-release-channel:
@@ -46,17 +47,22 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: Scripts/publish-release-channel.sh "${{ steps.version.outputs.version }}" "$PWD"
 
-      - name: Push site metadata to default branch
+      - name: Open PR with site metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
           version="${{ steps.version.outputs.version }}"
+          default_branch="${{ github.event.repository.default_branch }}"
+          branch="automation/release-site-v${version}"
           staging="$(mktemp -d)"
           cp site/appcast.xml site/version.txt "${staging}/"
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch origin "${{ github.event.repository.default_branch }}"
-          git checkout -B "${{ github.event.repository.default_branch }}" "origin/${{ github.event.repository.default_branch }}"
+          git fetch origin "${default_branch}"
+          git checkout -B "${branch}" "origin/${default_branch}"
           mkdir -p site
           cp "${staging}/appcast.xml" site/appcast.xml
           cp "${staging}/version.txt" site/version.txt
@@ -66,4 +72,12 @@ jobs:
             exit 0
           fi
           git commit -m "Release Switch Commit v${version} channel metadata"
-          git push origin "HEAD:${{ github.event.repository.default_branch }}"
+          git push -u origin "HEAD:${branch}" --force
+          if gh pr list --head "${branch}" --state open --json number --jq 'length' | grep -qx '0'; then
+            gh pr create \
+              --base "${default_branch}" \
+              --head "${branch}" \
+              --title "Release site metadata for v${version}" \
+              --body "Automated Sparkle \`site/appcast.xml\` + \`site/version.txt\` update for tag \`v${version}\`."
+          fi
+          gh pr merge --merge --auto "${branch}" || gh pr merge --merge "${branch}"

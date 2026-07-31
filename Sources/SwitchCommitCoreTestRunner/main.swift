@@ -2650,8 +2650,10 @@ let tests: [(String, () throws -> Void)] = [
         try expect(source.contains("SPARKLE_PRIVATE_ED_KEY"), "release workflow should provide Sparkle signing material only from secrets")
         try expect(source.contains("GH_TOKEN: ${{ github.token }}"), "release workflow should authenticate gh release with the job token")
         try expect(source.contains("Scripts/publish-release-channel.sh"), "release workflow should publish through the checked-in publisher script")
-        try expect(source.contains("site/appcast.xml"), "release workflow should push site appcast metadata to the default branch")
-        try expect(source.contains("git push"), "release workflow should push the site metadata update")
+        try expect(source.contains("site/appcast.xml"), "release workflow should publish site appcast metadata")
+        try expect(source.contains("gh pr create"), "release workflow should open a PR because main requires pull requests")
+        try expect(source.contains("gh pr merge"), "release workflow should merge the site metadata PR")
+        try expect(source.contains("pull-requests: write"), "release workflow should request pull-requests write permission")
     }),
     ("README documents tag release CD and release channel secrets", {
         let readmeURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
