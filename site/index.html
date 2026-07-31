@@ -645,7 +645,7 @@
         <span class="mark-dot" aria-hidden="true"></span>
         Switch Commit
       </a>
-      <div class="nav-meta">release channel · <em>v0.3.0</em></div>
+      <div class="nav-meta">release channel · <em>v0.3.2</em></div>
     </header>
 
     <section class="hero">
@@ -669,11 +669,11 @@
         </p>
 
         <div class="cta-row">
-          <a class="btn btn-primary" href="https://github.com/kwiats/switch-commit/releases/download/v0.3.0/SwitchCommit-v0.3.0-macOS.dmg">
+          <a class="btn btn-primary" href="https://github.com/kwiats/switch-commit/releases/download/v0.3.2/SwitchCommit-v0.3.2-macOS.dmg">
             <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path d="M8 2v8m0 0L5 7.5M8 10l3-2.5M3 13h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            Pobierz v0.3.0
+            Pobierz v0.3.2
           </a>
           <a class="btn btn-ghost" href="#install">
             Instalacja
@@ -760,6 +760,16 @@
         <h2>Changelog</h2>
         <div class="changelog-entries">
           <article class="changelog-entry">
+            <div class="changelog-meta">// v0.3.2 · 31 Jul 2026</div>
+            <div class="changelog-body"><h1>Switch Commit v0.3.2</h1>
+<h2>Highlights</h2>
+<ul><li>Requires committed release notes at <code>docs/release-notes/vX.Y.Z.md</code> before a tagged release can publish. Missing notes fail the release channel instead of shipping an empty GitHub Release body.</li><li>Always uploads the release-notes markdown asset and sets Sparkle <code>releaseNotesLink</code>, so Check for Updates can show the changelog.</li><li>Syncs the GitHub Pages landing changelog and download CTA inside the Release Channel site metadata PR. This avoids the GitHub Actions limitation where <code>GITHUB_TOKEN</code>-created releases do not trigger a separate <code>release: published</code> workflow.</li><li>Documents the v0.3.1 channel and docs changes that shipped without release notes because the notes file was missing.</li></ul></div>
+          </article>
+          <article class="changelog-entry">
+            <div class="changelog-meta">// v0.3.1 · 31 Jul 2026</div>
+            <div class="changelog-body"><p>Switch Commit 0.3.1</p></div>
+          </article>
+          <article class="changelog-entry">
             <div class="changelog-meta">// v0.3.0 · 31 Jul 2026</div>
             <div class="changelog-body"><h1>Switch Commit v0.3.0</h1>
 <h2>Highlights</h2>
@@ -786,7 +796,7 @@
       <span>© 2026 Switch Commit</span>
       <div class="links">
         <a href="appcast.xml">appcast.xml</a>
-        <a href="https://github.com/kwiats/switch-commit/releases/download/v0.3.0/SwitchCommit-v0.3.0-macOS.dmg.sha256">SHA-256</a>
+        <a href="https://github.com/kwiats/switch-commit/releases/download/v0.3.2/SwitchCommit-v0.3.2-macOS.dmg.sha256">SHA-256</a>
         <a href="https://github.com/kwiats/switch-commit">GitHub</a>
       </div>
     </footer>
