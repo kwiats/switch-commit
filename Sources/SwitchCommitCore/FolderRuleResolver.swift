@@ -17,24 +17,55 @@ public struct FolderRuleResolution: Equatable, Sendable {
     }
 }
 
-public enum FolderRuleResolver {
+public enum FolderRuleResolver: Sendable {
+    public static func normalize(_ path: String, homeDirectory: URL) -> String {
+        var trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed == "~" {
+            trimmed = homeDirectory.path
+        } else if trimmed.hasPrefix("~/") {
+            trimmed = homeDirectory.appendingPathComponent(String(trimmed.dropFirst(2))).path
+        }
+
+        let standardized = (trimmed as NSString).standardizingPath
+        guard standardized != "/" else {
+            return "/"
+        }
+        return standardized.hasSuffix("/") ? String(standardized.dropLast()) : standardized
+    }
+
+    public static func match(
+        path: String,
+        rules: [FolderRule],
+        homeDirectory: URL
+    ) -> FolderRule? {
+        let normalizedPath = normalize(path, homeDirectory: homeDirectory)
+
+        let matches = rules.filter { rule in
+            guard rule.enabled else { return false }
+            let normalizedRulePath = normalize(rule.path, homeDirectory: homeDirectory)
+            return Self.matches(path: normalizedPath, rulePath: normalizedRulePath, mode: rule.matchMode)
+        }
+
+        return matches.max { lhs, rhs in
+            let lhsPath = normalize(lhs.path, homeDirectory: homeDirectory)
+            let rhsPath = normalize(rhs.path, homeDirectory: homeDirectory)
+            if lhsPath.count != rhsPath.count {
+                return lhsPath.count < rhsPath.count
+            }
+            return lhsPath > rhsPath
+        }
+    }
+
     public static func resolve(
         path: String,
         rules: [FolderRule],
         profiles: [GitProfile],
         activeProfileId: String?
     ) -> FolderRuleResolution {
-        let normalizedPath = FolderPathNormalizer.normalize(path)
-        let candidates = rules.filter(\.enabled).compactMap { rule -> (FolderRule, Int)? in
-            let rulePath = FolderPathNormalizer.normalize(rule.path)
-            guard matches(path: normalizedPath, rulePath: rulePath, mode: rule.matchMode) else {
-                return nil
-            }
-            return (rule, rulePath.count)
-        }
-        if let best = candidates.max(by: { $0.1 < $1.1 }) {
-            let profile = profiles.first { $0.id == best.0.profileId }
-            return FolderRuleResolution(kind: .folderRule, rule: best.0, profile: profile)
+        let homeDirectory = FileManager.default.homeDirectoryForCurrentUser
+        if let rule = match(path: path, rules: rules, homeDirectory: homeDirectory) {
+            let profile = profiles.first { $0.id == rule.profileId }
+            return FolderRuleResolution(kind: .folderRule, rule: rule, profile: profile)
         }
         let active = profiles.first { $0.id == activeProfileId }
         return FolderRuleResolution(kind: .global, rule: nil, profile: active)

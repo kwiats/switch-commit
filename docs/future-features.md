@@ -45,19 +45,20 @@ Ostatnia aktualizacja: 2026-07-31
 
 **Cel:** Narzędzie wiersza poleceń do przełączania profili i odczytu stanu bez otwierania UI.
 
-**Przykładowe komendy (roboczo):**
-- lista profili;
-- przełączenie aktywnego profilu;
-- pokazanie aktywnej tożsamości;
-- przypisanie / odczyt reguły folderu;
-- diagnostyka lokalna (bez sieci, chyba że użytkownik jawnie o to poprosi).
+**Zrealizowane (v0.3.0):**
+- binary `switch-commit` w SPM, współdzielący `SwitchCommitCore` z aplikacją menu bar;
+- komendy: `list`/`ls`, `status`, `use`, `show`, `add`, `edit`, `delete`, `folder` (list/add/remove), `doctor`, interaktywne menu bez argumentów na TTY;
+- flagi `--json` i `--no-color` (oraz `NO_COLOR`);
+- instalacja na PATH przez `Install Switch Commit.pkg` w DMG oraz Settings → General → Install / Reinstall CLI (`/usr/local/bin/switch-commit`);
+- naprawa zepsutego symlinku przez Reinstall CLI lub ponowny pkg;
+- diagnostyka lokalna bez automatycznych wywołań sieciowych; brak sekretów w JSON i stdout.
 
-**Otwarte pytania:**
-- osobny binary w package vs. subcommand aplikacji;
-- jak dzielić logikę z `SwitchCommitCore` (preferowane: ten sam core);
-- instalacja / PATH na macOS.
+**Możliwe rozszerzenia później:**
+- Homebrew formula / cask;
+- uzupełnienia shell (zsh/bash/fish);
+- bogatsze TUI (np. przeglądarka folderów).
 
-**Status:** pomysł
+**Status:** zrobione (v0.3.0)
 
 ---
 

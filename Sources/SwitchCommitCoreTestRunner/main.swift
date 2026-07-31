@@ -106,7 +106,77 @@ final class FakeLaunchAtLoginManager: LaunchAtLoginManaging, @unchecked Sendable
     }
 }
 
+enum FakeCLIInstallerError: Error {
+    case denied
+}
+
+final class FakeCLIInstaller: CLIInstalling, @unchecked Sendable {
+    var statusMessage: String
+    var installCallCount = 0
+    var errorToThrow: Error?
+
+    init(statusMessage: String) {
+        self.statusMessage = statusMessage
+    }
+
+    func installOrRepair() throws {
+        installCallCount += 1
+        if let errorToThrow {
+            throw errorToThrow
+        }
+    }
+}
+
 let tests: [(String, () throws -> Void)] = [
+    ("CLI version reads the packaged app version and emits JSON", {
+        let fileManager = FileManager.default
+        let temporaryDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("switch-commit-version-\(UUID().uuidString)")
+        let executable = temporaryDirectory
+            .appendingPathComponent("Switch Commit.app/Contents/MacOS/switch-commit")
+        let infoPlist = executable
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Info.plist")
+
+        try fileManager.createDirectory(
+            at: executable.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0"><dict>
+            <key>CFBundleShortVersionString</key><string>1.2.3</string>
+        </dict></plist>
+        """.write(to: infoPlist, atomically: true, encoding: .utf8)
+        defer { try? fileManager.removeItem(at: temporaryDirectory) }
+
+        try expect(
+            CLIVersion.current(executableURL: executable, environment: [:]) == "1.2.3",
+            "CLI version should read CFBundleShortVersionString from its app bundle"
+        )
+        try expect(
+            CLIOutput.jsonVersion(CLIVersion.current(executableURL: executable, environment: [:]))
+                == "{\"ok\":true,\"version\":\"1.2.3\"}",
+            "CLI version JSON should include a successful version response"
+        )
+    }),
+    ("CLI version uses environment override then development fallback", {
+        let executable = URL(fileURLWithPath: "/tmp/switch-commit")
+
+        try expect(
+            CLIVersion.current(
+                executableURL: executable,
+                environment: ["SWITCH_COMMIT_VERSION": "2.0.0"]
+            ) == "2.0.0",
+            "CLI version should prefer an explicit release environment override"
+        )
+        try expect(
+            CLIVersion.current(executableURL: executable, environment: [:]) == "0.3.0-dev",
+            "CLI version should use the development fallback outside an app bundle"
+        )
+    }),
     ("detected git account exposes stable local-only metadata", {
         let account = DetectedGitAccount(
             id: "github-pawelkwiatkowski",
@@ -539,6 +609,89 @@ let tests: [(String, () throws -> Void)] = [
                 isDefault: false
             )
         }, "profile ids should be safe path components")
+    }),
+    ("switch commit paths default profiles url lives under managed config dir", {
+        let url = SwitchCommitPaths.defaultProfilesURL(homeDirectory: URL(fileURLWithPath: "/Users/demo"))
+        try expect(
+            url.path == "/Users/demo/.config/git-account-switcher/profiles.json",
+            "default profiles path should match managed config layout"
+        )
+    }),
+    ("profile reference resolver matches id exactly", {
+        let profiles = [
+            try GitProfile(id: "work", displayName: "Work", gitUserName: "W", gitUserEmail: "w@example.com", accessMethod: .https, sshKeyPath: "", hosts: ["github.com"], httpsCredentialRef: nil, isDefault: true),
+            try GitProfile(id: "personal", displayName: "Personal", gitUserName: "P", gitUserEmail: "p@example.com", accessMethod: .https, sshKeyPath: "", hosts: ["github.com"], httpsCredentialRef: nil, isDefault: false)
+        ]
+        let resolved = try ProfileReferenceResolver.resolve("work", in: profiles)
+        try expect(resolved.id == "work", "id lookup should win")
+    }),
+    ("profile reference resolver matches display name case-insensitively", {
+        let profiles = [
+            try GitProfile(id: "work", displayName: "Work", gitUserName: "W", gitUserEmail: "w@example.com", accessMethod: .https, sshKeyPath: "", hosts: ["github.com"], httpsCredentialRef: nil, isDefault: true)
+        ]
+        // Use "WORK" so id exact-match fails and display-name path is exercised
+        let resolved = try ProfileReferenceResolver.resolve("WORK", in: profiles)
+        try expect(resolved.displayName == "Work", "name lookup should be case-insensitive")
+    }),
+    ("profile reference resolver errors on unknown and ambiguous names", {
+        let profiles = [
+            try GitProfile(id: "a", displayName: "Work", gitUserName: "A", gitUserEmail: "a@example.com", accessMethod: .https, sshKeyPath: "", hosts: ["github.com"], httpsCredentialRef: nil, isDefault: true),
+            try GitProfile(id: "b", displayName: "work", gitUserName: "B", gitUserEmail: "b@example.com", accessMethod: .https, sshKeyPath: "", hosts: ["github.com"], httpsCredentialRef: nil, isDefault: false)
+        ]
+        try expectThrows(ProfileReferenceError.notFound("missing"), { _ = try ProfileReferenceResolver.resolve("missing", in: profiles) }, "unknown should throw notFound")
+        try expectThrows(ProfileReferenceError.ambiguous("work", candidates: ["a", "b"]), { _ = try ProfileReferenceResolver.resolve("work", in: profiles) }, "ambiguous display names should throw")
+    }),
+    ("profile reference resolver trims whitespace", {
+        let profiles = [
+            try GitProfile(id: "work", displayName: "Work", gitUserName: "W", gitUserEmail: "w@example.com", accessMethod: .https, sshKeyPath: "", hosts: ["github.com"], httpsCredentialRef: nil, isDefault: true)
+        ]
+        let resolved = try ProfileReferenceResolver.resolve("  work  ", in: profiles)
+        try expect(resolved.id == "work", "whitespace should be trimmed before lookup")
+    }),
+    ("profile reference resolver prefers id over display name", {
+        let profiles = [
+            try GitProfile(id: "work", displayName: "Other", gitUserName: "W", gitUserEmail: "w@example.com", accessMethod: .https, sshKeyPath: "", hosts: ["github.com"], httpsCredentialRef: nil, isDefault: true),
+            try GitProfile(id: "other", displayName: "work", gitUserName: "O", gitUserEmail: "o@example.com", accessMethod: .https, sshKeyPath: "", hosts: ["github.com"], httpsCredentialRef: nil, isDefault: false)
+        ]
+        let resolved = try ProfileReferenceResolver.resolve("work", in: profiles)
+        try expect(resolved.id == "work", "id lookup should win over display name")
+    }),
+    ("folder rule resolver prefers longest enabled prefix for folder trees", {
+        let work = try FolderRule(id: "r1", path: "/Users/demo/Dev", profileId: "work", matchMode: .folderTree, enabled: true)
+        let acme = try FolderRule(id: "r2", path: "/Users/demo/Dev/acme", profileId: "acme", matchMode: .folderTree, enabled: true)
+        let match = FolderRuleResolver.match(
+            path: "/Users/demo/Dev/acme/repo",
+            rules: [work, acme],
+            homeDirectory: URL(fileURLWithPath: "/Users/demo")
+        )
+        try expect(match?.id == "r2", "longest prefix should win")
+    }),
+    ("folder rule resolver singleRepo matches only exact path", {
+        let rule = try FolderRule(id: "r1", path: "/Users/demo/repo", profileId: "work", matchMode: .singleRepo, enabled: true)
+        let hit = FolderRuleResolver.match(path: "/Users/demo/repo", rules: [rule], homeDirectory: URL(fileURLWithPath: "/Users/demo"))
+        let miss = FolderRuleResolver.match(path: "/Users/demo/repo/sub", rules: [rule], homeDirectory: URL(fileURLWithPath: "/Users/demo"))
+        try expect(hit?.id == "r1", "exact path should match")
+        try expect(miss == nil, "descendant should not match singleRepo")
+    }),
+    ("folder rule resolver ignores disabled rules", {
+        let rule = try FolderRule(id: "r1", path: "/Users/demo/Dev", profileId: "work", matchMode: .folderTree, enabled: false)
+        let match = FolderRuleResolver.match(path: "/Users/demo/Dev/x", rules: [rule], homeDirectory: URL(fileURLWithPath: "/Users/demo"))
+        try expect(match == nil, "disabled rules must not match")
+    }),
+    ("folder rule resolver normalize expands tilde and strips trailing slash", {
+        let home = URL(fileURLWithPath: "/Users/demo")
+        try expect(
+            FolderRuleResolver.normalize("~/Dev/", homeDirectory: home) == "/Users/demo/Dev",
+            "tilde and trailing slash should normalize"
+        )
+        try expect(
+            FolderRuleResolver.normalize("/Users/demo/Dev/", homeDirectory: home) == "/Users/demo/Dev",
+            "trailing slash should strip"
+        )
+        try expect(
+            FolderRuleResolver.normalize("/", homeDirectory: home) == "/",
+            "root should stay root"
+        )
     }),
     ("profile store round trips metadata without secret payloads", {
         let temporaryDirectory = FileManager.default.temporaryDirectory
@@ -1283,6 +1436,474 @@ let tests: [(String, () throws -> Void)] = [
         try expect(rootConfig.contains("path = ~/.config/git-account-switcher/global.gitconfig"), "root git config should include managed global config")
         try expect(rootConfig.contains("path = ~/.config/git-account-switcher/rules.gitconfig"), "root git config should include managed rules config")
     }),
+    ("switch commit session lists profiles and switches active", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let personal = try GitProfile(
+            id: "personal",
+            displayName: "Personal",
+            gitUserName: "Personal User",
+            gitUserEmail: "personal@example.com",
+            sshKeyPath: "~/.ssh/id_personal",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let work = try GitProfile(
+            id: "work",
+            displayName: "Work",
+            gitUserName: "Work User",
+            gitUserEmail: "work@example.com",
+            sshKeyPath: "~/.ssh/id_work",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: false
+        )
+        let store = ProfileStore(fileURL: temporaryDirectory.appendingPathComponent("profiles.json"))
+        try store.save(ProfileStoreData(profiles: [personal, work]))
+        let session = try SwitchCommitSession(
+            profileStore: store,
+            keychainStore: InMemoryKeychainStore(),
+            gitConfigInstaller: ManagedGitConfigInstaller(homeDirectory: temporaryDirectory),
+            homeDirectory: temporaryDirectory
+        )
+
+        try expect(session.profiles == [personal, work], "session should expose persisted profiles")
+        try session.use(reference: "Work")
+
+        try expect(session.activeProfile?.id == "work", "use should resolve a display name and switch active profile")
+        let globalConfig = try String(
+            contentsOf: temporaryDirectory.appendingPathComponent(".config/git-account-switcher/global.gitconfig"),
+            encoding: .utf8
+        )
+        try expect(globalConfig.contains("name = Work User"), "use should update managed global config")
+    }),
+    ("switch commit session status reports folder context", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let personal = try GitProfile(
+            id: "personal",
+            displayName: "Personal",
+            gitUserName: "Personal User",
+            gitUserEmail: "personal@example.com",
+            sshKeyPath: "~/.ssh/id_personal",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let work = try GitProfile(
+            id: "work",
+            displayName: "Work",
+            gitUserName: "Work User",
+            gitUserEmail: "work@example.com",
+            sshKeyPath: "~/.ssh/id_work",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: false
+        )
+        let projectPath = temporaryDirectory.appendingPathComponent("Dev/project").path
+        let rule = try FolderRule(
+            id: "work-dev",
+            path: temporaryDirectory.appendingPathComponent("Dev").path,
+            profileId: "work",
+            matchMode: .folderTree,
+            enabled: true
+        )
+        let store = ProfileStore(fileURL: temporaryDirectory.appendingPathComponent("profiles.json"))
+        try store.save(ProfileStoreData(profiles: [personal, work], rules: [rule]))
+        let session = try SwitchCommitSession(
+            profileStore: store,
+            keychainStore: InMemoryKeychainStore(),
+            gitConfigInstaller: nil,
+            homeDirectory: temporaryDirectory
+        )
+
+        let status = session.status(path: projectPath)
+
+        try expect(status.activeProfile?.id == "personal", "status should retain the active global profile")
+        try expect(status.contextSource == .folder, "matching rule should report folder context")
+        try expect(status.contextProfile?.id == "work", "matching rule should select its profile")
+        try expect(status.contextPath == projectPath, "status should report the inspected path")
+    }),
+    ("switch commit session uses its home directory for folder rules", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let work = try GitProfile(
+            id: "work",
+            displayName: "Work",
+            gitUserName: "Work User",
+            gitUserEmail: "work@example.com",
+            sshKeyPath: "~/.ssh/id_work",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let store = ProfileStore(fileURL: temporaryDirectory.appendingPathComponent("profiles.json"))
+        try store.save(ProfileStoreData(profiles: [work]))
+        let session = try SwitchCommitSession(
+            profileStore: store,
+            keychainStore: InMemoryKeychainStore(),
+            gitConfigInstaller: nil,
+            homeDirectory: temporaryDirectory
+        )
+
+        let rule = try session.addFolderRule(path: "~/Dev", profileReference: "work")
+        try expect(
+            rule.path == temporaryDirectory.appendingPathComponent("Dev").path,
+            "folder rules should expand tilde relative to the session home directory"
+        )
+        try session.removeFolderRule(path: "~/Dev")
+        try expect(session.rules.isEmpty, "folder rule removal should use the session home directory")
+    }),
+    ("switch commit session doctor uses local git configuration only", {
+        final class RecordingRunner: CommandRunning {
+            var invocations: [(command: String, arguments: [String])] = []
+
+            func run(_ command: String, arguments: [String], workingDirectory: URL?) throws -> CommandResult {
+                invocations.append((command, arguments))
+                return CommandResult(exitCode: 0, standardOutput: "file\tvalue", standardError: "")
+            }
+        }
+
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let runner = RecordingRunner()
+        let session = try SwitchCommitSession(
+            profileStore: ProfileStore(fileURL: temporaryDirectory.appendingPathComponent("profiles.json")),
+            keychainStore: InMemoryKeychainStore(),
+            gitConfigInstaller: nil,
+            homeDirectory: temporaryDirectory,
+            commandRunner: runner
+        )
+
+        _ = session.doctor(path: temporaryDirectory.path)
+
+        try expect(runner.invocations.count == 3, "doctor should inspect three git configuration values")
+        try expect(runner.invocations.allSatisfy { $0.command == "git" }, "doctor should only invoke git")
+        try expect(
+            runner.invocations.allSatisfy { $0.arguments.first == "config" },
+            "doctor should only invoke git config commands"
+        )
+        try expect(
+            !runner.invocations.contains { $0.command == "ssh" },
+            "doctor must not invoke SSH diagnostics"
+        )
+    }),
+    ("switch commit session resolves show and delete references", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let work = try GitProfile(
+            id: "work",
+            displayName: "Work",
+            gitUserName: "Work User",
+            gitUserEmail: "work@example.com",
+            sshKeyPath: "~/.ssh/id_work",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let store = ProfileStore(fileURL: temporaryDirectory.appendingPathComponent("profiles.json"))
+        try store.save(ProfileStoreData(profiles: [work]))
+        let session = try SwitchCommitSession(
+            profileStore: store,
+            keychainStore: InMemoryKeychainStore(),
+            gitConfigInstaller: nil,
+            homeDirectory: temporaryDirectory
+        )
+
+        let shownProfile = try session.show(reference: "WORK")
+        try expect(shownProfile == work, "show should use case-insensitive display-name resolution")
+        try session.deleteProfile(reference: "work")
+
+        try expect(session.profiles.isEmpty, "delete should resolve and remove the selected profile")
+        try expectThrows(ProfileReferenceError.notFound("work"), {
+            _ = try session.show(reference: "work")
+        }, "show should report missing profiles")
+    }),
+    ("switch commit session adds and edits profiles", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let store = ProfileStore(fileURL: temporaryDirectory.appendingPathComponent("profiles.json"))
+        let session = try SwitchCommitSession(
+            profileStore: store,
+            keychainStore: InMemoryKeychainStore(),
+            gitConfigInstaller: nil,
+            homeDirectory: temporaryDirectory
+        )
+
+        let addedProfile = try session.addProfile(
+            displayName: "Personal",
+            gitUserName: "Personal User",
+            gitUserEmail: "personal@example.com",
+            accessMethod: .https,
+            sshKeyPath: "",
+            hosts: ["github.com"],
+            httpsCredentialRef: "git-account-switcher.personal.https"
+        )
+        let editedProfile = try session.editProfile(
+            reference: addedProfile.id,
+            displayName: "Personal GitHub",
+            hosts: ["github.com", "github.enterprise.example"]
+        )
+
+        try expect(
+            editedProfile.displayName == "Personal GitHub",
+            "edit should update a profile resolved by its identifier"
+        )
+        try expect(
+            editedProfile.hosts == ["github.com", "github.enterprise.example"],
+            "edit should replace configured hosts"
+        )
+        let persisted = try store.load()
+        try expect(
+            persisted.profiles == [editedProfile],
+            "add and edit should persist the updated profile metadata"
+        )
+    }),
+    ("cli output json list never contains credential secrets", {
+        let profile = try GitProfile(
+            id: "work",
+            displayName: "Work",
+            gitUserName: "W",
+            gitUserEmail: "w@example.com",
+            accessMethod: .https,
+            sshKeyPath: "",
+            hosts: ["github.com"],
+            httpsCredentialRef: "git-account-switcher.work.https",
+            isDefault: true
+        )
+        let json = CLIOutput.jsonList(profiles: [profile], activeProfileId: "work")
+        try expect(json.contains("\"id\":\"work\""), "json should include id")
+        try expect(json.contains("git-account-switcher.work.https"), "credential ref id is allowed")
+        try expect(!json.lowercased().contains("token"), "must not invent token fields")
+    }),
+    ("cli output respects no color", {
+        let profile = try GitProfile(
+            id: "work",
+            displayName: "Work",
+            gitUserName: "W",
+            gitUserEmail: "w@example.com",
+            accessMethod: .https,
+            sshKeyPath: "",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let snapshot = StatusSnapshot(
+            activeProfile: profile,
+            contextProfile: profile,
+            contextPath: "/Users/demo/project",
+            contextSource: .global
+        )
+        let text = CLIOutput.humanStatus(
+            snapshot: snapshot,
+            style: CLIOutput.Style(colorEnabled: false)
+        )
+        try expect(!text.contains("\u{001B}["), "no ANSI when disabled")
+    }),
+    ("cli output uses ansi when color enabled", {
+        let profile = try GitProfile(
+            id: "work",
+            displayName: "Work",
+            gitUserName: "W",
+            gitUserEmail: "w@example.com",
+            accessMethod: .https,
+            sshKeyPath: "",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let text = CLIOutput.humanList(
+            profiles: [profile],
+            activeProfileId: "work",
+            style: CLIOutput.Style(colorEnabled: true)
+        )
+        try expect(text.contains("\u{001B}["), "ANSI should appear when color enabled")
+    }),
+    ("cli output json error envelope", {
+        let json = CLIOutput.jsonError("unknown profile")
+        try expect(json.contains("\"ok\":false"), "error envelope required")
+        try expect(json.contains("unknown profile"), "message required")
+    }),
+    ("cli output style detect respects no color flag", {
+        let style = CLIOutput.Style.detect(noColorFlag: true, isTTY: true, env: [:])
+        try expect(!style.colorEnabled, "--no-color should disable color")
+    }),
+    ("cli output style detect respects no color env", {
+        let style = CLIOutput.Style.detect(noColorFlag: false, isTTY: true, env: ["NO_COLOR": "1"])
+        try expect(!style.colorEnabled, "NO_COLOR should disable color")
+    }),
+    ("cli output style detect respects non tty", {
+        let style = CLIOutput.Style.detect(noColorFlag: false, isTTY: false, env: [:])
+        try expect(!style.colorEnabled, "non-tty should disable color")
+    }),
+    ("cli output style detect enables color on tty", {
+        let style = CLIOutput.Style.detect(noColorFlag: false, isTTY: true, env: [:])
+        try expect(style.colorEnabled, "tty without no-color should enable color")
+    }),
+    ("cli output json ok envelope", {
+        let json = CLIOutput.jsonOK()
+        try expect(json.contains("\"ok\":true"), "ok envelope required")
+        try expect(!json.contains("\"error\""), "ok envelope should not include error")
+    }),
+    ("profile settings manager adds persisted folder rule and reapplies config", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let profile = try GitProfile(
+            id: "work",
+            displayName: "Work",
+            gitUserName: "Work User",
+            gitUserEmail: "work@example.com",
+            sshKeyPath: "~/.ssh/id_work",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let storeURL = temporaryDirectory.appendingPathComponent("profiles.json")
+        let manager = try ProfileSettingsManager(
+            profileStore: ProfileStore(fileURL: storeURL),
+            keychainStore: InMemoryKeychainStore(),
+            seedProfiles: [profile],
+            gitConfigInstaller: ManagedGitConfigInstaller(homeDirectory: temporaryDirectory)
+        )
+        let rulePath = temporaryDirectory.appendingPathComponent("Projects/Work").path
+
+        let rule = try manager.addFolderRule(path: rulePath, profileId: "work")
+
+        try expect(rule.path == rulePath, "added rule should retain its normalized absolute path")
+        try expect(manager.rules == [rule], "added rule should be available from manager state")
+        let loaded = try ProfileStore(fileURL: storeURL).load()
+        try expect(loaded.rules == [rule], "added rule should persist")
+        let rulesConfig = try String(
+            contentsOf: temporaryDirectory.appendingPathComponent(".config/git-account-switcher/rules.gitconfig"),
+            encoding: .utf8
+        )
+        try expect(rulesConfig.contains(rulePath), "rules config should contain the added path")
+        try expect(rulesConfig.contains("profiles/work.gitconfig"), "rules config should include the selected profile")
+    }),
+    ("profile settings manager moves folder rule after confirmed takeover", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let personal = try GitProfile(
+            id: "personal",
+            displayName: "Personal",
+            gitUserName: "Personal User",
+            gitUserEmail: "personal@example.com",
+            sshKeyPath: "~/.ssh/id_personal",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let work = try GitProfile(
+            id: "work",
+            displayName: "Work",
+            gitUserName: "Work User",
+            gitUserEmail: "work@example.com",
+            sshKeyPath: "~/.ssh/id_work",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: false
+        )
+        let manager = try ProfileSettingsManager(
+            profileStore: ProfileStore(fileURL: temporaryDirectory.appendingPathComponent("profiles.json")),
+            keychainStore: InMemoryKeychainStore(),
+            seedProfiles: [personal, work]
+        )
+        let rulePath = temporaryDirectory.appendingPathComponent("Projects/Shared").path
+        _ = try manager.addFolderRule(path: rulePath, profileId: "personal")
+
+        try expectThrows(
+            FolderRuleMutationError.ownedByOtherProfile(profileId: "personal"),
+            {
+                _ = try manager.addFolderRule(path: "\(rulePath)/", profileId: "work")
+            },
+            "unconfirmed ownership takeover should fail"
+        )
+        let moved = try manager.addFolderRule(
+            path: "\(rulePath)/",
+            profileId: "work",
+            moveIfOwned: true
+        )
+
+        try expect(moved.profileId == "work", "confirmed takeover should change the rule owner")
+        try expect(manager.rules.count == 1, "takeover should retain one rule for the path")
+    }),
+    ("profile settings manager validates profile id before folder rule takeover", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let personal = try GitProfile(
+            id: "personal",
+            displayName: "Personal",
+            gitUserName: "Personal User",
+            gitUserEmail: "personal@example.com",
+            sshKeyPath: "~/.ssh/id_personal",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let manager = try ProfileSettingsManager(
+            profileStore: ProfileStore(fileURL: temporaryDirectory.appendingPathComponent("profiles.json")),
+            keychainStore: InMemoryKeychainStore(),
+            seedProfiles: [personal]
+        )
+        let rulePath = temporaryDirectory.appendingPathComponent("Projects/Shared").path
+        let originalRule = try manager.addFolderRule(path: rulePath, profileId: "personal")
+
+        try expectThrows(SwitchCommitError.unsafeIdentifier, {
+            _ = try manager.addFolderRule(
+                path: rulePath,
+                profileId: "../evil",
+                moveIfOwned: true
+            )
+        }, "unsafe profile ids must be rejected before takeover")
+        try expectThrows(FolderRuleMutationError.profileNotFound(profileId: "missing"), {
+            _ = try manager.addFolderRule(path: rulePath, profileId: "missing", moveIfOwned: true)
+        }, "missing profiles must be rejected before takeover")
+        try expect(manager.rules == [originalRule], "failed takeover should preserve the original rule")
+    }),
+    ("profile settings manager lists and removes folder rules by profile path and id", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let personal = try GitProfile(
+            id: "personal",
+            displayName: "Personal",
+            gitUserName: "Personal User",
+            gitUserEmail: "personal@example.com",
+            sshKeyPath: "~/.ssh/id_personal",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let work = try GitProfile(
+            id: "work",
+            displayName: "Work",
+            gitUserName: "Work User",
+            gitUserEmail: "work@example.com",
+            sshKeyPath: "~/.ssh/id_work",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: false
+        )
+        let manager = try ProfileSettingsManager(
+            profileStore: ProfileStore(fileURL: temporaryDirectory.appendingPathComponent("profiles.json")),
+            keychainStore: InMemoryKeychainStore(),
+            seedProfiles: [personal, work]
+        )
+        let personalRule = try manager.addFolderRule(
+            path: temporaryDirectory.appendingPathComponent("Personal").path,
+            profileId: "personal"
+        )
+        let workRule = try manager.addFolderRule(
+            path: temporaryDirectory.appendingPathComponent("Work").path,
+            profileId: "work"
+        )
+
+        try expect(manager.rules(forProfileId: "personal") == [personalRule], "rules listing should filter to requested profile")
+        try manager.removeFolderRule(path: "\(workRule.path)/")
+        try expect(manager.rules == [personalRule], "path removal should normalize paths")
+        try manager.removeFolderRule(id: personalRule.id)
+        try expect(manager.rules.isEmpty, "id removal should remove the remaining rule")
+    }),
     ("profile settings manager keeps selection valid when deleting profiles", {
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -1967,6 +2588,24 @@ let tests: [(String, () throws -> Void)] = [
             "release script should write the public artifact URL next to release artifacts"
         )
     }),
+    ("release build script packages the switch-commit CLI", {
+        let scriptURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("Scripts/build-release.sh")
+        let source = try String(contentsOf: scriptURL, encoding: .utf8)
+
+        try expect(
+            source.contains("swift build -c release --product switch-commit"),
+            "release script should build the switch-commit CLI product"
+        )
+        try expect(
+            source.contains("Contents/MacOS/switch-commit"),
+            "release script should embed the CLI in the app bundle"
+        )
+        try expect(
+            source.contains("pkgbuild") || source.contains("productbuild"),
+            "release script should build an installer package"
+        )
+    }),
     ("release channel publisher signs appcast with Sparkle EdDSA key from standard input", {
         let scriptURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent("Scripts/publish-release-channel.sh")
@@ -2546,6 +3185,65 @@ let tests: [(String, () throws -> Void)] = [
             try expect(
                 viewModel.connectionStatus(for: githubProfile).systemImageName == "circle.fill",
                 "status should expose dot icon"
+            )
+        }
+    }),
+    ("CLI output formats doctor reports for people and JSON clients", {
+        let report = DiagnosticsReport(
+            values: [
+                "user.email": "file:.gitconfig\tme@example.com",
+                "user.name": "file:.gitconfig\tMe"
+            ],
+            warnings: ["core.sshCommand: unset"]
+        )
+
+        let human = CLIOutput.humanDoctor(report: report, style: .init(colorEnabled: false))
+        try expect(human.contains("user.email: file:.gitconfig\tme@example.com"), "human doctor output should include values")
+        try expect(human.contains("Warnings:"), "human doctor output should label warnings")
+        try expect(human.contains("core.sshCommand: unset"), "human doctor output should include warnings")
+
+        let json = CLIOutput.jsonDoctor(report: report)
+        try expect(json.contains("\"ok\":true"), "JSON doctor output should report success")
+        try expect(json.contains("\"values\""), "JSON doctor output should include values")
+        try expect(json.contains("\"warnings\""), "JSON doctor output should include warnings")
+    }),
+    ("app view model exposes CLI installer status from injected manager", {
+        try MainActor.assumeIsolated {
+            let installer = FakeCLIInstaller(statusMessage: "CLI is installed at /usr/local/bin/switch-commit.")
+            let viewModel = AppViewModel(profiles: [], cliInstaller: installer)
+
+            try expect(
+                viewModel.cliInstallStatusText == "CLI is installed at /usr/local/bin/switch-commit.",
+                "view model should expose the injected CLI installer status"
+            )
+            try expect(viewModel.isCLIInstalled, "installed status should select the reinstall action")
+        }
+    }),
+    ("app view model installs CLI through injected manager", {
+        try MainActor.assumeIsolated {
+            let installer = FakeCLIInstaller(statusMessage: "CLI is missing from /usr/local/bin/switch-commit.")
+            let viewModel = AppViewModel(profiles: [], cliInstaller: installer)
+
+            viewModel.installCLI()
+
+            try expect(installer.installCallCount == 1, "install should call the injected CLI installer")
+            try expect(
+                viewModel.cliInstallStatusText == "CLI is missing from /usr/local/bin/switch-commit.",
+                "view model should refresh and expose the installer status after install"
+            )
+        }
+    }),
+    ("app view model exposes CLI installation failure", {
+        try MainActor.assumeIsolated {
+            let installer = FakeCLIInstaller(statusMessage: "CLI is missing from /usr/local/bin/switch-commit.")
+            installer.errorToThrow = FakeCLIInstallerError.denied
+            let viewModel = AppViewModel(profiles: [], cliInstaller: installer)
+
+            viewModel.installCLI()
+
+            try expect(
+                viewModel.cliInstallStatusText.contains("Could not install CLI"),
+                "view model should expose a CLI installation failure"
             )
         }
     }),

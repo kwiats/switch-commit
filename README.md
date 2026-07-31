@@ -139,6 +139,65 @@ Click `Test Connection` in the selected account header to run the SSH check. Swi
 
 Open Settings, choose `General`, and switch `Launch at Login` on or off. The app uses macOS Login Items registration and does not modify shell startup files.
 
+## CLI
+
+Switch Commit ships a `switch-commit` command-line tool that shares the same profile store and managed Git/SSH config as the menu bar app.
+
+### Install
+
+Two ways to put `switch-commit` on your PATH at `/usr/local/bin/switch-commit`:
+
+1. **DMG installer package:** Open the release DMG and run `Install Switch Commit.pkg`. This installs the app to `/Applications` and places a launcher at `/usr/local/bin/switch-commit` that runs the bundled CLI inside the app bundle.
+2. **Settings → General → Install CLI:** After copying the app to Applications, open Settings and click **Install CLI** (or **Reinstall CLI**). This creates a symlink from `/usr/local/bin/switch-commit` to `Switch Commit.app/Contents/MacOS/switch-commit`. macOS may prompt for administrator privileges when `/usr/local/bin` is not writable.
+
+For local development:
+
+```bash
+swift build --product switch-commit
+.build/debug/switch-commit --help
+```
+
+### Command cheat sheet
+
+| Command | Description |
+|---|---|
+| `switch-commit` | Interactive profile menu when run on a TTY; prints usage on non-TTY |
+| `switch-commit list` / `ls` | List profiles; active profile is marked |
+| `switch-commit status` | Active global profile plus folder context for the current directory or `--path` |
+| `switch-commit use <name\|id>` | Switch the global active profile and apply managed Git/SSH config |
+| `switch-commit show <name\|id>` | Show profile metadata (no Keychain secret values) |
+| `switch-commit add ...` | Create a profile |
+| `switch-commit edit <name\|id> ...` | Update profile fields |
+| `switch-commit delete <name\|id>` | Delete a profile (confirm interactively or pass `--yes`) |
+| `switch-commit folder list` | List folder rules |
+| `switch-commit folder add <path> --profile <name\|id>` | Assign a profile to a folder |
+| `switch-commit folder remove <path\|id>` | Remove a folder rule |
+| `switch-commit doctor` | Inspect the local Git identity at the current directory or `--path` |
+
+Run `switch-commit help <command>` for flags and examples.
+
+### Output flags
+
+- `--json` — emit machine-readable JSON on stdout with stable field names. Secret payloads are never included.
+- `--no-color` — disable ANSI color output. The CLI also respects the `NO_COLOR` environment variable.
+
+Global flags apply to subcommands, for example `switch-commit list --json`.
+
+### Broken symlink repair
+
+If you delete or move `Switch Commit.app` without uninstalling the package, `/usr/local/bin/switch-commit` may point to a missing executable. Reinstall the app, then either run `Install Switch Commit.pkg` again or open Settings → General and click **Reinstall CLI**.
+
+If another file already occupies `/usr/local/bin/switch-commit` and it is not a symlink, the installer reports the conflict. Remove or rename that file before reinstalling.
+
+### Safety
+
+The CLI follows the same safety contract as the app:
+
+- no telemetry, analytics, or background network calls;
+- profile JSON and CLI output show metadata and Keychain reference identifiers only — never tokens, passwords, or private key contents;
+- `doctor` runs local Git and config checks only; it does not probe hosts over the network;
+- managed writes stay under app-owned paths; user `~/.gitconfig` and `~/.ssh/config` are never replaced wholesale.
+
 ## Development
 
 ```bash

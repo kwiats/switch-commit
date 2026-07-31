@@ -11,16 +11,19 @@ public final class ProfileSettingsManager {
     private let profileStore: ProfileStore
     private let keychainStore: KeychainStoring
     private let gitConfigInstaller: GitConfigInstalling?
+    private let homeDirectory: URL
 
     public init(
         profileStore: ProfileStore,
         keychainStore: KeychainStoring,
         seedProfiles: [GitProfile],
-        gitConfigInstaller: GitConfigInstalling? = nil
+        gitConfigInstaller: GitConfigInstalling? = nil,
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
     ) throws {
         self.profileStore = profileStore
         self.keychainStore = keychainStore
         self.gitConfigInstaller = gitConfigInstaller
+        self.homeDirectory = homeDirectory.standardizedFileURL
 
         let loaded = try profileStore.load()
         if loaded.profiles.isEmpty {
@@ -47,6 +50,109 @@ public final class ProfileSettingsManager {
 
     public var selectedProfile: GitProfile? {
         profiles.first { $0.id == selectedProfileId }
+    }
+
+    public func rules(forProfileId profileId: String) -> [FolderRule] {
+        rules
+            .filter { $0.profileId == profileId }
+            .sorted {
+                FolderRuleResolver.normalize($0.path, homeDirectory: homeDirectory)
+                    < FolderRuleResolver.normalize($1.path, homeDirectory: homeDirectory)
+            }
+    }
+
+    @discardableResult
+    public func addFolderRule(
+        path: String,
+        profileId: String,
+        matchMode: FolderRuleMatchMode = .folderTree,
+        moveIfOwned: Bool = false
+    ) throws -> FolderRule {
+        try SecurityValidation.requireSafeIdentifier(profileId)
+        guard profiles.contains(where: { $0.id == profileId }) else {
+            throw FolderRuleMutationError.profileNotFound(profileId: profileId)
+        }
+        let normalizedPath = FolderRuleResolver.normalize(
+            path,
+            homeDirectory: homeDirectory
+        )
+
+        if let index = rules.firstIndex(where: {
+            FolderRuleResolver.normalize(
+                $0.path,
+                homeDirectory: homeDirectory
+            ) == normalizedPath
+        }) {
+            if rules[index].profileId != profileId && !moveIfOwned {
+                throw FolderRuleMutationError.ownedByOtherProfile(profileId: rules[index].profileId)
+            }
+            rules[index].path = normalizedPath
+            rules[index].profileId = profileId
+            rules[index].matchMode = matchMode
+            try persist()
+            try applyGitConfig()
+            return rules[index]
+        }
+
+        let rule = try FolderRule(
+            id: uniqueRuleId(base: "rule-\(rules.count + 1)"),
+            path: normalizedPath,
+            profileId: profileId,
+            matchMode: matchMode,
+            enabled: true
+        )
+        rules.append(rule)
+        try persist()
+        try applyGitConfig()
+        return rule
+    }
+
+    /// UI-facing overload that maps mutation errors to `FolderRuleError`.
+    public func addFolderRule(
+        path: String,
+        profileId: String,
+        matchMode: FolderRuleMatchMode,
+        forceMove: Bool
+    ) throws {
+        do {
+            _ = try addFolderRule(
+                path: path,
+                profileId: profileId,
+                matchMode: matchMode,
+                moveIfOwned: forceMove
+            )
+        } catch FolderRuleMutationError.profileNotFound {
+            throw FolderRuleError.unknownProfile
+        } catch FolderRuleMutationError.ownedByOtherProfile(let profileId) {
+            throw FolderRuleError.pathOwnedByOtherProfile(profileId: profileId)
+        }
+    }
+
+    public func removeFolderRule(id: String) throws {
+        guard rules.contains(where: { $0.id == id }) else {
+            throw FolderRuleError.ruleNotFound
+        }
+        rules.removeAll { $0.id == id }
+        try persist()
+        try applyGitConfig()
+    }
+
+    public func removeFolderRule(path: String) throws {
+        let normalizedPath = FolderRuleResolver.normalize(
+            path,
+            homeDirectory: homeDirectory
+        )
+        guard let index = rules.firstIndex(where: {
+            FolderRuleResolver.normalize(
+                $0.path,
+                homeDirectory: homeDirectory
+            ) == normalizedPath
+        }) else {
+            return
+        }
+        rules.remove(at: index)
+        try persist()
+        try applyGitConfig()
     }
 
     public func selectProfile(id: String?) {
@@ -90,6 +196,70 @@ public final class ProfileSettingsManager {
         if activeProfileId == nil {
             activeProfileId = profile.id
         }
+        try persist()
+        try applyGitConfig()
+    }
+
+    public func addProfile(_ profile: GitProfile) throws {
+        var updatedProfiles = profiles
+        var addedProfile = profile
+        let updatedActiveProfileId = activeProfileId ?? addedProfile.id
+        addedProfile.isDefault = addedProfile.id == updatedActiveProfileId
+        updatedProfiles.append(addedProfile)
+        for index in updatedProfiles.indices {
+            updatedProfiles[index].isDefault = updatedProfiles[index].id == updatedActiveProfileId
+        }
+
+        try profileStore.save(ProfileStoreData(
+            profiles: updatedProfiles,
+            rules: rules,
+            profileConnectionStates: profileConnectionStates
+        ))
+        profiles = updatedProfiles
+        selectedProfileId = addedProfile.id
+        activeProfileId = updatedActiveProfileId
+        try applyGitConfig()
+    }
+
+    public func updateProfile(_ profile: GitProfile) throws {
+        guard let index = profiles.firstIndex(where: { $0.id == profile.id }) else {
+            return
+        }
+
+        var updatedProfiles = profiles
+        var updatedProfile = profile
+        updatedProfile.isDefault = updatedProfile.id == activeProfileId
+        updatedProfiles[index] = updatedProfile
+        try profileStore.save(ProfileStoreData(
+            profiles: updatedProfiles,
+            rules: rules,
+            profileConnectionStates: profileConnectionStates
+        ))
+        profiles = updatedProfiles
+        try applyGitConfig()
+    }
+
+    public func deleteProfile(id: String) throws {
+        guard profiles.contains(where: { $0.id == id }) else {
+            return
+        }
+
+        profiles.removeAll { $0.id == id }
+        rules.removeAll { $0.profileId == id }
+        profileConnectionStates.removeValue(forKey: id)
+
+        if profiles.isEmpty {
+            selectedProfileId = nil
+            activeProfileId = nil
+        } else {
+            let nextId = profiles.first?.id
+            selectedProfileId = nextId
+            if activeProfileId == id || activeProfileId == nil {
+                activeProfileId = nextId
+            }
+        }
+
+        normalizeDefaultFlags()
         try persist()
         try applyGitConfig()
     }
@@ -148,25 +318,7 @@ public final class ProfileSettingsManager {
         guard let selectedProfileId else {
             return
         }
-
-        profiles.removeAll { $0.id == selectedProfileId }
-        rules.removeAll { $0.profileId == selectedProfileId }
-        profileConnectionStates.removeValue(forKey: selectedProfileId)
-
-        if profiles.isEmpty {
-            self.selectedProfileId = nil
-            activeProfileId = nil
-        } else {
-            let nextId = profiles.first?.id
-            self.selectedProfileId = nextId
-            if activeProfileId == selectedProfileId || activeProfileId == nil {
-                activeProfileId = nextId
-            }
-        }
-
-        normalizeDefaultFlags()
-        try persist()
-        try applyGitConfig()
+        try deleteProfile(id: selectedProfileId)
     }
 
     public func updateSelectedProfileDisplayName(_ displayName: String) throws {
@@ -298,74 +450,6 @@ public final class ProfileSettingsManager {
             return
         }
         try persist()
-    }
-
-    public func rules(forProfileId profileId: String) -> [FolderRule] {
-        rules
-            .filter { $0.profileId == profileId }
-            .sorted { FolderPathNormalizer.normalize($0.path) < FolderPathNormalizer.normalize($1.path) }
-    }
-
-    public func addFolderRule(
-        path: String,
-        profileId: String,
-        matchMode: FolderRuleMatchMode,
-        forceMove: Bool
-    ) throws {
-        guard profiles.contains(where: { $0.id == profileId }) else {
-            throw FolderRuleError.unknownProfile
-        }
-        let normalized = FolderPathNormalizer.normalize(path)
-        if let existingIndex = rules.firstIndex(where: {
-            FolderPathNormalizer.normalize($0.path) == normalized
-        }) {
-            let existing = rules[existingIndex]
-            if existing.profileId == profileId {
-                rules[existingIndex] = try FolderRule(
-                    id: existing.id,
-                    path: normalized,
-                    profileId: profileId,
-                    matchMode: matchMode,
-                    enabled: existing.enabled
-                )
-                try persist()
-                try applyGitConfig()
-                return
-            }
-            guard forceMove else {
-                throw FolderRuleError.pathOwnedByOtherProfile(profileId: existing.profileId)
-            }
-            rules[existingIndex] = try FolderRule(
-                id: existing.id,
-                path: normalized,
-                profileId: profileId,
-                matchMode: matchMode,
-                enabled: true
-            )
-            try persist()
-            try applyGitConfig()
-            return
-        }
-
-        let rule = try FolderRule(
-            id: uniqueRuleId(base: "rule-\(profileId)"),
-            path: normalized,
-            profileId: profileId,
-            matchMode: matchMode,
-            enabled: true
-        )
-        rules.append(rule)
-        try persist()
-        try applyGitConfig()
-    }
-
-    public func removeFolderRule(id: String) throws {
-        guard rules.contains(where: { $0.id == id }) else {
-            throw FolderRuleError.ruleNotFound
-        }
-        rules.removeAll { $0.id == id }
-        try persist()
-        try applyGitConfig()
     }
 
     private var selectedProfileIndex: Array<GitProfile>.Index? {
