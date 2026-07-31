@@ -264,5 +264,3 @@ Generated appcast and landing download URLs point at GitHub Releases, for exampl
 ```text
 https://github.com/kwiats/switch-commit/releases/download/v0.2.5/SwitchCommit-v0.2.5-macOS.dmg
 ```
-
-Bridge note for existing 0.2.x installs: publish `v0.3.0` with the new `SUFeedURL`, then run `Scripts/publish-legacy-bridge-appcast.sh 0.3.0` so the legacy channel appcast advertises that build. After `v0.3.1` ships on this repo, the legacy `switch-commit-release-channel` repository can be archived/removed.

@@ -2,3 +2,5 @@
 .superpowers/
 .build/
 dist/
+.DS_Store
+.vscode/
