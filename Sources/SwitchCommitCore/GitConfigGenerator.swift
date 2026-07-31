@@ -4,21 +4,29 @@ public struct GitConfigGenerator: Sendable {
     public init() {}
 
     public func profileConfig(for profile: GitProfile) -> String {
-        let userConfig = """
-        [user]
-            name = \(escape(profile.gitUserName))
-            email = \(escape(profile.gitUserEmail))
-        """
+        var sections: [String] = [
+            """
+            [user]
+                name = \(escape(profile.gitUserName))
+                email = \(escape(profile.gitUserEmail))
+            """
+        ]
 
-        guard profile.accessMethod == .ssh else {
-            return userConfig + "\n"
+        if profile.accessMethod == .ssh {
+            sections.append(
+                """
+                [core]
+                    sshCommand = ssh -i \(shellQuote(profile.sshKeyPath)) -F ~/.ssh/config
+                """
+            )
         }
 
-        return userConfig + "\n" + """
-        [core]
-            sshCommand = ssh -i \(shellQuote(profile.sshKeyPath)) -F ~/.ssh/config
+        let rewrite = urlRewriteSections(for: profile)
+        if !rewrite.isEmpty {
+            sections.append(contentsOf: rewrite)
+        }
 
-        """
+        return sections.joined(separator: "\n") + "\n"
     }
 
     public func rootIncludeConfig(globalConfigPath: String, rulesConfigPath: String) -> String {
@@ -42,6 +50,29 @@ public struct GitConfigGenerator: Sendable {
                 """
             }
             .joined()
+    }
+
+    private func urlRewriteSections(for profile: GitProfile) -> [String] {
+        profile.hosts
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .map { host in
+                let escapedHost = escape(host)
+                switch profile.accessMethod {
+                case .ssh:
+                    return """
+                    [url "git@\(escapedHost):"]
+                        insteadOf = https://\(escapedHost)/
+                        insteadOf = ssh://git@\(escapedHost)/
+                    """
+                case .https:
+                    return """
+                    [url "https://\(escapedHost)/"]
+                        insteadOf = git@\(escapedHost):
+                        insteadOf = ssh://git@\(escapedHost)/
+                    """
+                }
+            }
     }
 
     private func gitdirPattern(for rule: FolderRule) -> String {

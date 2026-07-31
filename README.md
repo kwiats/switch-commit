@@ -31,6 +31,11 @@ Discovery does not call the GitHub API, does not log in to GitHub, does not read
 
 Profiles use an explicit access method: SSH or HTTPS. SSH profiles generate a managed `core.sshCommand` and can run an SSH connection test. HTTPS profiles rely on local Git credentials or GitHub CLI-configured credentials and do not require an SSH key.
 
+For each configured host, Switch Commit also writes Git `url.<base>.insteadOf` rules so transport follows the profile access method without rewriting remotes in `.git/config`:
+
+- SSH profiles rewrite `https://HOST/` and `ssh://git@HOST/` to `git@HOST:` (then use the profile SSH key).
+- HTTPS profiles rewrite `git@HOST:` and `ssh://git@HOST/` to `https://HOST/`.
+
 ## Managed Files
 
 The app is designed to manage only these paths:
@@ -89,7 +94,7 @@ Assignments are stored in profile metadata only. Saving settings regenerates man
 
 When folder rules exist, Switch Commit writes `~/.config/git-account-switcher/rules.gitconfig` with Git `includeIf "gitdir:..."` blocks that point at per-profile config files under `~/.config/git-account-switcher/profiles/`.
 
-Git resolves `user.name`, `user.email`, and SSH profile settings from repository location automatically. You do not need to switch the global profile from the menu bar when working inside an assigned folder.
+Git resolves `user.name`, `user.email`, SSH command, and `url.insteadOf` transport rewrites from repository location automatically. You do not need to switch the global profile from the menu bar when working inside an assigned folder, and you do not need to manually change `https://` remotes to `git@` when the folder profile uses SSH.
 
 The app adds managed include lines to `~/.gitconfig` when they are missing:
 
@@ -103,7 +108,10 @@ To confirm Git is using the expected identity inside a repo:
 ```bash
 git config --includes --show-origin user.name
 git config --includes --show-origin user.email
+switch-commit doctor
 ```
+
+`doctor` warns when a folder profile’s access method differs from the global profile, because both sets of `url.insteadOf` rules can be active at once.
 
 ## Live Folder Context and Menu Bar Preview
 

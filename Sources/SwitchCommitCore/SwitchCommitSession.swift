@@ -175,7 +175,17 @@ public final class SwitchCommitSession {
 
     public func doctor(path: String?) -> DiagnosticsReport {
         let inspectedPath = path ?? FileManager.default.currentDirectoryPath
-        return diagnosticsService.inspectGitIdentity(at: URL(fileURLWithPath: inspectedPath))
+        var report = diagnosticsService.inspectGitIdentity(at: URL(fileURLWithPath: inspectedPath))
+        let snapshot = status(path: inspectedPath)
+        if snapshot.contextSource == .folder,
+           let active = snapshot.activeProfile,
+           let context = snapshot.contextProfile,
+           active.accessMethod != context.accessMethod {
+            report.warnings.append(
+                "Folder profile '\(context.displayName)' uses \(context.accessMethod.rawValue) while global profile '\(active.displayName)' uses \(active.accessMethod.rawValue); url.insteadOf access method rules from both profiles may conflict."
+            )
+        }
+        return report
     }
 
     public static func live() throws -> SwitchCommitSession {
