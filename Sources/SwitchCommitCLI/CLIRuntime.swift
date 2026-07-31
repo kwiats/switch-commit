@@ -38,7 +38,8 @@ enum CLIRuntime {
     static func terminate(code: CLIExitCode, message: String?, json: Bool) -> Never {
         if let message {
             let output = json ? CLIOutput.jsonError(message) : message
-            FileHandle.standardError.write(Data("\(output)\n".utf8))
+            let handle = json ? FileHandle.standardOutput : FileHandle.standardError
+            handle.write(Data("\(output)\n".utf8))
         }
         exit(code.rawValue)
     }
