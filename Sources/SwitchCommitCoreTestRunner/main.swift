@@ -1497,6 +1497,92 @@ let tests: [(String, () throws -> Void)] = [
             _ = try session.show(reference: "work")
         }, "show should report missing profiles")
     }),
+    ("cli output json list never contains credential secrets", {
+        let profile = try GitProfile(
+            id: "work",
+            displayName: "Work",
+            gitUserName: "W",
+            gitUserEmail: "w@example.com",
+            accessMethod: .https,
+            sshKeyPath: "",
+            hosts: ["github.com"],
+            httpsCredentialRef: "git-account-switcher.work.https",
+            isDefault: true
+        )
+        let json = CLIOutput.jsonList(profiles: [profile], activeProfileId: "work")
+        try expect(json.contains("\"id\":\"work\""), "json should include id")
+        try expect(json.contains("git-account-switcher.work.https"), "credential ref id is allowed")
+        try expect(!json.lowercased().contains("token"), "must not invent token fields")
+    }),
+    ("cli output respects no color", {
+        let profile = try GitProfile(
+            id: "work",
+            displayName: "Work",
+            gitUserName: "W",
+            gitUserEmail: "w@example.com",
+            accessMethod: .https,
+            sshKeyPath: "",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let snapshot = StatusSnapshot(
+            activeProfile: profile,
+            contextProfile: profile,
+            contextPath: "/Users/demo/project",
+            contextSource: .global
+        )
+        let text = CLIOutput.humanStatus(
+            snapshot: snapshot,
+            style: CLIOutput.Style(colorEnabled: false)
+        )
+        try expect(!text.contains("\u{001B}["), "no ANSI when disabled")
+    }),
+    ("cli output uses ansi when color enabled", {
+        let profile = try GitProfile(
+            id: "work",
+            displayName: "Work",
+            gitUserName: "W",
+            gitUserEmail: "w@example.com",
+            accessMethod: .https,
+            sshKeyPath: "",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let text = CLIOutput.humanList(
+            profiles: [profile],
+            activeProfileId: "work",
+            style: CLIOutput.Style(colorEnabled: true)
+        )
+        try expect(text.contains("\u{001B}["), "ANSI should appear when color enabled")
+    }),
+    ("cli output json error envelope", {
+        let json = CLIOutput.jsonError("unknown profile")
+        try expect(json.contains("\"ok\":false"), "error envelope required")
+        try expect(json.contains("unknown profile"), "message required")
+    }),
+    ("cli output style detect respects no color flag", {
+        let style = CLIOutput.Style.detect(noColorFlag: true, isTTY: true, env: [:])
+        try expect(!style.colorEnabled, "--no-color should disable color")
+    }),
+    ("cli output style detect respects no color env", {
+        let style = CLIOutput.Style.detect(noColorFlag: false, isTTY: true, env: ["NO_COLOR": "1"])
+        try expect(!style.colorEnabled, "NO_COLOR should disable color")
+    }),
+    ("cli output style detect respects non tty", {
+        let style = CLIOutput.Style.detect(noColorFlag: false, isTTY: false, env: [:])
+        try expect(!style.colorEnabled, "non-tty should disable color")
+    }),
+    ("cli output style detect enables color on tty", {
+        let style = CLIOutput.Style.detect(noColorFlag: false, isTTY: true, env: [:])
+        try expect(style.colorEnabled, "tty without no-color should enable color")
+    }),
+    ("cli output json ok envelope", {
+        let json = CLIOutput.jsonOK()
+        try expect(json.contains("\"ok\":true"), "ok envelope required")
+        try expect(!json.contains("\"error\""), "ok envelope should not include error")
+    }),
     ("profile settings manager adds persisted folder rule and reapplies config", {
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
