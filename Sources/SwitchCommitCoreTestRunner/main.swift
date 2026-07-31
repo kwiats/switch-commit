@@ -757,6 +757,59 @@ let tests: [(String, () throws -> Void)] = [
 
         try expect(config.isEmpty, "https profiles should not emit managed ssh config blocks")
     }),
+    ("ssh key discovery lists private keys and skips junk", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let sshDirectory = temporaryDirectory.appendingPathComponent(".ssh", isDirectory: true)
+        try FileManager.default.createDirectory(at: sshDirectory, withIntermediateDirectories: true)
+        try Data("private".utf8).write(to: sshDirectory.appendingPathComponent("id_ed25519"))
+        try Data("private".utf8).write(to: sshDirectory.appendingPathComponent("id_rsa"))
+        try Data("public".utf8).write(to: sshDirectory.appendingPathComponent("id_ed25519.pub"))
+        try Data("config".utf8).write(to: sshDirectory.appendingPathComponent("config"))
+        try Data("hosts".utf8).write(to: sshDirectory.appendingPathComponent("known_hosts"))
+        try Data("auth".utf8).write(to: sshDirectory.appendingPathComponent("authorized_keys"))
+        try FileManager.default.createDirectory(
+            at: sshDirectory.appendingPathComponent("somedir", isDirectory: true),
+            withIntermediateDirectories: true
+        )
+
+        let paths = SSHKeyDiscovery(homeDirectory: temporaryDirectory).discoverKeyPaths()
+        try expect(paths == ["~/.ssh/id_ed25519", "~/.ssh/id_rsa"], "should list private keys sorted by basename")
+    }),
+    ("ssh key discovery includes IdentityFile paths from config and managed include", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let sshDirectory = temporaryDirectory.appendingPathComponent(".ssh", isDirectory: true)
+        try FileManager.default.createDirectory(at: sshDirectory, withIntermediateDirectories: true)
+        try Data("private".utf8).write(to: sshDirectory.appendingPathComponent("id_ed25519"))
+        try """
+        Host github.com
+            IdentityFile ~/.ssh/id_ed25519
+            IdentityFile ~/.ssh/id_work
+        """.write(to: sshDirectory.appendingPathComponent("config"), atomically: true, encoding: .utf8)
+        try Data("private".utf8).write(to: sshDirectory.appendingPathComponent("id_work"))
+        try """
+        Host gitlab.com
+            IdentityFile ~/.ssh/id_gitlab
+        """.write(
+            to: sshDirectory.appendingPathComponent("git-account-switcher.conf"),
+            atomically: true,
+            encoding: .utf8
+        )
+        try Data("private".utf8).write(to: sshDirectory.appendingPathComponent("id_gitlab"))
+
+        let paths = SSHKeyDiscovery(homeDirectory: temporaryDirectory).discoverKeyPaths()
+        try expect(
+            paths == ["~/.ssh/id_ed25519", "~/.ssh/id_gitlab", "~/.ssh/id_work"],
+            "should merge directory keys and IdentityFile entries with stable dedup/sort"
+        )
+    }),
+    ("ssh key discovery returns empty list when ssh directory is missing", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let paths = SSHKeyDiscovery(homeDirectory: temporaryDirectory).discoverKeyPaths()
+        try expect(paths.isEmpty, "missing .ssh should yield empty list")
+    }),
     ("safe file writer constrains writes and creates backups", {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let managed = root.appendingPathComponent("managed", isDirectory: true)
