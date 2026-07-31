@@ -1497,6 +1497,46 @@ let tests: [(String, () throws -> Void)] = [
             _ = try session.show(reference: "work")
         }, "show should report missing profiles")
     }),
+    ("switch commit session adds and edits profiles", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let store = ProfileStore(fileURL: temporaryDirectory.appendingPathComponent("profiles.json"))
+        let session = try SwitchCommitSession(
+            profileStore: store,
+            keychainStore: InMemoryKeychainStore(),
+            gitConfigInstaller: nil,
+            homeDirectory: temporaryDirectory
+        )
+
+        let addedProfile = try session.addProfile(
+            displayName: "Personal",
+            gitUserName: "Personal User",
+            gitUserEmail: "personal@example.com",
+            accessMethod: .https,
+            sshKeyPath: "",
+            hosts: ["github.com"],
+            httpsCredentialRef: "git-account-switcher.personal.https"
+        )
+        let editedProfile = try session.editProfile(
+            reference: addedProfile.id,
+            displayName: "Personal GitHub",
+            hosts: ["github.com", "github.enterprise.example"]
+        )
+
+        try expect(
+            editedProfile.displayName == "Personal GitHub",
+            "edit should update a profile resolved by its identifier"
+        )
+        try expect(
+            editedProfile.hosts == ["github.com", "github.enterprise.example"],
+            "edit should replace configured hosts"
+        )
+        let persisted = try store.load()
+        try expect(
+            persisted.profiles == [editedProfile],
+            "add and edit should persist the updated profile metadata"
+        )
+    }),
     ("cli output json list never contains credential secrets", {
         let profile = try GitProfile(
             id: "work",
