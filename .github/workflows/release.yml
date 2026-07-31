@@ -61,6 +61,7 @@ jobs:
       - name: Open PR with site metadata
         env:
           GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
         shell: bash
         run: |
           set -euo pipefail
@@ -70,10 +71,19 @@ jobs:
           staging="$(mktemp -d)"
           cp site/appcast.xml site/version.txt site/index.html "${staging}/"
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch origin "${default_branch}"
-          git checkout -B "${branch}" "origin/${default_branch}"
+          # Ignore user/global Git config that may rewrite GitHub HTTPS to SSH
+          # (for example managed Switch Commit url.insteadOf / core.sshCommand).
+          export GIT_CONFIG_GLOBAL=/dev/null
+          export GIT_CONFIG_SYSTEM=/dev/null
+          unset GIT_SSH_COMMAND || true
+
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git -c user.name="github-actions[bot]" \
+            -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            fetch origin "${default_branch}"
+          git -c user.name="github-actions[bot]" \
+            -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            checkout -B "${branch}" "origin/${default_branch}"
           mkdir -p site
           cp "${staging}/appcast.xml" site/appcast.xml
           cp "${staging}/version.txt" site/version.txt
@@ -83,7 +93,9 @@ jobs:
             echo "No site metadata changes to publish."
             exit 0
           fi
-          git commit -m "Release Switch Commit v${version} channel metadata"
+          git -c user.name="github-actions[bot]" \
+            -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -m "Release Switch Commit v${version} channel metadata"
           git push -u origin "HEAD:${branch}" --force
           if gh pr list --head "${branch}" --state open --json number --jq 'length' | grep -qx '0'; then
             gh pr create \
@@ -93,4 +105,5 @@ jobs:
               --body "Automated Sparkle \`site/appcast.xml\`, \`site/version.txt\`, and landing changelog/CTA update for tag \`v${version}\`."
           fi
           gh pr merge --merge --auto "${branch}" || gh pr merge --merge "${branch}"
-          gh workflow run "Deploy GitHub Pages" --repo "${GITHUB_REPOSITORY}" --ref "${default_branch}"
+          gh workflow run "Deploy GitHub Pages" --repo "${GITHUB_REPOSITORY}" --ref "${default_branch}" \
+            || echo "Warning: could not dispatch Pages deploy; run it manually if needed."
