@@ -18,12 +18,18 @@ public struct FolderRuleResolution: Equatable, Sendable {
 }
 
 public enum FolderRuleResolver: Sendable {
-    public static func normalize(_ path: String, homeDirectory: URL) -> String {
+    public static func normalize(
+        _ path: String,
+        homeDirectory: URL,
+        currentDirectory: URL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+    ) -> String {
         var trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed == "~" {
             trimmed = homeDirectory.path
         } else if trimmed.hasPrefix("~/") {
             trimmed = homeDirectory.appendingPathComponent(String(trimmed.dropFirst(2))).path
+        } else if !(trimmed as NSString).isAbsolutePath {
+            trimmed = currentDirectory.appendingPathComponent(trimmed).path
         }
 
         let standardized = (trimmed as NSString).standardizingPath

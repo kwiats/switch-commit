@@ -693,6 +693,65 @@ let tests: [(String, () throws -> Void)] = [
             "root should stay root"
         )
     }),
+    ("folder rule resolver normalize resolves relative paths against current directory", {
+        let home = URL(fileURLWithPath: "/Users/demo")
+        let cwd = URL(fileURLWithPath: "/Users/demo/switch-commit")
+        try expect(
+            FolderRuleResolver.normalize(".", homeDirectory: home, currentDirectory: cwd)
+                == "/Users/demo/switch-commit",
+            "dot should resolve to current directory"
+        )
+        try expect(
+            FolderRuleResolver.normalize("./repo", homeDirectory: home, currentDirectory: cwd)
+                == "/Users/demo/switch-commit/repo",
+            "relative repo path should resolve against current directory"
+        )
+        try expect(
+            FolderRuleResolver.normalize("repo/", homeDirectory: home, currentDirectory: cwd)
+                == "/Users/demo/switch-commit/repo",
+            "relative path with trailing slash should resolve and strip slash"
+        )
+    }),
+    ("profile settings manager resolves relative folder rule paths to absolute gitdir patterns", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let repoDirectory = temporaryDirectory.appendingPathComponent("switch-commit", isDirectory: true)
+        try FileManager.default.createDirectory(at: repoDirectory, withIntermediateDirectories: true)
+        let profile = try GitProfile(
+            id: "work",
+            displayName: "Work",
+            gitUserName: "Work User",
+            gitUserEmail: "work@example.com",
+            sshKeyPath: "~/.ssh/id_work",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let manager = try ProfileSettingsManager(
+            profileStore: ProfileStore(fileURL: temporaryDirectory.appendingPathComponent("profiles.json")),
+            keychainStore: InMemoryKeychainStore(),
+            seedProfiles: [profile],
+            gitConfigInstaller: ManagedGitConfigInstaller(homeDirectory: temporaryDirectory),
+            homeDirectory: temporaryDirectory
+        )
+        let previousDirectory = FileManager.default.currentDirectoryPath
+        defer { _ = FileManager.default.changeCurrentDirectoryPath(previousDirectory) }
+        guard FileManager.default.changeCurrentDirectoryPath(repoDirectory.path) else {
+            throw TestFailure.expectationFailed("unable to enter temporary repo directory")
+        }
+
+        let rule = try manager.addFolderRule(path: ".", profileId: "work", matchMode: .singleRepo)
+
+        try expect(rule.path == repoDirectory.path, "relative dot path should become absolute")
+        let rulesConfig = try String(
+            contentsOf: temporaryDirectory.appendingPathComponent(".config/git-account-switcher/rules.gitconfig"),
+            encoding: .utf8
+        )
+        try expect(
+            rulesConfig.contains("[includeIf \"gitdir:\(repoDirectory.path)/\"]"),
+            "single-repo rule should emit absolute gitdir pattern"
+        )
+    }),
     ("profile store round trips metadata without secret payloads", {
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -1029,11 +1088,56 @@ let tests: [(String, () throws -> Void)] = [
 
         let githubCommand = service.sshConnectionTestCommand(host: "github.com")
         let gitlabCommand = service.sshConnectionTestCommand(host: "gitlab.com")
+        let keyedCommand = service.sshConnectionTestCommand(
+            host: "github.com",
+            identityFile: "~/.ssh/id_ed25519_work"
+        )
 
         try expect(githubCommand.command == "ssh", "github command should use ssh")
-        try expect(githubCommand.arguments == ["-o", "BatchMode=yes", "-T", "git@github.com"], "github command should use git user")
+        try expect(
+            githubCommand.arguments == ["-o", "BatchMode=yes", "-T", "git@github.com"],
+            "github command without identity should use default agent keys"
+        )
         try expect(gitlabCommand.command == "ssh", "generic host command should use ssh")
-        try expect(gitlabCommand.arguments == ["-o", "BatchMode=yes", "-T", "git@gitlab.com"], "generic host command should use git user")
+        try expect(
+            gitlabCommand.arguments == ["-o", "BatchMode=yes", "-T", "git@gitlab.com"],
+            "generic host command without identity should use default agent keys"
+        )
+        try expect(keyedCommand.command == "ssh", "keyed command should use ssh")
+        try expect(
+            keyedCommand.arguments == [
+                "-o", "BatchMode=yes",
+                "-o", "IdentitiesOnly=yes",
+                "-i", "~/.ssh/id_ed25519_work",
+                "-T", "git@github.com"
+            ],
+            "keyed command should force the profile identity file"
+        )
+    }),
+    ("diagnostics testSSHConnection passes identity file to the runner", {
+        final class RecordingRunner: CommandRunning {
+            var arguments: [String] = []
+
+            func run(_ command: String, arguments: [String], workingDirectory: URL?) throws -> CommandResult {
+                self.arguments = arguments
+                return CommandResult(
+                    exitCode: 1,
+                    standardOutput: "",
+                    standardError: "Hi work! You've successfully authenticated, but GitHub does not provide shell access."
+                )
+            }
+        }
+
+        let runner = RecordingRunner()
+        let result = DiagnosticsService(commandRunner: runner).testSSHConnection(
+            host: "github.com",
+            identityFile: "~/.ssh/id_work"
+        )
+
+        try expect(result.status == .connected, "keyed github auth should count as connected")
+        try expect(runner.arguments.contains("-i"), "connection test should pass -i")
+        try expect(runner.arguments.contains("~/.ssh/id_work"), "connection test should pass identity path")
+        try expect(runner.arguments.contains("IdentitiesOnly=yes"), "connection test should force IdentitiesOnly")
     }),
     ("diagnostics interprets manual ssh connection results", {
         final class FakeConnectionRunner: CommandRunning {

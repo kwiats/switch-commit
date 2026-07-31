@@ -134,8 +134,8 @@ private actor HostConnectionTestWorker {
         self.service = service
     }
 
-    func test(hosts: [String]) -> [HostConnectionTestResult] {
-        hosts.map { service.value.testSSHConnection(host: $0) }
+    func test(hosts: [String], identityFile: String?) -> [HostConnectionTestResult] {
+        hosts.map { service.value.testSSHConnection(host: $0, identityFile: identityFile) }
     }
 }
 
@@ -800,8 +800,9 @@ public final class AppViewModel: ObservableObject {
             return
         }
         let worker = hostConnectionTestWorker
-        Task { [weak self, worker, profile, hosts, source] in
-            let results = await worker.test(hosts: hosts)
+        let identityFile = profile.sshKeyPath
+        Task { [weak self, worker, profile, hosts, source, identityFile] in
+            let results = await worker.test(hosts: hosts, identityFile: identityFile)
             guard let self else {
                 return
             }
