@@ -63,30 +63,24 @@ if [[ -z "${generate_appcast_tool}" ]]; then
     exit 1
 fi
 
+if [[ ! -f "${notes_source}" ]]; then
+    echo "error: missing release notes ${notes_source}" >&2
+    echo "error: add docs/release-notes/v${version}.md before tagging v${version}" >&2
+    exit 1
+fi
+
 echo "==> Publishing GitHub Release ${tag} to ${github_repo}"
-release_assets=("${artifact_path}" "${checksum_path}")
-if [[ -f "${notes_source}" ]]; then
-    mkdir -p "${release_dir}"
-    cp "${notes_source}" "${notes_asset_path}"
-    release_assets+=("${notes_asset_path}")
-    if gh release view "${tag}" --repo "${github_repo}" >/dev/null 2>&1; then
-        gh release upload "${tag}" "${release_assets[@]}" --repo "${github_repo}" --clobber
-        gh release edit "${tag}" --repo "${github_repo}" --notes-file "${notes_source}"
-    else
-        gh release create "${tag}" "${release_assets[@]}" \
-            --repo "${github_repo}" \
-            --title "Switch Commit ${version}" \
-            --notes-file "${notes_source}"
-    fi
+mkdir -p "${release_dir}"
+cp "${notes_source}" "${notes_asset_path}"
+release_assets=("${artifact_path}" "${checksum_path}" "${notes_asset_path}")
+if gh release view "${tag}" --repo "${github_repo}" >/dev/null 2>&1; then
+    gh release upload "${tag}" "${release_assets[@]}" --repo "${github_repo}" --clobber
+    gh release edit "${tag}" --repo "${github_repo}" --notes-file "${notes_source}"
 else
-    if gh release view "${tag}" --repo "${github_repo}" >/dev/null 2>&1; then
-        gh release upload "${tag}" "${release_assets[@]}" --repo "${github_repo}" --clobber
-    else
-        gh release create "${tag}" "${release_assets[@]}" \
-            --repo "${github_repo}" \
-            --title "Switch Commit ${version}" \
-            --notes "Switch Commit ${version}"
-    fi
+    gh release create "${tag}" "${release_assets[@]}" \
+        --repo "${github_repo}" \
+        --title "Switch Commit ${version}" \
+        --notes-file "${notes_source}"
 fi
 
 appcast_staging="$(mktemp -d "${TMPDIR:-/tmp}/switch-commit-appcast.XXXXXX")"
@@ -96,30 +90,16 @@ cleanup_appcast_staging() {
 trap cleanup_appcast_staging EXIT
 
 cp "${artifact_path}" "${appcast_staging}/${artifact_name}"
-if [[ -f "${notes_asset_path}" ]]; then
-    cp "${notes_asset_path}" "${appcast_staging}/SwitchCommit-v${version}-macOS.md"
-fi
+cp "${notes_asset_path}" "${appcast_staging}/SwitchCommit-v${version}-macOS.md"
 
 echo "==> Generating Sparkle appcast into site/"
-generate_appcast_args=(
-    --ed-key-file -
-    --download-url-prefix "${github_download_prefix}/"
-    --versions "${version}"
-    -o "${site_dir}/appcast.xml"
+printf '%s' "${normalized_private_key}" | "${generate_appcast_tool}" \
+    --ed-key-file - \
+    --download-url-prefix "${github_download_prefix}/" \
+    --release-notes-url-prefix "${github_download_prefix}/" \
+    --versions "${version}" \
+    -o "${site_dir}/appcast.xml" \
     "${appcast_staging}"
-)
-if [[ -f "${notes_source}" ]]; then
-    generate_appcast_args=(
-        --ed-key-file -
-        --download-url-prefix "${github_download_prefix}/"
-        --release-notes-url-prefix "${github_download_prefix}/"
-        --versions "${version}"
-        -o "${site_dir}/appcast.xml"
-        "${appcast_staging}"
-    )
-fi
-
-printf '%s' "${normalized_private_key}" | "${generate_appcast_tool}" "${generate_appcast_args[@]}"
 
 echo "==> Updating site/version.txt"
 printf '%s\n' "${version}" > "${site_dir}/version.txt"
