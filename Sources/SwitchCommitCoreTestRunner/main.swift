@@ -2624,13 +2624,22 @@ let tests: [(String, () throws -> Void)] = [
         try expect(source.contains("SwitchCommit-v${version}-macOS.dmg"), "publisher should upload the release DMG")
         try expect(!source.contains("macOS.zip"), "publisher should not publish a ZIP artifact")
         try expect(source.contains("checksum_name=\"${artifact_name}.sha256\""), "publisher should upload the checksum")
-        try expect(source.contains("docs/release-notes/v${version}.md"), "publisher should attach matching release notes when present")
+        try expect(source.contains("docs/release-notes/v${version}.md"), "publisher should require matching release notes")
+        try expect(
+            source.contains("missing release notes"),
+            "publisher must fail when release notes are missing instead of publishing an empty body"
+        )
+        try expect(
+            !source.contains("--notes \"Switch Commit ${version}\""),
+            "publisher must not fall back to a stub GitHub Release body"
+        )
         try expect(
             source.contains("notes_asset_path=\"${release_dir}/SwitchCommit-v${version}-macOS.md\""),
             "publisher should stage release notes under the Sparkle releaseNotesLink asset name"
         )
         try expect(
-            source.contains("release_assets+=(\"${notes_asset_path}\")"),
+            source.contains("release_assets=(\"${artifact_path}\" \"${checksum_path}\" \"${notes_asset_path}\")")
+                || source.contains("release_assets+=(\"${notes_asset_path}\")"),
             "publisher must upload the release notes markdown asset so Sparkle can download it"
         )
         try expect(
@@ -2662,6 +2671,14 @@ let tests: [(String, () throws -> Void)] = [
         try expect(source.contains("SPARKLE_PRIVATE_ED_KEY"), "release workflow should provide Sparkle signing material only from secrets")
         try expect(source.contains("GH_TOKEN: ${{ github.token }}"), "release workflow should authenticate gh release with the job token")
         try expect(source.contains("Scripts/publish-release-channel.sh"), "release workflow should publish through the checked-in publisher script")
+        try expect(
+            source.contains("Scripts/site-landing/sync-landing.mjs"),
+            "release workflow should sync landing changelog/CTA after publishing the GitHub Release"
+        )
+        try expect(
+            source.contains("site/index.html"),
+            "release workflow should include landing HTML in the site metadata PR"
+        )
         try expect(source.contains("site/appcast.xml"), "release workflow should publish site appcast metadata")
         try expect(source.contains("gh pr create"), "release workflow should open a PR because main requires pull requests")
         try expect(source.contains("gh pr merge"), "release workflow should merge the site metadata PR")
@@ -2673,6 +2690,7 @@ let tests: [(String, () throws -> Void)] = [
         let source = try String(contentsOf: readmeURL, encoding: .utf8)
 
         try expect(source.contains("git tag v0.2.0"), "README should show how to tag a release")
+        try expect(source.contains("docs/release-notes/"), "README should document required release notes path")
         try expect(!source.contains("RELEASE_CHANNEL_TOKEN"), "README should not require a legacy cross-repo release channel token")
         try expect(source.contains("SPARKLE_PRIVATE_ED_KEY"), "README should document the Sparkle private key secret")
         try expect(source.contains("generate_keys -x /tmp/sparkle-private-key.txt"), "README should show how to export the Sparkle private key")

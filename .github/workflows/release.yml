@@ -47,6 +47,17 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: Scripts/publish-release-channel.sh "${{ steps.version.outputs.version }}" "$PWD"
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Sync landing changelog and download CTA
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: node Scripts/site-landing/sync-landing.mjs
+
       - name: Open PR with site metadata
         env:
           GH_TOKEN: ${{ github.token }}
@@ -57,7 +68,7 @@ jobs:
           default_branch="${{ github.event.repository.default_branch }}"
           branch="automation/release-site-v${version}"
           staging="$(mktemp -d)"
-          cp site/appcast.xml site/version.txt "${staging}/"
+          cp site/appcast.xml site/version.txt site/index.html "${staging}/"
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -66,7 +77,8 @@ jobs:
           mkdir -p site
           cp "${staging}/appcast.xml" site/appcast.xml
           cp "${staging}/version.txt" site/version.txt
-          git add site/appcast.xml site/version.txt
+          cp "${staging}/index.html" site/index.html
+          git add site/appcast.xml site/version.txt site/index.html
           if git diff --cached --quiet; then
             echo "No site metadata changes to publish."
             exit 0
@@ -78,6 +90,6 @@ jobs:
               --base "${default_branch}" \
               --head "${branch}" \
               --title "Release site metadata for v${version}" \
-              --body "Automated Sparkle \`site/appcast.xml\` + \`site/version.txt\` update for tag \`v${version}\`."
+              --body "Automated Sparkle \`site/appcast.xml\`, \`site/version.txt\`, and landing changelog/CTA update for tag \`v${version}\`."
           fi
           gh pr merge --merge --auto "${branch}" || gh pr merge --merge "${branch}"
