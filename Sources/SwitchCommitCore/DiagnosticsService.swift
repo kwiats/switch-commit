@@ -95,12 +95,26 @@ public struct DiagnosticsService {
         ("ssh", ["-T", host])
     }
 
-    public func sshConnectionTestCommand(host: String) -> (command: String, arguments: [String]) {
-        ("ssh", ["-o", "BatchMode=yes", "-T", "git@\(host)"])
+    public func sshConnectionTestCommand(
+        host: String,
+        identityFile: String? = nil
+    ) -> (command: String, arguments: [String]) {
+        var arguments = ["-o", "BatchMode=yes"]
+        if let identityFile {
+            let trimmed = identityFile.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmed.isEmpty {
+                arguments += ["-o", "IdentitiesOnly=yes", "-i", trimmed]
+            }
+        }
+        arguments += ["-T", "git@\(host)"]
+        return ("ssh", arguments)
     }
 
-    public func testSSHConnection(host: String) -> HostConnectionTestResult {
-        let testCommand = sshConnectionTestCommand(host: host)
+    public func testSSHConnection(
+        host: String,
+        identityFile: String? = nil
+    ) -> HostConnectionTestResult {
+        let testCommand = sshConnectionTestCommand(host: host, identityFile: identityFile)
         do {
             let result = try commandRunner.run(testCommand.command, arguments: testCommand.arguments, workingDirectory: nil)
             let message = connectionMessage(from: result)
