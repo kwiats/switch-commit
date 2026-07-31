@@ -568,8 +568,23 @@ let tests: [(String, () throws -> Void)] = [
             try GitProfile(id: "a", displayName: "Work", gitUserName: "A", gitUserEmail: "a@example.com", accessMethod: .https, sshKeyPath: "", hosts: ["github.com"], httpsCredentialRef: nil, isDefault: true),
             try GitProfile(id: "b", displayName: "work", gitUserName: "B", gitUserEmail: "b@example.com", accessMethod: .https, sshKeyPath: "", hosts: ["github.com"], httpsCredentialRef: nil, isDefault: false)
         ]
-        try expectThrowsAny({ _ = try ProfileReferenceResolver.resolve("missing", in: profiles) }, "unknown should throw")
-        try expectThrowsAny({ _ = try ProfileReferenceResolver.resolve("work", in: profiles) }, "ambiguous display names should throw")
+        try expectThrows(ProfileReferenceError.notFound("missing"), { _ = try ProfileReferenceResolver.resolve("missing", in: profiles) }, "unknown should throw notFound")
+        try expectThrows(ProfileReferenceError.ambiguous("work", candidates: ["a", "b"]), { _ = try ProfileReferenceResolver.resolve("work", in: profiles) }, "ambiguous display names should throw")
+    }),
+    ("profile reference resolver trims whitespace", {
+        let profiles = [
+            try GitProfile(id: "work", displayName: "Work", gitUserName: "W", gitUserEmail: "w@example.com", accessMethod: .https, sshKeyPath: "", hosts: ["github.com"], httpsCredentialRef: nil, isDefault: true)
+        ]
+        let resolved = try ProfileReferenceResolver.resolve("  work  ", in: profiles)
+        try expect(resolved.id == "work", "whitespace should be trimmed before lookup")
+    }),
+    ("profile reference resolver prefers id over display name", {
+        let profiles = [
+            try GitProfile(id: "work", displayName: "Other", gitUserName: "W", gitUserEmail: "w@example.com", accessMethod: .https, sshKeyPath: "", hosts: ["github.com"], httpsCredentialRef: nil, isDefault: true),
+            try GitProfile(id: "other", displayName: "work", gitUserName: "O", gitUserEmail: "o@example.com", accessMethod: .https, sshKeyPath: "", hosts: ["github.com"], httpsCredentialRef: nil, isDefault: false)
+        ]
+        let resolved = try ProfileReferenceResolver.resolve("work", in: profiles)
+        try expect(resolved.id == "work", "id lookup should win over display name")
     }),
     ("profile store round trips metadata without secret payloads", {
         let temporaryDirectory = FileManager.default.temporaryDirectory
