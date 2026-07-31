@@ -171,6 +171,70 @@ public final class ProfileSettingsManager {
         try applyGitConfig()
     }
 
+    public func addProfile(_ profile: GitProfile) throws {
+        var updatedProfiles = profiles
+        var addedProfile = profile
+        let updatedActiveProfileId = activeProfileId ?? addedProfile.id
+        addedProfile.isDefault = addedProfile.id == updatedActiveProfileId
+        updatedProfiles.append(addedProfile)
+        for index in updatedProfiles.indices {
+            updatedProfiles[index].isDefault = updatedProfiles[index].id == updatedActiveProfileId
+        }
+
+        try profileStore.save(ProfileStoreData(
+            profiles: updatedProfiles,
+            rules: rules,
+            profileConnectionStates: profileConnectionStates
+        ))
+        profiles = updatedProfiles
+        selectedProfileId = addedProfile.id
+        activeProfileId = updatedActiveProfileId
+        try applyGitConfig()
+    }
+
+    public func updateProfile(_ profile: GitProfile) throws {
+        guard let index = profiles.firstIndex(where: { $0.id == profile.id }) else {
+            return
+        }
+
+        var updatedProfiles = profiles
+        var updatedProfile = profile
+        updatedProfile.isDefault = updatedProfile.id == activeProfileId
+        updatedProfiles[index] = updatedProfile
+        try profileStore.save(ProfileStoreData(
+            profiles: updatedProfiles,
+            rules: rules,
+            profileConnectionStates: profileConnectionStates
+        ))
+        profiles = updatedProfiles
+        try applyGitConfig()
+    }
+
+    public func deleteProfile(id: String) throws {
+        guard profiles.contains(where: { $0.id == id }) else {
+            return
+        }
+
+        profiles.removeAll { $0.id == id }
+        rules.removeAll { $0.profileId == id }
+        profileConnectionStates.removeValue(forKey: id)
+
+        if profiles.isEmpty {
+            selectedProfileId = nil
+            activeProfileId = nil
+        } else {
+            let nextId = profiles.first?.id
+            selectedProfileId = nextId
+            if activeProfileId == id || activeProfileId == nil {
+                activeProfileId = nextId
+            }
+        }
+
+        normalizeDefaultFlags()
+        try persist()
+        try applyGitConfig()
+    }
+
     public func importDetectedAccount(_ account: DetectedGitAccount) throws {
         let displayName = account.username ?? account.gitUserName ?? "GitHub Account"
         let gitUserName = account.gitUserName ?? account.username ?? ""
@@ -225,25 +289,7 @@ public final class ProfileSettingsManager {
         guard let selectedProfileId else {
             return
         }
-
-        profiles.removeAll { $0.id == selectedProfileId }
-        rules.removeAll { $0.profileId == selectedProfileId }
-        profileConnectionStates.removeValue(forKey: selectedProfileId)
-
-        if profiles.isEmpty {
-            self.selectedProfileId = nil
-            activeProfileId = nil
-        } else {
-            let nextId = profiles.first?.id
-            self.selectedProfileId = nextId
-            if activeProfileId == selectedProfileId || activeProfileId == nil {
-                activeProfileId = nextId
-            }
-        }
-
-        normalizeDefaultFlags()
-        try persist()
-        try applyGitConfig()
+        try deleteProfile(id: selectedProfileId)
     }
 
     public func updateSelectedProfileDisplayName(_ displayName: String) throws {

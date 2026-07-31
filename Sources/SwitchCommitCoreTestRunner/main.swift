@@ -1313,6 +1313,126 @@ let tests: [(String, () throws -> Void)] = [
         try expect(rootConfig.contains("path = ~/.config/git-account-switcher/global.gitconfig"), "root git config should include managed global config")
         try expect(rootConfig.contains("path = ~/.config/git-account-switcher/rules.gitconfig"), "root git config should include managed rules config")
     }),
+    ("switch commit session lists profiles and switches active", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let personal = try GitProfile(
+            id: "personal",
+            displayName: "Personal",
+            gitUserName: "Personal User",
+            gitUserEmail: "personal@example.com",
+            sshKeyPath: "~/.ssh/id_personal",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let work = try GitProfile(
+            id: "work",
+            displayName: "Work",
+            gitUserName: "Work User",
+            gitUserEmail: "work@example.com",
+            sshKeyPath: "~/.ssh/id_work",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: false
+        )
+        let store = ProfileStore(fileURL: temporaryDirectory.appendingPathComponent("profiles.json"))
+        try store.save(ProfileStoreData(profiles: [personal, work]))
+        let session = try SwitchCommitSession(
+            profileStore: store,
+            keychainStore: InMemoryKeychainStore(),
+            gitConfigInstaller: ManagedGitConfigInstaller(homeDirectory: temporaryDirectory),
+            homeDirectory: temporaryDirectory
+        )
+
+        try expect(session.profiles == [personal, work], "session should expose persisted profiles")
+        try session.use(reference: "Work")
+
+        try expect(session.activeProfile?.id == "work", "use should resolve a display name and switch active profile")
+        let globalConfig = try String(
+            contentsOf: temporaryDirectory.appendingPathComponent(".config/git-account-switcher/global.gitconfig"),
+            encoding: .utf8
+        )
+        try expect(globalConfig.contains("name = Work User"), "use should update managed global config")
+    }),
+    ("switch commit session status reports folder context", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let personal = try GitProfile(
+            id: "personal",
+            displayName: "Personal",
+            gitUserName: "Personal User",
+            gitUserEmail: "personal@example.com",
+            sshKeyPath: "~/.ssh/id_personal",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let work = try GitProfile(
+            id: "work",
+            displayName: "Work",
+            gitUserName: "Work User",
+            gitUserEmail: "work@example.com",
+            sshKeyPath: "~/.ssh/id_work",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: false
+        )
+        let projectPath = temporaryDirectory.appendingPathComponent("Dev/project").path
+        let rule = try FolderRule(
+            id: "work-dev",
+            path: temporaryDirectory.appendingPathComponent("Dev").path,
+            profileId: "work",
+            matchMode: .folderTree,
+            enabled: true
+        )
+        let store = ProfileStore(fileURL: temporaryDirectory.appendingPathComponent("profiles.json"))
+        try store.save(ProfileStoreData(profiles: [personal, work], rules: [rule]))
+        let session = try SwitchCommitSession(
+            profileStore: store,
+            keychainStore: InMemoryKeychainStore(),
+            gitConfigInstaller: nil,
+            homeDirectory: temporaryDirectory
+        )
+
+        let status = session.status(path: projectPath)
+
+        try expect(status.activeProfile?.id == "personal", "status should retain the active global profile")
+        try expect(status.contextSource == .folder, "matching rule should report folder context")
+        try expect(status.contextProfile?.id == "work", "matching rule should select its profile")
+        try expect(status.contextPath == projectPath, "status should report the inspected path")
+    }),
+    ("switch commit session resolves show and delete references", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let work = try GitProfile(
+            id: "work",
+            displayName: "Work",
+            gitUserName: "Work User",
+            gitUserEmail: "work@example.com",
+            sshKeyPath: "~/.ssh/id_work",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let store = ProfileStore(fileURL: temporaryDirectory.appendingPathComponent("profiles.json"))
+        try store.save(ProfileStoreData(profiles: [work]))
+        let session = try SwitchCommitSession(
+            profileStore: store,
+            keychainStore: InMemoryKeychainStore(),
+            gitConfigInstaller: nil,
+            homeDirectory: temporaryDirectory
+        )
+
+        let shownProfile = try session.show(reference: "WORK")
+        try expect(shownProfile == work, "show should use case-insensitive display-name resolution")
+        try session.deleteProfile(reference: "work")
+
+        try expect(session.profiles.isEmpty, "delete should resolve and remove the selected profile")
+        try expectThrows(ProfileReferenceError.notFound("work"), {
+            _ = try session.show(reference: "work")
+        }, "show should report missing profiles")
+    }),
     ("profile settings manager adds persisted folder rule and reapplies config", {
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
