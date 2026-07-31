@@ -17,10 +17,12 @@ The project is intentionally privacy-preserving:
 - `Sources/SwitchCommitCore/`: pure core logic for models, config generation, persistence, safe writes, diagnostics, and Keychain abstractions.
 - `Sources/SwitchCommitAppLogic/`: UI-facing view model and presentation state.
 - `Sources/SwitchCommitApp/`: SwiftUI/AppKit menu bar app and settings window.
+- `Sources/SwitchCommitCLI/`: command-line interface.
 - `Sources/SwitchCommitCoreTestRunner/`: local test runner used instead of XCTest or Swift Testing.
-- `docs/superpowers/specs/`: design notes.
-- `docs/superpowers/plans/`: implementation plans.
+- `Scripts/`: release, checks, and landing-site tooling.
+- `site/`: public landing page and Sparkle appcast.
 - `docs/release-notes/`: release notes.
+- `.github/`: CI workflows and Dependabot.
 
 ## Build And Test
 
@@ -68,5 +70,4 @@ Preserve these constraints in every change:
 ## Documentation Guidance
 
 - Keep user-facing docs focused on local safety, managed files, and commands.
-- Keep planning docs in ASCII unless an existing file clearly uses non-ASCII text.
-- When behavior changes, update `README.md` and relevant release notes or plan/spec files.
+- When behavior changes, update `README.md` and relevant release notes.
