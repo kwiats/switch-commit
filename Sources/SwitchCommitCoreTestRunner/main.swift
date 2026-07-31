@@ -547,6 +547,30 @@ let tests: [(String, () throws -> Void)] = [
             "default profiles path should match managed config layout"
         )
     }),
+    ("profile reference resolver matches id exactly", {
+        let profiles = [
+            try GitProfile(id: "work", displayName: "Work", gitUserName: "W", gitUserEmail: "w@example.com", accessMethod: .https, sshKeyPath: "", hosts: ["github.com"], httpsCredentialRef: nil, isDefault: true),
+            try GitProfile(id: "personal", displayName: "Personal", gitUserName: "P", gitUserEmail: "p@example.com", accessMethod: .https, sshKeyPath: "", hosts: ["github.com"], httpsCredentialRef: nil, isDefault: false)
+        ]
+        let resolved = try ProfileReferenceResolver.resolve("work", in: profiles)
+        try expect(resolved.id == "work", "id lookup should win")
+    }),
+    ("profile reference resolver matches display name case-insensitively", {
+        let profiles = [
+            try GitProfile(id: "work", displayName: "Work", gitUserName: "W", gitUserEmail: "w@example.com", accessMethod: .https, sshKeyPath: "", hosts: ["github.com"], httpsCredentialRef: nil, isDefault: true)
+        ]
+        // Use "WORK" so id exact-match fails and display-name path is exercised
+        let resolved = try ProfileReferenceResolver.resolve("WORK", in: profiles)
+        try expect(resolved.displayName == "Work", "name lookup should be case-insensitive")
+    }),
+    ("profile reference resolver errors on unknown and ambiguous names", {
+        let profiles = [
+            try GitProfile(id: "a", displayName: "Work", gitUserName: "A", gitUserEmail: "a@example.com", accessMethod: .https, sshKeyPath: "", hosts: ["github.com"], httpsCredentialRef: nil, isDefault: true),
+            try GitProfile(id: "b", displayName: "work", gitUserName: "B", gitUserEmail: "b@example.com", accessMethod: .https, sshKeyPath: "", hosts: ["github.com"], httpsCredentialRef: nil, isDefault: false)
+        ]
+        try expectThrowsAny({ _ = try ProfileReferenceResolver.resolve("missing", in: profiles) }, "unknown should throw")
+        try expectThrowsAny({ _ = try ProfileReferenceResolver.resolve("work", in: profiles) }, "ambiguous display names should throw")
+    }),
     ("profile store round trips metadata without secret payloads", {
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
