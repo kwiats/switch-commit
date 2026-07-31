@@ -93,3 +93,4 @@ jobs:
               --body "Automated Sparkle \`site/appcast.xml\`, \`site/version.txt\`, and landing changelog/CTA update for tag \`v${version}\`."
           fi
           gh pr merge --merge --auto "${branch}" || gh pr merge --merge "${branch}"
+          gh workflow run "Deploy GitHub Pages" --repo "${GITHUB_REPOSITORY}" --ref "${default_branch}"
