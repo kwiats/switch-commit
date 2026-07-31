@@ -677,10 +677,7 @@ public final class AppViewModel: ObservableObject {
     }
 
     private static func defaultProfilesURL() -> URL {
-        FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent(".config", isDirectory: true)
-            .appendingPathComponent("git-account-switcher", isDirectory: true)
-            .appendingPathComponent("profiles.json")
+        SwitchCommitPaths.defaultProfilesURL()
     }
 
     private static func temporaryProfilesURL() -> URL {

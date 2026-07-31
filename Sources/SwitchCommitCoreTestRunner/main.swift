@@ -540,6 +540,13 @@ let tests: [(String, () throws -> Void)] = [
             )
         }, "profile ids should be safe path components")
     }),
+    ("switch commit paths default profiles url lives under managed config dir", {
+        let url = SwitchCommitPaths.defaultProfilesURL(homeDirectory: URL(fileURLWithPath: "/Users/demo"))
+        try expect(
+            url.path == "/Users/demo/.config/git-account-switcher/profiles.json",
+            "default profiles path should match managed config layout"
+        )
+    }),
     ("profile store round trips metadata without secret payloads", {
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
