@@ -879,6 +879,9 @@ let tests: [(String, () throws -> Void)] = [
             email = work@example.com
         [core]
             sshCommand = ssh -i '~/.ssh/id_work' -F ~/.ssh/config
+        [url "git@github.com:"]
+            insteadOf = https://github.com/
+            insteadOf = ssh://git@github.com/
 
         """
         try expect(profileConfig == expectedProfileConfig, "ssh profile config should remain byte stable")
@@ -886,6 +889,9 @@ let tests: [(String, () throws -> Void)] = [
         try expect(profileConfig.contains("name = Work User"), "profile config should contain name")
         try expect(profileConfig.contains("email = work@example.com"), "profile config should contain email")
         try expect(profileConfig.contains("sshCommand = ssh -i '~/.ssh/id_work' -F ~/.ssh/config"), "profile config should contain ssh command")
+        try expect(profileConfig.contains("[url \"git@github.com:\"]"), "ssh profile should rewrite URLs to SSH")
+        try expect(profileConfig.contains("insteadOf = https://github.com/"), "ssh profile should rewrite HTTPS remotes")
+        try expect(profileConfig.contains("insteadOf = ssh://git@github.com/"), "ssh profile should normalize ssh URL form")
 
         let includeConfig = generator.rootIncludeConfig(
             globalConfigPath: "~/.config/git-account-switcher/global.gitconfig",
@@ -928,12 +934,39 @@ let tests: [(String, () throws -> Void)] = [
         )
 
         let config = GitConfigGenerator().profileConfig(for: profile)
+        let expected = """
+        [user]
+            name = Personal User
+            email = me@example.com
+        [url "https://github.com/"]
+            insteadOf = git@github.com:
+            insteadOf = ssh://git@github.com/
 
+        """
+
+        try expect(config == expected, "https profile config should remain byte stable")
         try expect(config.contains("[user]"), "https profile config should include user section")
         try expect(config.contains("name = Personal User"), "https profile config should include git name")
         try expect(config.contains("email = me@example.com"), "https profile config should include git email")
         try expect(!config.contains("[core]"), "https profile config should not include core section")
         try expect(!config.contains("sshCommand"), "https profile config should not include ssh command")
+        try expect(config.contains("[url \"https://github.com/\"]"), "https profile should rewrite URLs to HTTPS")
+        try expect(config.contains("insteadOf = git@github.com:"), "https profile should rewrite SSH remotes")
+    }),
+    ("git config generator emits insteadOf for each profile host", {
+        let profile = try GitProfile(
+            id: "multi",
+            displayName: "Multi",
+            gitUserName: "Multi User",
+            gitUserEmail: "multi@example.com",
+            sshKeyPath: "~/.ssh/id_multi",
+            hosts: ["github.com", "gitlab.com"],
+            httpsCredentialRef: nil,
+            isDefault: false
+        )
+        let config = GitConfigGenerator().profileConfig(for: profile)
+        try expect(config.contains("[url \"git@github.com:\"]"), "should rewrite github.com")
+        try expect(config.contains("[url \"git@gitlab.com:\"]"), "should rewrite gitlab.com")
     }),
     ("ssh config generator emits managed identity blocks", {
         let profile = try GitProfile(
@@ -1691,6 +1724,70 @@ let tests: [(String, () throws -> Void)] = [
         try expect(
             !runner.invocations.contains { $0.command == "ssh" },
             "doctor must not invoke SSH diagnostics"
+        )
+    }),
+    ("switch commit session doctor warns when folder and global access methods conflict", {
+        final class QuietRunner: CommandRunning {
+            func run(_ command: String, arguments: [String], workingDirectory: URL?) throws -> CommandResult {
+                CommandResult(exitCode: 0, standardOutput: "file\tvalue", standardError: "")
+            }
+        }
+
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let personal = try GitProfile(
+            id: "personal",
+            displayName: "Personal",
+            gitUserName: "Personal User",
+            gitUserEmail: "personal@example.com",
+            accessMethod: .https,
+            sshKeyPath: "",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let work = try GitProfile(
+            id: "work",
+            displayName: "Work",
+            gitUserName: "Work User",
+            gitUserEmail: "work@example.com",
+            accessMethod: .ssh,
+            sshKeyPath: "~/.ssh/id_work",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: false
+        )
+        let projectPath = temporaryDirectory.appendingPathComponent("Projects/Acme").path
+        let store = ProfileStore(fileURL: temporaryDirectory.appendingPathComponent("profiles.json"))
+        try store.save(ProfileStoreData(
+            profiles: [personal, work],
+            rules: [
+                try FolderRule(
+                    id: "work-folder",
+                    path: projectPath,
+                    profileId: "work",
+                    matchMode: .folderTree,
+                    enabled: true
+                )
+            ]
+        ))
+        let session = try SwitchCommitSession(
+            profileStore: store,
+            keychainStore: InMemoryKeychainStore(),
+            gitConfigInstaller: nil,
+            homeDirectory: temporaryDirectory,
+            commandRunner: QuietRunner()
+        )
+
+        let report = session.doctor(path: projectPath)
+
+        try expect(
+            report.warnings.contains {
+                $0.contains("access method")
+                    && $0.contains("Work")
+                    && $0.contains("Personal")
+            },
+            "doctor should warn when folder SSH conflicts with global HTTPS"
         )
     }),
     ("switch commit session resolves show and delete references", {
