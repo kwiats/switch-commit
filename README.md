@@ -228,27 +228,26 @@ Install by opening the DMG and dragging `Switch Commit.app` to Applications.
 
 ## Release Channel CD
 
-Pushing a version tag publishes the public Sparkle release channel:
+Pushing a version tag publishes Releases and Sparkle metadata in this same public repository:
 
 ```bash
 git tag v0.2.0
 git push origin v0.2.0
 ```
 
-The tag workflow builds the DMG, creates a GitHub Release on `kwiats/switch-commit-release-channel`, regenerates a latest-only `appcast.xml`, writes `version.txt`, renders `docs/release-channel/index.html` into the Pages landing page, and pushes the public channel repository. The app reads update metadata from:
+The tag workflow builds the DMG, creates a GitHub Release on `kwiats/switch-commit`, regenerates a latest-only `site/appcast.xml`, and writes `site/version.txt`. A separate `release: published` workflow syncs `site/index.html` changelog + download CTA from Releases. GitHub Pages deploys from `site/` via Actions. The app reads update metadata from:
 
 ```text
-https://kwiats.github.io/switch-commit-release-channel/appcast.xml
+https://kwiats.github.io/switch-commit/appcast.xml
 ```
 
-Configure these source-repository secrets before tagging a release:
+Configure this repository secret before tagging a release:
 
 ```text
-RELEASE_CHANNEL_TOKEN
 SPARKLE_PRIVATE_ED_KEY
 ```
 
-`RELEASE_CHANNEL_TOKEN` needs write access to the public release channel repository (Contents + Releases). `SPARKLE_PRIVATE_ED_KEY` must match the `SUPublicEDKey` embedded by `Scripts/build-release.sh`.
+`SPARKLE_PRIVATE_ED_KEY` must match the `SUPublicEDKey` embedded by `Scripts/build-release.sh`. Repository `GITHUB_TOKEN` is enough for Releases and `site/` commits.
 
 Export the Sparkle private key from the local Keychain before setting `SPARKLE_PRIVATE_ED_KEY`:
 
@@ -263,5 +262,7 @@ Use the exact contents printed by `cat` as the secret value. Do not use the publ
 Generated appcast and landing download URLs point at GitHub Releases, for example:
 
 ```text
-https://github.com/kwiats/switch-commit-release-channel/releases/download/v0.2.5/SwitchCommit-v0.2.5-macOS.dmg
+https://github.com/kwiats/switch-commit/releases/download/v0.2.5/SwitchCommit-v0.2.5-macOS.dmg
 ```
+
+Bridge note for existing 0.2.x installs: publish `v0.3.0` with the new `SUFeedURL`, then run `Scripts/publish-legacy-bridge-appcast.sh 0.3.0` so the legacy channel appcast advertises that build. After `v0.3.1` ships on this repo, the legacy `switch-commit-release-channel` repository can be archived/removed.

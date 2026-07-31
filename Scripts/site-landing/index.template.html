@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Switch Commit — lokalna aplikacja menu bar na macOS do przełączania tożsamości Git." />
+  <title>Switch Commit</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #070908;
+      --bg-elev: #0e1210;
+      --fg: #e8efe6;
+      --muted: #7f8f84;
+      --dim: #3d4a42;
+      --accent: #c8f542;
+      --accent-dim: rgba(200, 245, 66, 0.12);
+      --amber: #f0a35a;
+      --line: #1c2620;
+      --glow: rgba(200, 245, 66, 0.35);
+      --font-display: "Syne", sans-serif;
+      --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      min-height: 100vh;
+      font-family: var(--font-mono);
+      background: var(--bg);
+      color: var(--fg);
+      overflow-x: hidden;
+    }
+
+    /* Atmosphere */
+    .stage {
+      position: relative;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      isolation: isolate;
+    }
+
+    .stage::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: -2;
+      background:
+        radial-gradient(900px 520px at 18% -8%, rgba(200, 245, 66, 0.09), transparent 55%),
+        radial-gradient(700px 480px at 92% 12%, rgba(240, 163, 90, 0.07), transparent 50%),
+        radial-gradient(600px 400px at 50% 110%, rgba(80, 120, 90, 0.12), transparent 45%),
+        var(--bg);
+    }
+
+    .stage::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+      opacity: 0.045;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    .grid-lines {
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      pointer-events: none;
+      background-image:
+        linear-gradient(var(--line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--line) 1px, transparent 1px);
+      background-size: 64px 64px;
+      mask-image: radial-gradient(ellipse 70% 60% at 50% 30%, black, transparent);
+      opacity: 0.55;
+    }
+
+    /* Nav */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1.25rem clamp(1.25rem, 4vw, 3rem);
+      animation: fadeDown 0.7s ease both;
+    }
+
+    .mark {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.65rem;
+      text-decoration: none;
+      color: var(--fg);
+      font-family: var(--font-display);
+      font-weight: 700;
+      font-size: 0.95rem;
+      letter-spacing: -0.02em;
+    }
+
+    .mark-dot {
+      width: 0.55rem;
+      height: 0.55rem;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 12px var(--glow);
+      animation: pulse 2.4s ease-in-out infinite;
+    }
+
+    .nav-meta {
+      font-size: 0.72rem;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .nav-meta em {
+      font-style: normal;
+      color: var(--accent);
+    }
+
+    /* Hero */
+    .hero {
+      flex: 1;
+      display: grid;
+      align-content: center;
+      gap: clamp(2rem, 5vh, 3.5rem);
+      padding: clamp(1.5rem, 4vh, 3rem) clamp(1.25rem, 4vw, 3rem) 3rem;
+      width: min(72rem, 100%);
+      margin: 0 auto;
+    }
+
+    .hero-copy {
+      max-width: 38rem;
+      animation: fadeUp 0.8s 0.1s ease both;
+    }
+
+    .prompt {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.55rem;
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-bottom: 1.25rem;
+    }
+
+    .prompt .path { color: var(--amber); }
+    .prompt .cmd { color: var(--accent); }
+
+    .cursor {
+      display: inline-block;
+      width: 0.55ch;
+      height: 1.05em;
+      background: var(--accent);
+      vertical-align: text-bottom;
+      animation: blink 1.05s step-end infinite;
+    }
+
+    h1 {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: clamp(3.2rem, 9vw, 6.5rem);
+      line-height: 0.92;
+      letter-spacing: -0.045em;
+      margin-bottom: 1.25rem;
+    }
+
+    h1 span {
+      display: block;
+    }
+
+    h1 .accent {
+      color: var(--accent);
+      text-shadow: 0 0 40px var(--glow);
+    }
+
+    .lede {
+      font-size: clamp(0.9rem, 1.6vw, 1.05rem);
+      line-height: 1.65;
+      color: var(--muted);
+      max-width: 32rem;
+      margin-bottom: 2rem;
+    }
+
+    .lede strong {
+      color: var(--fg);
+      font-weight: 500;
+    }
+
+    .cta-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.85rem;
+      animation: fadeUp 0.8s 0.25s ease both;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.55rem;
+      padding: 0.85rem 1.25rem;
+      font-family: var(--font-mono);
+      font-size: 0.88rem;
+      font-weight: 500;
+      text-decoration: none;
+      border-radius: 0.2rem;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #0a1008;
+      box-shadow: 0 0 0 1px rgba(200, 245, 66, 0.3), 0 0 28px var(--glow);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 0 0 1px rgba(200, 245, 66, 0.5), 0 8px 36px var(--glow);
+    }
+
+    .btn-ghost {
+      color: var(--fg);
+      border: 1px solid var(--dim);
+      background: transparent;
+    }
+
+    .btn-ghost:hover {
+      border-color: var(--muted);
+      background: var(--accent-dim);
+    }
+
+    .btn svg {
+      width: 1rem;
+      height: 1rem;
+    }
+
+    .specs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem 1.25rem;
+      margin-top: 1.5rem;
+      font-size: 0.75rem;
+      color: var(--muted);
+      animation: fadeUp 0.8s 0.35s ease both;
+    }
+
+    .specs span {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .specs span::before {
+      content: "//";
+      color: var(--dim);
+    }
+
+    /* Visual panel — menu bar mock */
+    .visual {
+      animation: fadeUp 0.9s 0.2s ease both;
+    }
+
+    .terminal {
+      position: relative;
+      background: linear-gradient(165deg, #101612 0%, #0a0e0b 100%);
+      border: 1px solid var(--line);
+      border-radius: 0.35rem;
+      overflow: hidden;
+      box-shadow:
+        0 0 0 1px rgba(200, 245, 66, 0.04),
+        0 24px 80px rgba(0, 0, 0, 0.55);
+    }
+
+    .terminal-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.7rem 0.9rem;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.015);
+    }
+
+    .terminal-bar i {
+      width: 0.55rem;
+      height: 0.55rem;
+      border-radius: 50%;
+      background: var(--dim);
+    }
+
+    .terminal-bar i:nth-child(1) { background: #ff5f57; }
+    .terminal-bar i:nth-child(2) { background: #febc2e; }
+    .terminal-bar i:nth-child(3) { background: #28c840; }
+
+    .terminal-bar .title {
+      margin-left: 0.5rem;
+      font-size: 0.68rem;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .menubar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.55rem 0.9rem;
+      background: #121816;
+      border-bottom: 1px solid var(--line);
+      font-size: 0.72rem;
+      color: var(--muted);
+    }
+
+    .menubar-left {
+      display: flex;
+      gap: 0.85rem;
+      align-items: center;
+    }
+
+    .menubar-app {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      color: var(--fg);
+      font-weight: 500;
+    }
+
+    .menubar-app .chip {
+      width: 1.1rem;
+      height: 1.1rem;
+      border-radius: 0.2rem;
+      background: var(--accent-dim);
+      border: 1px solid rgba(200, 245, 66, 0.25);
+      display: grid;
+      place-items: center;
+      color: var(--accent);
+      font-size: 0.55rem;
+      font-weight: 600;
+    }
+
+    .body-panel {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0;
+      min-height: 11rem;
+    }
+
+    @media (max-width: 640px) {
+      .body-panel { grid-template-columns: 1fr; }
+    }
+
+    .profile-col {
+      padding: 1.1rem 1rem;
+      border-right: 1px solid var(--line);
+    }
+
+    @media (max-width: 640px) {
+      .profile-col { border-right: none; border-bottom: 1px solid var(--line); }
+    }
+
+    .profile-col:last-child { border-right: none; }
+
+    .label {
+      font-size: 0.65rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--dim);
+      margin-bottom: 0.75rem;
+    }
+
+    .profile {
+      padding: 0.7rem 0.75rem;
+      border: 1px solid var(--line);
+      border-radius: 0.2rem;
+      background: rgba(0, 0, 0, 0.25);
+      margin-bottom: 0.5rem;
+      transition: border-color 0.25s ease, background 0.25s ease;
+    }
+
+    .profile.active {
+      border-color: rgba(200, 245, 66, 0.45);
+      background: var(--accent-dim);
+      animation: selectPulse 2.8s ease-in-out infinite;
+    }
+
+    .profile .name {
+      font-size: 0.82rem;
+      color: var(--fg);
+      margin-bottom: 0.2rem;
+    }
+
+    .profile .email {
+      font-size: 0.68rem;
+      color: var(--muted);
+      word-break: break-all;
+    }
+
+    .profile.active .name { color: var(--accent); }
+
+    .swap-hint {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.85rem;
+      font-size: 0.7rem;
+      color: var(--muted);
+      border-top: 1px solid var(--line);
+      background: rgba(0, 0, 0, 0.2);
+    }
+
+    .swap-hint code {
+      color: var(--accent);
+      font-family: inherit;
+    }
+
+    /* Install strip */
+    .install {
+      width: min(72rem, 100%);
+      margin: 0 auto;
+      padding: 0 clamp(1.25rem, 4vw, 3rem) 3.5rem;
+      animation: fadeUp 0.8s 0.4s ease both;
+    }
+
+    .install-inner {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 1.5rem 2rem;
+      align-items: start;
+      padding-top: 1.75rem;
+      border-top: 1px solid var(--line);
+    }
+
+    @media (max-width: 720px) {
+      .install-inner { grid-template-columns: 1fr; }
+    }
+
+    .install h2 {
+      font-family: var(--font-display);
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      white-space: nowrap;
+    }
+
+    .steps {
+      list-style: none;
+      display: grid;
+      gap: 0.65rem;
+      color: var(--muted);
+      font-size: 0.85rem;
+      line-height: 1.5;
+    }
+
+    .steps li {
+      display: grid;
+      grid-template-columns: 1.6rem 1fr;
+      gap: 0.65rem;
+    }
+
+    .steps .n {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .steps strong { color: var(--fg); font-weight: 500; }
+
+    .gatekeeper-note {
+      grid-column: 2;
+      margin-top: 0.35rem;
+      padding: 0.75rem 0 0.75rem 1rem;
+      border-left: 2px solid var(--amber);
+      color: var(--muted);
+      font-size: 0.8rem;
+      line-height: 1.55;
+      max-width: 38rem;
+    }
+
+    .gatekeeper-note strong {
+      color: var(--fg);
+      font-weight: 500;
+    }
+
+    @media (max-width: 720px) {
+      .gatekeeper-note { grid-column: 1; }
+    }
+
+    /* Changelog — mirrors .install layout */
+    .changelog {
+      width: min(72rem, 100%);
+      margin: 0 auto;
+      padding: 0 clamp(1.25rem, 4vw, 3rem) 3.5rem;
+    }
+
+    .changelog-inner {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 1.5rem 2rem;
+      align-items: start;
+      padding-top: 1.75rem;
+      border-top: 1px solid var(--line);
+    }
+
+    @media (max-width: 720px) {
+      .changelog-inner { grid-template-columns: 1fr; }
+    }
+
+    .changelog h2 {
+      font-family: var(--font-display);
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      white-space: nowrap;
+    }
+
+    .changelog-entries {
+      display: grid;
+      gap: 1.35rem;
+    }
+
+    .changelog-meta {
+      font-size: 0.78rem;
+      color: var(--accent);
+      margin-bottom: 0.55rem;
+      letter-spacing: 0.02em;
+    }
+
+    .changelog-body {
+      color: var(--muted);
+      font-size: 0.85rem;
+      line-height: 1.55;
+    }
+
+    .changelog-body h1,
+    .changelog-body h2,
+    .changelog-body h3 {
+      font-family: var(--font-display);
+      color: var(--fg);
+      font-size: 0.95rem;
+      margin: 0.35rem 0 0.5rem;
+    }
+
+    .changelog-body ul,
+    .changelog-body ol {
+      margin: 0.25rem 0 0.5rem;
+      padding-left: 1.2rem;
+    }
+
+    .changelog-body li { margin: 0.25rem 0; }
+
+    .changelog-body a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    .changelog-body a:hover { text-decoration: underline; }
+
+    .changelog-body code {
+      color: var(--fg);
+      font-size: 0.84em;
+    }
+
+    .changelog-body strong { color: var(--fg); font-weight: 500; }
+
+    .changelog-empty {
+      color: var(--dim);
+      font-style: italic;
+    }
+
+    footer {
+      padding: 1.25rem clamp(1.25rem, 4vw, 3rem) 2rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem 1.5rem;
+      justify-content: space-between;
+      font-size: 0.72rem;
+      color: var(--dim);
+      border-top: 1px solid var(--line);
+    }
+
+    footer a {
+      color: var(--muted);
+      text-decoration: none;
+      transition: color 0.15s ease;
+    }
+
+    footer a:hover { color: var(--accent); }
+
+    footer .links {
+      display: flex;
+      gap: 1.25rem;
+    }
+
+    @media (min-width: 900px) {
+      .hero {
+        grid-template-columns: 1.05fr 0.95fr;
+        align-items: center;
+        gap: 3.5rem;
+      }
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; box-shadow: 0 0 10px var(--glow); }
+      50% { opacity: 0.65; box-shadow: 0 0 18px var(--glow); }
+    }
+
+    @keyframes selectPulse {
+      0%, 100% { box-shadow: inset 0 0 0 0 transparent; }
+      50% { box-shadow: inset 0 0 24px rgba(200, 245, 66, 0.06); }
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(18px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes fadeDown {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="stage">
+    <div class="grid-lines" aria-hidden="true"></div>
+
+    <header>
+      <a class="mark" href="./">
+        <span class="mark-dot" aria-hidden="true"></span>
+        Switch Commit
+      </a>
+      <div class="nav-meta">release channel · <em>__VERSION_TAG__</em></div>
+    </header>
+
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="prompt" aria-hidden="true">
+          <span class="path">~/dev</span>
+          <span>%</span>
+          <span class="cmd">switch-commit</span>
+          <span class="cursor"></span>
+        </p>
+
+        <h1>
+          <span>Switch</span>
+          <span class="accent">Commit</span>
+        </h1>
+
+        <p class="lede">
+          Lokalna aplikacja <strong>menu bar</strong> na macOS.
+          Przełączaj tożsamość Git globalnie i per folder —
+          bez telemetrii, bez automatycznych połączeń sieciowych.
+        </p>
+
+        <div class="cta-row">
+          <a class="btn btn-primary" href="__DMG_URL__">
+            <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M8 2v8m0 0L5 7.5M8 10l3-2.5M3 13h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Pobierz __VERSION_TAG__
+          </a>
+          <a class="btn btn-ghost" href="#install">
+            Instalacja
+          </a>
+        </div>
+
+        <div class="specs">
+          <span>macOS 14+</span>
+          <span>Apple Silicon</span>
+          <span>Sparkle updates</span>
+        </div>
+      </div>
+
+      <div class="visual" aria-hidden="true">
+        <div class="terminal">
+          <div class="terminal-bar">
+            <i></i><i></i><i></i>
+            <span class="title">menu bar · identity</span>
+          </div>
+          <div class="menubar">
+            <div class="menubar-left">
+              <span class="menubar-app">
+                <span class="chip">SC</span>
+                Switch Commit
+              </span>
+              <span>File</span>
+              <span>Edit</span>
+            </div>
+            <span>⚙︎</span>
+          </div>
+          <div class="body-panel">
+            <div class="profile-col">
+              <div class="label">active</div>
+              <div class="profile active">
+                <div class="name">kwiats</div>
+                <div class="email">work@example.com</div>
+              </div>
+              <div class="profile">
+                <div class="name">personal</div>
+                <div class="email">me@example.com</div>
+              </div>
+            </div>
+            <div class="profile-col">
+              <div class="label">git config</div>
+              <div class="profile">
+                <div class="name">user.name</div>
+                <div class="email">kwiats</div>
+              </div>
+              <div class="profile">
+                <div class="name">user.email</div>
+                <div class="email">work@example.com</div>
+              </div>
+            </div>
+          </div>
+          <div class="swap-hint">
+            click profile → <code>git config</code> switches instantly
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="install" id="install">
+      <div class="install-inner">
+        <h2>Instalacja</h2>
+        <ol class="steps">
+          <li><span class="n">01</span><span>Otwórz DMG i przeciągnij <strong>Switch Commit.app</strong> do Aplikacji.</span></li>
+          <li><span class="n">02</span><span>Wyrzuć DMG do Kosza po instalacji.</span></li>
+          <li><span class="n">03</span><span>Uruchom — ikona pojawi się na pasku menu.</span></li>
+          <li><span class="n">04</span><span>Aktualizacje: Settings → <strong>Check for Updates</strong>.</span></li>
+        </ol>
+        <p class="gatekeeper-note">
+          <strong>macOS blokuje pierwsze uruchomienie?</strong>
+          Zamknij dialog, w Finderze kliknij appkę prawym przyciskiem → Open → potwierdź Open.
+          Wydanie nie jest jeszcze notarized przez Apple.
+        </p>
+      </div>
+    </section>
+
+    <!-- changelog:start -->
+    <section class="changelog" id="changelog">
+      <div class="changelog-inner">
+        <h2>Changelog</h2>
+        <div class="changelog-entries">
+          <article class="changelog-entry">
+            <div class="changelog-meta">// v0.2.5 · 30 Jul 2026</div>
+            <div class="changelog-body"><h1>Switch Commit v0.2.5</h1>
+<h2>Highlights</h2>
+<ul><li>Renames the shipping app and package surface to Switch Commit while keeping existing profile, Keychain, and Sparkle continuity identifiers.</li><li>Publishes installer DMG artifacts (<code>SwitchCommit-vX.Y.Z-macOS.dmg</code>) with an Applications shortcut instead of ZIP archives.</li></ul></div>
+          </article>
+        </div>
+      </div>
+    </section>
+<!-- changelog:end -->
+
+    <footer>
+      <span>© 2026 Switch Commit</span>
+      <div class="links">
+        <a href="appcast.xml">appcast.xml</a>
+        <a href="__SHA256_URL__">SHA-256</a>
+        <a href="https://github.com/kwiats/switch-commit">GitHub</a>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>
