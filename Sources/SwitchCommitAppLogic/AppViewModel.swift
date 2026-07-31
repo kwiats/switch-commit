@@ -157,6 +157,11 @@ public final class AppViewModel: ObservableObject {
     @Published public private(set) var profiles: [GitProfile]
     @Published public private(set) var activeProfileId: String?
     @Published public private(set) var selectedProfileId: String?
+    @Published public private(set) var folderAssignmentsForSelectedProfile: [FolderAssignmentRow]
+    @Published public private(set) var pendingFolderMatchMode: FolderRuleMatchMode
+    @Published public private(set) var contextPresentation: FolderContextPresentation
+    @Published public var isShowingFolderRuleMoveConfirmation: Bool
+    @Published public private(set) var pendingFolderRulePath: String?
     @Published public var diagnosticsText: String
     @Published public var settingsMessage: String?
     @Published public private(set) var presentationRequest: AppPresentationRequest?
@@ -174,6 +179,8 @@ public final class AppViewModel: ObservableObject {
     private let launchAtLoginManager: LaunchAtLoginManaging
     private let sshKeyDiscovery: SSHKeyDiscovery
     private var connectionTestResultsByProfileId: [String: [HostConnectionTestResult]]
+    private var frontmostPath: String?
+    private var frontmostUnavailableReason: String?
 
     public init(
         profiles: [GitProfile]? = nil,
@@ -221,6 +228,16 @@ public final class AppViewModel: ObservableObject {
         self.profiles = manager.profiles
         self.activeProfileId = manager.activeProfileId
         self.selectedProfileId = manager.selectedProfileId
+        self.folderAssignmentsForSelectedProfile = Self.folderAssignmentRows(
+            from: manager.rules(forProfileId: manager.selectedProfileId ?? "")
+        )
+        self.pendingFolderMatchMode = .folderTree
+        self.contextPresentation = Self.globalContextPresentation(
+            profiles: manager.profiles,
+            activeProfileId: manager.activeProfileId
+        )
+        self.isShowingFolderRuleMoveConfirmation = false
+        self.pendingFolderRulePath = nil
         self.diagnosticsText = diagnosticsText
         self.settingsMessage = startupMessage
         self.presentationRequest = presentationRequest
@@ -365,6 +382,67 @@ public final class AppViewModel: ObservableObject {
     public func selectProfile(id: String?) {
         profileSettingsManager.selectProfile(id: id)
         refreshFromProfileSettings()
+    }
+
+    public func setPendingFolderMatchMode(_ matchMode: FolderRuleMatchMode) {
+        pendingFolderMatchMode = matchMode
+    }
+
+    public func addFolderRuleForSelectedProfile(path: String, forceMove: Bool) {
+        guard let selectedProfileId else {
+            settingsMessage = "Select an account before adding a folder."
+            return
+        }
+
+        do {
+            try profileSettingsManager.addFolderRule(
+                path: path,
+                profileId: selectedProfileId,
+                matchMode: pendingFolderMatchMode,
+                forceMove: forceMove
+            )
+            settingsMessage = profileSettingsManager.statusMessage
+            pendingFolderRulePath = nil
+            isShowingFolderRuleMoveConfirmation = false
+            refreshFromProfileSettings()
+            menuContentRevision += 1
+        } catch FolderRuleError.pathOwnedByOtherProfile {
+            pendingFolderRulePath = path
+            isShowingFolderRuleMoveConfirmation = true
+        } catch {
+            settingsMessage = "Could not save settings: \(error.localizedDescription)"
+        }
+    }
+
+    public func removeFolderRule(id: String) {
+        performSettingsUpdate {
+            try profileSettingsManager.removeFolderRule(id: id)
+        }
+    }
+
+    public func confirmPendingFolderRuleMove() {
+        guard let path = pendingFolderRulePath else {
+            isShowingFolderRuleMoveConfirmation = false
+            return
+        }
+        addFolderRuleForSelectedProfile(path: path, forceMove: true)
+    }
+
+    public func cancelPendingFolderRuleMove() {
+        pendingFolderRulePath = nil
+        isShowingFolderRuleMoveConfirmation = false
+    }
+
+    public func applyFrontmostPath(_ path: String, source _: FrontmostPathSource) {
+        applyFrontmostState(path: path, unavailableReason: nil)
+    }
+
+    public func applyFrontmostUnavailable(reason: String) {
+        applyFrontmostState(path: nil, unavailableReason: reason)
+    }
+
+    public func applyFrontmostClearedToGlobal() {
+        applyFrontmostState(path: nil, unavailableReason: nil)
     }
 
     public func addProfile() {
@@ -560,6 +638,80 @@ public final class AppViewModel: ObservableObject {
         profiles = profileSettingsManager.profiles
         activeProfileId = profileSettingsManager.activeProfileId
         selectedProfileId = profileSettingsManager.selectedProfileId
+        folderAssignmentsForSelectedProfile = Self.folderAssignmentRows(
+            from: profileSettingsManager.rules(forProfileId: selectedProfileId ?? "")
+        )
+        refreshContextPresentation()
+    }
+
+    private func globalFolderRuleResolution() -> FolderRuleResolution {
+        FolderRuleResolution(
+            kind: .global,
+            rule: nil,
+            profile: profileSettingsManager.activeProfile
+        )
+    }
+
+    private func applyFrontmostState(path: String?, unavailableReason: String?) {
+        let previousPresentation = contextPresentation
+        frontmostPath = path
+        frontmostUnavailableReason = unavailableReason
+        refreshContextPresentation()
+        if contextPresentation != previousPresentation {
+            menuContentRevision += 1
+        }
+    }
+
+    private func refreshContextPresentation() {
+        if let frontmostUnavailableReason {
+            contextPresentation = FolderContextPresentation.from(
+                resolution: globalFolderRuleResolution(),
+                path: nil,
+                unavailableReason: frontmostUnavailableReason
+            )
+            return
+        }
+        if let frontmostPath {
+            let resolution = FolderRuleResolver.resolve(
+                path: frontmostPath,
+                rules: profileSettingsManager.rules,
+                profiles: profileSettingsManager.profiles,
+                activeProfileId: profileSettingsManager.activeProfileId
+            )
+            contextPresentation = FolderContextPresentation.from(
+                resolution: resolution,
+                path: frontmostPath,
+                unavailableReason: nil
+            )
+            return
+        }
+        contextPresentation = FolderContextPresentation.from(
+            resolution: globalFolderRuleResolution(),
+            path: nil,
+            unavailableReason: nil
+        )
+    }
+
+    private static func globalContextPresentation(
+        profiles: [GitProfile],
+        activeProfileId: String?
+    ) -> FolderContextPresentation {
+        let resolution = FolderRuleResolution(
+            kind: .global,
+            rule: nil,
+            profile: profiles.first { $0.id == activeProfileId }
+        )
+        return FolderContextPresentation.from(
+            resolution: resolution,
+            path: nil,
+            unavailableReason: nil
+        )
+    }
+
+    private static func folderAssignmentRows(from rules: [FolderRule]) -> [FolderAssignmentRow] {
+        rules.map {
+            FolderAssignmentRow(id: $0.id, path: $0.path, matchMode: $0.matchMode)
+        }
     }
 
     private func refreshLaunchAtLoginState() {
