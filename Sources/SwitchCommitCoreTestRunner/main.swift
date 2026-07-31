@@ -2682,6 +2682,10 @@ let tests: [(String, () throws -> Void)] = [
         try expect(source.contains("site/appcast.xml"), "release workflow should publish site appcast metadata")
         try expect(source.contains("gh pr create"), "release workflow should open a PR because main requires pull requests")
         try expect(source.contains("gh pr merge"), "release workflow should merge the site metadata PR")
+        try expect(
+            source.contains("gh workflow run \"Deploy GitHub Pages\""),
+            "release workflow should dispatch Pages deploy after merging site metadata"
+        )
         try expect(source.contains("pull-requests: write"), "release workflow should request pull-requests write permission")
     }),
     ("README documents tag release CD and release channel secrets", {
