@@ -2,10 +2,9 @@
 
 set -euo pipefail
 
-version="${1:?usage: Scripts/publish-release-channel.sh <version> <release-channel-dir> [repo-root]}"
-release_channel_dir="${2:?usage: Scripts/publish-release-channel.sh <version> <release-channel-dir> [repo-root]}"
-repo_root="${3:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-github_repo="kwiats/switch-commit-release-channel"
+version="${1:?usage: Scripts/publish-release-channel.sh <version> [repo-root]}"
+repo_root="${2:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+github_repo="${GITHUB_REPOSITORY:-kwiats/switch-commit}"
 github_download_prefix="https://github.com/${github_repo}/releases/download/v${version}"
 artifact_name="SwitchCommit-v${version}-macOS.dmg"
 checksum_name="${artifact_name}.sha256"
@@ -13,7 +12,7 @@ release_dir="${repo_root}/dist/v${version}"
 artifact_path="${release_dir}/${artifact_name}"
 checksum_path="${release_dir}/${checksum_name}"
 notes_source="${repo_root}/docs/release-notes/v${version}.md"
-landing_template="${repo_root}/docs/release-channel/index.html"
+site_dir="${repo_root}/site"
 tag="v${version}"
 
 if [[ ! "${version}" =~ ^[0-9]+[.][0-9]+[.][0-9]+$ ]]; then
@@ -34,8 +33,8 @@ if [[ -z "${normalized_private_key}" ]] || ! printf '%s' "${normalized_private_k
     exit 1
 fi
 
-if [[ ! -d "${release_channel_dir}/.git" ]]; then
-    echo "error: release channel directory must be a checked-out git repository" >&2
+if [[ ! -d "${site_dir}" ]]; then
+    echo "error: missing site directory ${site_dir}" >&2
     exit 1
 fi
 
@@ -46,11 +45,6 @@ fi
 
 if [[ ! -f "${checksum_path}" ]]; then
     echo "error: missing checksum ${checksum_path}" >&2
-    exit 1
-fi
-
-if [[ ! -f "${landing_template}" ]]; then
-    echo "error: missing landing template ${landing_template}" >&2
     exit 1
 fi
 
@@ -68,7 +62,7 @@ if [[ -z "${generate_appcast_tool}" ]]; then
     exit 1
 fi
 
-echo "==> Publishing GitHub Release ${tag}"
+echo "==> Publishing GitHub Release ${tag} to ${github_repo}"
 release_assets=("${artifact_path}" "${checksum_path}")
 if [[ -f "${notes_source}" ]]; then
     if gh release view "${tag}" --repo "${github_repo}" >/dev/null 2>&1; then
@@ -102,12 +96,12 @@ if [[ -f "${notes_source}" ]]; then
     cp "${notes_source}" "${appcast_staging}/SwitchCommit-v${version}-macOS.md"
 fi
 
-echo "==> Generating Sparkle appcast"
+echo "==> Generating Sparkle appcast into site/"
 generate_appcast_args=(
     --ed-key-file -
     --download-url-prefix "${github_download_prefix}/"
     --versions "${version}"
-    -o "${release_channel_dir}/appcast.xml"
+    -o "${site_dir}/appcast.xml"
     "${appcast_staging}"
 )
 if [[ -f "${notes_source}" ]]; then
@@ -116,38 +110,20 @@ if [[ -f "${notes_source}" ]]; then
         --download-url-prefix "${github_download_prefix}/"
         --release-notes-url-prefix "${github_download_prefix}/"
         --versions "${version}"
-        -o "${release_channel_dir}/appcast.xml"
+        -o "${site_dir}/appcast.xml"
         "${appcast_staging}"
     )
 fi
 
 printf '%s' "${normalized_private_key}" | "${generate_appcast_tool}" "${generate_appcast_args[@]}"
 
-echo "==> Updating Pages landing metadata"
-printf '%s\n' "${version}" > "${release_channel_dir}/version.txt"
+echo "==> Updating site/version.txt"
+printf '%s\n' "${version}" > "${site_dir}/version.txt"
 
-dmg_url="${github_download_prefix}/${artifact_name}"
-sha256_url="${github_download_prefix}/${checksum_name}"
-python3 - "${landing_template}" "${release_channel_dir}/index.html" "${version}" "${dmg_url}" "${sha256_url}" <<'PY'
-import pathlib
-import sys
-
-template_path, output_path, version, dmg_url, sha256_url = sys.argv[1:6]
-rendered = (
-    pathlib.Path(template_path)
-    .read_text(encoding="utf-8")
-    .replace("__VERSION__", version)
-    .replace("__VERSION_TAG__", f"v{version}")
-    .replace("__DMG_URL__", dmg_url)
-    .replace("__SHA256_URL__", sha256_url)
-)
-pathlib.Path(output_path).write_text(rendered, encoding="utf-8")
-PY
-
-echo "==> Removing obsolete Pages artifact folders"
-rm -rf "${release_channel_dir}/release" "${release_channel_dir}/releases"
+echo "==> Removing obsolete site artifact folders"
+rm -rf "${site_dir}/release" "${site_dir}/releases"
 
 trap - EXIT
 cleanup_appcast_staging
 
-echo "==> Public release channel contents updated"
+echo "==> site/ channel metadata updated (landing owned by Scripts/site-landing/sync-landing.mjs)"

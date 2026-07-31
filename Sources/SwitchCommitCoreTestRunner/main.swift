@@ -2544,7 +2544,7 @@ let tests: [(String, () throws -> Void)] = [
         let source = try String(contentsOf: scriptURL, encoding: .utf8)
 
         try expect(
-            source.contains("release_channel_base_url=\"https://kwiats.github.io/switch-commit-release-channel\"")
+            source.contains("release_channel_base_url=\"https://kwiats.github.io/switch-commit\"")
                 && source.contains("sparkle_feed_url=\"${release_channel_base_url}/appcast.xml\""),
             "release script should embed the public Switch Commit appcast URL"
         )
@@ -2567,7 +2567,7 @@ let tests: [(String, () throws -> Void)] = [
         let source = try String(contentsOf: scriptURL, encoding: .utf8)
 
         try expect(
-            source.contains("release_channel_base_url=\"https://kwiats.github.io/switch-commit-release-channel\""),
+            source.contains("release_channel_base_url=\"https://kwiats.github.io/switch-commit\""),
             "release script should keep the public channel base URL in one place"
         )
         try expect(
@@ -2577,7 +2577,7 @@ let tests: [(String, () throws -> Void)] = [
         try expect(source.contains("app_name=\"Switch Commit\""), "release script should ship Switch Commit.app")
         try expect(source.contains("binary_name=\"SwitchCommitApp\""), "release script should build SwitchCommitApp")
         try expect(
-            source.contains("sparkle_artifact_url=\"https://github.com/kwiats/switch-commit-release-channel/releases/download/v${version}/SwitchCommit-v${version}-macOS.dmg\""),
+            source.contains("sparkle_artifact_url=\"https://github.com/kwiats/switch-commit/releases/download/v${version}/SwitchCommit-v${version}-macOS.dmg\""),
             "release script should derive DMG artifact URL from GitHub Releases"
         )
         try expect(source.contains("hdiutil create"), "release script should create a DMG with hdiutil")
@@ -2619,7 +2619,8 @@ let tests: [(String, () throws -> Void)] = [
         try expect(source.contains("generate_appcast"), "publisher should invoke Sparkle generate_appcast")
         try expect(source.contains("--ed-key-file -"), "publisher should pass the EdDSA key via standard input")
         try expect(source.contains("gh release"), "publisher should publish artifacts through GitHub Releases")
-        try expect(source.contains("kwiats/switch-commit-release-channel"), "publisher should target the public channel repository for Releases")
+        try expect(source.contains("kwiats/switch-commit"), "publisher should target this public repository for Releases")
+        try expect(!source.contains("switch-commit-release-channel"), "publisher should not target the legacy channel repository")
         try expect(source.contains("SwitchCommit-v${version}-macOS.dmg"), "publisher should upload the release DMG")
         try expect(!source.contains("macOS.zip"), "publisher should not publish a ZIP artifact")
         try expect(source.contains("checksum_name=\"${artifact_name}.sha256\""), "publisher should upload the checksum")
@@ -2628,11 +2629,12 @@ let tests: [(String, () throws -> Void)] = [
             source.contains("--download-url-prefix \"${github_download_prefix}/\""),
             "publisher should put GitHub Releases download URLs inside appcast enclosures"
         )
-        try expect(source.contains("version.txt"), "publisher should write the latest version marker for Pages")
-        try expect(source.contains("docs/release-channel/index.html"), "publisher should render the landing page from the source template")
+        try expect(source.contains("site/version.txt") || source.contains("version.txt"), "publisher should write the latest version marker for Pages")
+        try expect(source.contains("site_dir"), "publisher should write channel metadata under site/")
+        try expect(!source.contains("docs/release-channel/index.html"), "publisher must not overwrite the Pages landing from a template")
+        try expect(!source.contains("index.html"), "publisher must not write site/index.html; landing sync owns it")
         try expect(source.contains("rm -rf"), "publisher should remove obsolete Pages artifact folders")
-        try expect(!source.contains("release_channel_assets_dir=\"${release_channel_dir}/release\""), "publisher should not copy artifacts into a Pages release folder")
-        try expect(source.contains("-o \"${release_channel_dir}/appcast.xml\""), "publisher should keep appcast.xml at the release channel root")
+        try expect(source.contains("-o \"${site_dir}/appcast.xml\""), "publisher should keep appcast.xml under site/")
     }),
     ("tag release workflow publishes public GitHub Pages appcast channel", {
         let workflowURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
@@ -2643,12 +2645,13 @@ let tests: [(String, () throws -> Void)] = [
         try expect(source.contains("'v*'"), "release workflow should limit publishing to v-prefixed tags")
         try expect(source.contains("Scripts/pr-checks.sh"), "release workflow should run local checks before publishing")
         try expect(source.contains("Scripts/build-release.sh"), "release workflow should build the release artifact")
-        try expect(source.contains("repository: kwiats/switch-commit-release-channel"), "release workflow should checkout the public release channel")
-        try expect(source.contains("RELEASE_CHANNEL_TOKEN"), "release workflow should use a token scoped to the public release channel")
+        try expect(!source.contains("repository: kwiats/switch-commit-release-channel"), "release workflow should not checkout the legacy channel repository")
+        try expect(!source.contains("RELEASE_CHANNEL_TOKEN"), "release workflow should not require a cross-repo release channel token")
         try expect(source.contains("SPARKLE_PRIVATE_ED_KEY"), "release workflow should provide Sparkle signing material only from secrets")
-        try expect(source.contains("GH_TOKEN: ${{ secrets.RELEASE_CHANNEL_TOKEN }}"), "release workflow should authenticate gh release against the channel repo")
+        try expect(source.contains("GH_TOKEN: ${{ github.token }}"), "release workflow should authenticate gh release with the job token")
         try expect(source.contains("Scripts/publish-release-channel.sh"), "release workflow should publish through the checked-in publisher script")
-        try expect(source.contains("git push"), "release workflow should push the release channel update")
+        try expect(source.contains("site/appcast.xml"), "release workflow should push site appcast metadata to the default branch")
+        try expect(source.contains("git push"), "release workflow should push the site metadata update")
     }),
     ("README documents tag release CD and release channel secrets", {
         let readmeURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
@@ -2656,15 +2659,15 @@ let tests: [(String, () throws -> Void)] = [
         let source = try String(contentsOf: readmeURL, encoding: .utf8)
 
         try expect(source.contains("git tag v0.2.0"), "README should show how to tag a release")
-        try expect(source.contains("RELEASE_CHANNEL_TOKEN"), "README should document the release channel token secret")
+        try expect(!source.contains("RELEASE_CHANNEL_TOKEN"), "README should not require a legacy cross-repo release channel token")
         try expect(source.contains("SPARKLE_PRIVATE_ED_KEY"), "README should document the Sparkle private key secret")
         try expect(source.contains("generate_keys -x /tmp/sparkle-private-key.txt"), "README should show how to export the Sparkle private key")
         try expect(source.contains("Do not use the public SUPublicEDKey value"), "README should warn against using the public key as the private secret")
-        try expect(source.contains("https://kwiats.github.io/switch-commit-release-channel/appcast.xml"), "README should document the public appcast URL")
-        try expect(source.contains("version.txt"), "README should document the Pages version marker")
-        try expect(source.contains("docs/release-channel/index.html"), "README should document the landing template")
+        try expect(source.contains("https://kwiats.github.io/switch-commit/appcast.xml"), "README should document the public appcast URL")
+        try expect(source.contains("site/version.txt") || source.contains("version.txt"), "README should document the Pages version marker")
+        try expect(source.contains("site/index.html") || source.contains("site/"), "README should document the site/ Pages root")
         try expect(
-            source.contains("https://github.com/kwiats/switch-commit-release-channel/releases/download/"),
+            source.contains("https://github.com/kwiats/switch-commit/releases/download/"),
             "README should document GitHub Releases download URLs"
         )
         try expect(source.contains("SwitchCommit-v"), "README should document SwitchCommit DMG artifact naming")

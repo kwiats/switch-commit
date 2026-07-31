@@ -6,7 +6,7 @@ on:
       - 'v*'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   publish-release-channel:
@@ -39,30 +39,31 @@ jobs:
       - name: Build release artifacts
         run: Scripts/build-release.sh "${{ steps.version.outputs.version }}"
 
-      - name: Check out public release channel
-        uses: actions/checkout@v7
-        with:
-          repository: kwiats/switch-commit-release-channel
-          token: ${{ secrets.RELEASE_CHANNEL_TOKEN }}
-          path: release-channel
-
-      - name: Publish appcast channel
+      - name: Publish GitHub Release and site metadata
         env:
           SPARKLE_PRIVATE_ED_KEY: ${{ secrets.SPARKLE_PRIVATE_ED_KEY }}
-          GH_TOKEN: ${{ secrets.RELEASE_CHANNEL_TOKEN }}
-        run: Scripts/publish-release-channel.sh "${{ steps.version.outputs.version }}" release-channel "$PWD"
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: Scripts/publish-release-channel.sh "${{ steps.version.outputs.version }}" "$PWD"
 
-      - name: Commit public release channel
-        working-directory: release-channel
+      - name: Push site metadata to default branch
         shell: bash
         run: |
           set -euo pipefail
+          version="${{ steps.version.outputs.version }}"
+          staging="$(mktemp -d)"
+          cp site/appcast.xml site/version.txt "${staging}/"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .
+          git fetch origin "${{ github.event.repository.default_branch }}"
+          git checkout -B "${{ github.event.repository.default_branch }}" "origin/${{ github.event.repository.default_branch }}"
+          mkdir -p site
+          cp "${staging}/appcast.xml" site/appcast.xml
+          cp "${staging}/version.txt" site/version.txt
+          git add site/appcast.xml site/version.txt
           if git diff --cached --quiet; then
-            echo "No release channel changes to publish."
+            echo "No site metadata changes to publish."
             exit 0
           fi
-          git commit -m "Release Switch Commit v${{ steps.version.outputs.version }}"
-          git push
+          git commit -m "Release Switch Commit v${version} channel metadata"
+          git push origin "HEAD:${{ github.event.repository.default_branch }}"
