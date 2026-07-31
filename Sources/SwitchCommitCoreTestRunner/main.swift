@@ -2161,6 +2161,24 @@ let tests: [(String, () throws -> Void)] = [
             "release script should write the public artifact URL next to release artifacts"
         )
     }),
+    ("release build script packages the switch-commit CLI", {
+        let scriptURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("Scripts/build-release.sh")
+        let source = try String(contentsOf: scriptURL, encoding: .utf8)
+
+        try expect(
+            source.contains("swift build -c release --product switch-commit"),
+            "release script should build the switch-commit CLI product"
+        )
+        try expect(
+            source.contains("Contents/MacOS/switch-commit"),
+            "release script should embed the CLI in the app bundle"
+        )
+        try expect(
+            source.contains("pkgbuild") || source.contains("productbuild"),
+            "release script should build an installer package"
+        )
+    }),
     ("release channel publisher signs appcast with Sparkle EdDSA key from standard input", {
         let scriptURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent("Scripts/publish-release-channel.sh")

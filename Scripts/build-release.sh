@@ -29,6 +29,12 @@ mkdir -p "${frameworks_dir}"
 cp "${repo_root}/.build/release/${binary_name}" "${app_bundle}/Contents/MacOS/${binary_name}"
 chmod 755 "${app_bundle}/Contents/MacOS/${binary_name}"
 
+echo "==> Building bundled CLI"
+swift build -c release --product switch-commit
+cli_binary="${app_bundle}/Contents/MacOS/switch-commit"
+cp "${repo_root}/.build/release/switch-commit" "${cli_binary}"
+chmod 755 "${cli_binary}"
+
 sparkle_framework_source="$(
     find "${repo_root}/.build/artifacts" "${repo_root}/.build/release" -name Sparkle.framework -type d 2>/dev/null | sort | head -n 1
 )"
@@ -86,7 +92,24 @@ PLIST
 
 echo "==> Signing app bundle"
 codesign --force --deep --sign - "${sparkle_framework_destination}"
+codesign --force --deep --sign - "${cli_binary}"
 codesign --force --deep --sign - "${app_bundle}"
+
+echo "==> Creating installer package"
+pkg_name="Install Switch Commit.pkg"
+package_root="$(mktemp -d "${TMPDIR:-/tmp}/switch-commit-pkg.XXXXXX")"
+mkdir -p "${package_root}/Applications" "${package_root}/usr/local/bin"
+ditto "${app_bundle}" "${package_root}/Applications/${app_name}.app"
+cp "${repo_root}/Scripts/macos/cli-launch.sh" "${package_root}/usr/local/bin/switch-commit"
+chmod 755 "${package_root}/usr/local/bin/switch-commit"
+rm -f "${release_dir}/${pkg_name}"
+pkgbuild \
+    --root "${package_root}" \
+    --identifier "${bundle_id}" \
+    --version "${version}" \
+    --install-location / \
+    "${release_dir}/${pkg_name}"
+rm -rf "${package_root}"
 
 echo "==> Creating DMG artifact"
 dmg_name="SwitchCommit-v${version}-macOS.dmg"
@@ -97,6 +120,7 @@ cleanup_staging() {
 trap cleanup_staging EXIT
 
 ditto "${app_bundle}" "${staging_dir}/${app_name}.app"
+cp "${release_dir}/${pkg_name}" "${staging_dir}/${pkg_name}"
 ln -s /Applications "${staging_dir}/Applications"
 
 rm -f "${release_dir}/${dmg_name}"
