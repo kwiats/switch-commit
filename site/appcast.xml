@@ -3,6 +3,15 @@
     <channel>
         <title>Switch Commit</title>
         <item>
+            <title>0.3.1</title>
+            <pubDate>Fri, 31 Jul 2026 18:21:24 +0000</pubDate>
+            <sparkle:version>0.3.1</sparkle:version>
+            <sparkle:shortVersionString>0.3.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <enclosure url="https://github.com/kwiats/switch-commit/releases/download/v0.3.1/SwitchCommit-v0.3.1-macOS.dmg" length="4925263" type="application/octet-stream" sparkle:edSignature="QPHMalLRxqENk9cd6GDTG+I3pXg0BcZqlGrFpJWb9LNdBCR2kRawpsHy3Atp02wroiGH+lWHhCaGpdjn8fN7DA=="/>
+        </item>
+        <item>
             <title>0.3.0</title>
             <pubDate>Fri, 31 Jul 2026 18:56:45 +0200</pubDate>
             <sparkle:version>0.3.0</sparkle:version>
@@ -21,16 +30,6 @@
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <sparkle:releaseNotesLink>https://github.com/kwiats/switch-commit/releases/download/v0.2.6/SwitchCommit-v0.2.6-macOS.md</sparkle:releaseNotesLink>
             <enclosure url="https://github.com/kwiats/switch-commit/releases/download/v0.2.6/SwitchCommit-v0.2.6-macOS.dmg" length="4924945" type="application/octet-stream" sparkle:edSignature="cngP13Kh6e+ZshnuJLbatrenaC89OKxpRNgt15jyHMzPwaJT7l26EQoQFfIXU7pO9N6ftu4pUVl0AO/JUNz6AQ=="/>
-        </item>
-        <item>
-            <title>0.2.5</title>
-            <pubDate>Thu, 30 Jul 2026 16:37:09 +0000</pubDate>
-            <sparkle:version>0.2.5</sparkle:version>
-            <sparkle:shortVersionString>0.2.5</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <sparkle:releaseNotesLink>https://github.com/kwiats/switch-commit/releases/download/v0.2.5/SwitchCommit-v0.2.5-macOS.md</sparkle:releaseNotesLink>
-            <enclosure url="https://github.com/kwiats/switch-commit/releases/download/v0.2.5/SwitchCommit-v0.2.5-macOS.dmg" length="1656596" type="application/octet-stream" sparkle:edSignature="XCS1y5/zmDKiPnpWny1IRLLCT1zgrjzeqiaAVikGhyc/9d/dN/gvZKvWhI2L6kfETUoo9UfazQNwcgTdASr7CQ=="/>
         </item>
     </channel>
 </rss>
