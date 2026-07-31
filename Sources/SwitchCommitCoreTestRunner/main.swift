@@ -1395,6 +1395,39 @@ let tests: [(String, () throws -> Void)] = [
         try expect(moved.profileId == "work", "confirmed takeover should change the rule owner")
         try expect(manager.rules.count == 1, "takeover should retain one rule for the path")
     }),
+    ("profile settings manager validates profile id before folder rule takeover", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let personal = try GitProfile(
+            id: "personal",
+            displayName: "Personal",
+            gitUserName: "Personal User",
+            gitUserEmail: "personal@example.com",
+            sshKeyPath: "~/.ssh/id_personal",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let manager = try ProfileSettingsManager(
+            profileStore: ProfileStore(fileURL: temporaryDirectory.appendingPathComponent("profiles.json")),
+            keychainStore: InMemoryKeychainStore(),
+            seedProfiles: [personal]
+        )
+        let rulePath = temporaryDirectory.appendingPathComponent("Projects/Shared").path
+        let originalRule = try manager.addFolderRule(path: rulePath, profileId: "personal")
+
+        try expectThrows(SwitchCommitError.unsafeIdentifier, {
+            _ = try manager.addFolderRule(
+                path: rulePath,
+                profileId: "../evil",
+                moveIfOwned: true
+            )
+        }, "unsafe profile ids must be rejected before takeover")
+        try expectThrows(FolderRuleMutationError.profileNotFound(profileId: "missing"), {
+            _ = try manager.addFolderRule(path: rulePath, profileId: "missing", moveIfOwned: true)
+        }, "missing profiles must be rejected before takeover")
+        try expect(manager.rules == [originalRule], "failed takeover should preserve the original rule")
+    }),
     ("profile settings manager lists and removes folder rules by profile path and id", {
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)

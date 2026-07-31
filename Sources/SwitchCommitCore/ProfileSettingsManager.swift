@@ -60,6 +60,10 @@ public final class ProfileSettingsManager {
         matchMode: FolderRuleMatchMode = .folderTree,
         moveIfOwned: Bool = false
     ) throws -> FolderRule {
+        try SecurityValidation.requireSafeIdentifier(profileId)
+        guard profiles.contains(where: { $0.id == profileId }) else {
+            throw FolderRuleMutationError.profileNotFound(profileId: profileId)
+        }
         let normalizedPath = FolderRuleResolver.normalize(
             path,
             homeDirectory: FileManager.default.homeDirectoryForCurrentUser

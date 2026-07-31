@@ -113,6 +113,7 @@ public enum FolderRuleMatchMode: String, Codable, Equatable, Sendable {
 
 public enum FolderRuleMutationError: Error, Equatable, Sendable {
     case ownedByOtherProfile(profileId: String)
+    case profileNotFound(profileId: String)
 }
 
 public struct FolderRule: Codable, Equatable, Identifiable, Sendable {
