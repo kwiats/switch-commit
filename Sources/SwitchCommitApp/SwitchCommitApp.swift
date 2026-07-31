@@ -30,6 +30,10 @@ final class SwitchCommitApp: NSObject, NSApplicationDelegate {
         app.run()
     }
 
+    func applicationWillTerminate(_ notification: Notification) {
+        frontmostContextMonitor.stop()
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         print("SwitchCommitApp did finish launching")
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)

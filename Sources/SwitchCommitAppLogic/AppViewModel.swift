@@ -429,24 +429,15 @@ public final class AppViewModel: ObservableObject {
     }
 
     public func applyFrontmostPath(_ path: String, source _: FrontmostPathSource) {
-        frontmostPath = path
-        frontmostUnavailableReason = nil
-        refreshContextPresentation()
-        menuContentRevision += 1
+        applyFrontmostState(path: path, unavailableReason: nil)
     }
 
     public func applyFrontmostUnavailable(reason: String) {
-        frontmostPath = nil
-        frontmostUnavailableReason = reason
-        refreshContextPresentation()
-        menuContentRevision += 1
+        applyFrontmostState(path: nil, unavailableReason: reason)
     }
 
     public func applyFrontmostClearedToGlobal() {
-        frontmostPath = nil
-        frontmostUnavailableReason = nil
-        refreshContextPresentation()
-        menuContentRevision += 1
+        applyFrontmostState(path: nil, unavailableReason: nil)
     }
 
     public func addProfile() {
@@ -650,6 +641,16 @@ public final class AppViewModel: ObservableObject {
             rule: nil,
             profile: profileSettingsManager.activeProfile
         )
+    }
+
+    private func applyFrontmostState(path: String?, unavailableReason: String?) {
+        let previousPresentation = contextPresentation
+        frontmostPath = path
+        frontmostUnavailableReason = unavailableReason
+        refreshContextPresentation()
+        if contextPresentation != previousPresentation {
+            menuContentRevision += 1
+        }
     }
 
     private func refreshContextPresentation() {

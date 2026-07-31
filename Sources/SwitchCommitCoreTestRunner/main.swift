@@ -2703,6 +2703,51 @@ let tests: [(String, () throws -> Void)] = [
             try expect(viewModel.menuContentRevision == before + 1, "menu revision bumped")
         }
     }),
+    ("view model apply same frontmost path twice does not bump menu revision twice", {
+        try MainActor.assumeIsolated {
+            let temporaryDirectory = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+            let storeURL = temporaryDirectory.appendingPathComponent("profiles.json")
+            let personal = try GitProfile(
+                id: "personal",
+                displayName: "Personal",
+                gitUserName: "Me",
+                gitUserEmail: "me@example.com",
+                sshKeyPath: "~/.ssh/id_ed25519",
+                hosts: ["github.com"],
+                httpsCredentialRef: nil,
+                isDefault: true
+            )
+            let work = try GitProfile(
+                id: "work",
+                displayName: "Work",
+                gitUserName: "Work",
+                gitUserEmail: "work@example.com",
+                sshKeyPath: "~/.ssh/id_work",
+                hosts: ["github.com"],
+                httpsCredentialRef: nil,
+                isDefault: false
+            )
+            try ProfileStore(fileURL: storeURL).save(ProfileStoreData(
+                profiles: [personal, work],
+                rules: [
+                    try FolderRule(id: "w1", path: "/Users/me/Work", profileId: "work", matchMode: .folderTree, enabled: true)
+                ]
+            ))
+            let viewModel = AppViewModel(
+                profileStore: ProfileStore(fileURL: storeURL),
+                keychainStore: InMemoryKeychainStore(),
+                gitConfigInstaller: nil
+            )
+            let before = viewModel.menuContentRevision
+            viewModel.applyFrontmostPath("/Users/me/Work", source: .terminal)
+            let afterFirst = viewModel.menuContentRevision
+            try expect(afterFirst == before + 1, "first apply bumps revision")
+            viewModel.applyFrontmostPath("/Users/me/Work", source: .finder)
+            try expect(viewModel.menuContentRevision == afterFirst, "second apply keeps revision")
+        }
+    }),
     ("view model apply frontmost path shows folder context without changing active profile", {
         try MainActor.assumeIsolated {
             let temporaryDirectory = FileManager.default.temporaryDirectory
