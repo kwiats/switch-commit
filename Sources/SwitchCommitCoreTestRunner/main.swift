@@ -2631,6 +2631,199 @@ let tests: [(String, () throws -> Void)] = [
             activeProfileId: "work"
         )
         try expect(exact.kind == .folderRule, "singleRepo should match exact path")
+    }),
+    ("view model lists folder rules for selected profile only", {
+        try MainActor.assumeIsolated {
+            let temporaryDirectory = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+            let storeURL = temporaryDirectory.appendingPathComponent("profiles.json")
+            let work = try GitProfile(
+                id: "work",
+                displayName: "Work",
+                gitUserName: "Work",
+                gitUserEmail: "work@example.com",
+                sshKeyPath: "~/.ssh/id_work",
+                hosts: ["github.com"],
+                httpsCredentialRef: nil,
+                isDefault: true
+            )
+            let personal = try GitProfile(
+                id: "personal",
+                displayName: "Personal",
+                gitUserName: "Me",
+                gitUserEmail: "me@example.com",
+                sshKeyPath: "~/.ssh/id_ed25519",
+                hosts: ["github.com"],
+                httpsCredentialRef: nil,
+                isDefault: false
+            )
+            try ProfileStore(fileURL: storeURL).save(ProfileStoreData(
+                profiles: [work, personal],
+                rules: [
+                    try FolderRule(id: "w1", path: "/Users/me/Work", profileId: "work", matchMode: .folderTree, enabled: true),
+                    try FolderRule(id: "p1", path: "/Users/me/Personal", profileId: "personal", matchMode: .folderTree, enabled: true)
+                ]
+            ))
+            let viewModel = AppViewModel(
+                profileStore: ProfileStore(fileURL: storeURL),
+                keychainStore: InMemoryKeychainStore(),
+                gitConfigInstaller: nil
+            )
+            viewModel.selectProfile(id: "work")
+            try expect(viewModel.folderAssignmentsForSelectedProfile.map(\.id) == ["w1"], "only selected profile folders")
+        }
+    }),
+    ("view model add folder rule updates rows and bumps menu revision", {
+        try MainActor.assumeIsolated {
+            let temporaryDirectory = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+            let storeURL = temporaryDirectory.appendingPathComponent("profiles.json")
+            let work = try GitProfile(
+                id: "work",
+                displayName: "Work",
+                gitUserName: "Work",
+                gitUserEmail: "work@example.com",
+                sshKeyPath: "~/.ssh/id_work",
+                hosts: ["github.com"],
+                httpsCredentialRef: nil,
+                isDefault: true
+            )
+            try ProfileStore(fileURL: storeURL).save(ProfileStoreData(profiles: [work], rules: []))
+            let viewModel = AppViewModel(
+                profileStore: ProfileStore(fileURL: storeURL),
+                keychainStore: InMemoryKeychainStore(),
+                gitConfigInstaller: nil
+            )
+            let before = viewModel.menuContentRevision
+            viewModel.setPendingFolderMatchMode(.folderTree)
+            viewModel.addFolderRuleForSelectedProfile(path: "/Users/me/Work", forceMove: false)
+            try expect(viewModel.folderAssignmentsForSelectedProfile.count == 1, "row added")
+            try expect(viewModel.menuContentRevision == before + 1, "menu revision bumped")
+        }
+    }),
+    ("view model apply frontmost path shows folder context without changing active profile", {
+        try MainActor.assumeIsolated {
+            let temporaryDirectory = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+            let storeURL = temporaryDirectory.appendingPathComponent("profiles.json")
+            let personal = try GitProfile(
+                id: "personal",
+                displayName: "Personal",
+                gitUserName: "Me",
+                gitUserEmail: "me@example.com",
+                sshKeyPath: "~/.ssh/id_ed25519",
+                hosts: ["github.com"],
+                httpsCredentialRef: nil,
+                isDefault: true
+            )
+            let work = try GitProfile(
+                id: "work",
+                displayName: "Work",
+                gitUserName: "Work",
+                gitUserEmail: "work@example.com",
+                sshKeyPath: "~/.ssh/id_work",
+                hosts: ["github.com"],
+                httpsCredentialRef: nil,
+                isDefault: false
+            )
+            try ProfileStore(fileURL: storeURL).save(ProfileStoreData(
+                profiles: [personal, work],
+                rules: [
+                    try FolderRule(id: "w1", path: "/Users/me/Work", profileId: "work", matchMode: .folderTree, enabled: true)
+                ]
+            ))
+            let viewModel = AppViewModel(
+                profileStore: ProfileStore(fileURL: storeURL),
+                keychainStore: InMemoryKeychainStore(),
+                gitConfigInstaller: nil
+            )
+            viewModel.applyFrontmostPath("/Users/me/Work", source: .terminal)
+            try expect(viewModel.activeProfileId == "personal", "global active must stay personal")
+            if case let .folder(_, profileDisplayName) = viewModel.contextPresentation.kind {
+                try expect(profileDisplayName == "Work", "context shows work profile")
+            } else {
+                throw TestFailure.expectationFailed("expected folder context")
+            }
+        }
+    }),
+    ("view model apply unavailable context keeps degraded header", {
+        try MainActor.assumeIsolated {
+            let temporaryDirectory = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+            let storeURL = temporaryDirectory.appendingPathComponent("profiles.json")
+            let personal = try GitProfile(
+                id: "personal",
+                displayName: "Personal",
+                gitUserName: "Me",
+                gitUserEmail: "me@example.com",
+                sshKeyPath: "~/.ssh/id_ed25519",
+                hosts: ["github.com"],
+                httpsCredentialRef: nil,
+                isDefault: true
+            )
+            try ProfileStore(fileURL: storeURL).save(ProfileStoreData(profiles: [personal], rules: []))
+            let viewModel = AppViewModel(
+                profileStore: ProfileStore(fileURL: storeURL),
+                keychainStore: InMemoryKeychainStore(),
+                gitConfigInstaller: nil
+            )
+            viewModel.applyFrontmostUnavailable(reason: "Automation denied")
+            if case let .unavailable(reason) = viewModel.contextPresentation.kind {
+                try expect(reason == "Automation denied", "unavailable reason")
+            } else {
+                throw TestFailure.expectationFailed("expected unavailable context")
+            }
+        }
+    }),
+    ("view model clear frontmost path falls back to global", {
+        try MainActor.assumeIsolated {
+            let temporaryDirectory = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+            let storeURL = temporaryDirectory.appendingPathComponent("profiles.json")
+            let personal = try GitProfile(
+                id: "personal",
+                displayName: "Personal",
+                gitUserName: "Me",
+                gitUserEmail: "me@example.com",
+                sshKeyPath: "~/.ssh/id_ed25519",
+                hosts: ["github.com"],
+                httpsCredentialRef: nil,
+                isDefault: true
+            )
+            let work = try GitProfile(
+                id: "work",
+                displayName: "Work",
+                gitUserName: "Work",
+                gitUserEmail: "work@example.com",
+                sshKeyPath: "~/.ssh/id_work",
+                hosts: ["github.com"],
+                httpsCredentialRef: nil,
+                isDefault: false
+            )
+            try ProfileStore(fileURL: storeURL).save(ProfileStoreData(
+                profiles: [personal, work],
+                rules: [
+                    try FolderRule(id: "w1", path: "/Users/me/Work", profileId: "work", matchMode: .folderTree, enabled: true)
+                ]
+            ))
+            let viewModel = AppViewModel(
+                profileStore: ProfileStore(fileURL: storeURL),
+                keychainStore: InMemoryKeychainStore(),
+                gitConfigInstaller: nil
+            )
+            viewModel.applyFrontmostPath("/Users/me/Work", source: .finder)
+            viewModel.applyFrontmostClearedToGlobal()
+            if case let .global(name) = viewModel.contextPresentation.kind {
+                try expect(name == "Personal", "cleared context is global active")
+            } else {
+                throw TestFailure.expectationFailed("expected global context")
+            }
+        }
     })
 ]
 
