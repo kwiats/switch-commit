@@ -1507,6 +1507,122 @@ let tests: [(String, () throws -> Void)] = [
         try expect(installer.appliedRules[0].profileId == "work", "apply should receive work rule")
         try expect(installer.appliedRules[0].path == "/Users/me/Work", "apply should receive normalized path")
     }),
+    ("profile settings manager rejects unknown profile for folder rule", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        let storeURL = temporaryDirectory.appendingPathComponent("profiles.json")
+        let work = try GitProfile(
+            id: "work",
+            displayName: "Work",
+            gitUserName: "Work",
+            gitUserEmail: "work@example.com",
+            sshKeyPath: "~/.ssh/id_work",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let manager = try ProfileSettingsManager(
+            profileStore: ProfileStore(fileURL: storeURL),
+            keychainStore: InMemoryKeychainStore(),
+            seedProfiles: [work]
+        )
+        try expectThrows(FolderRuleError.unknownProfile, {
+            try manager.addFolderRule(
+                path: "/Users/me/Work",
+                profileId: "nonexistent",
+                matchMode: .folderTree,
+                forceMove: false
+            )
+        }, "unknown profile")
+    }),
+    ("profile settings manager rejects removing unknown folder rule", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        let storeURL = temporaryDirectory.appendingPathComponent("profiles.json")
+        let work = try GitProfile(
+            id: "work",
+            displayName: "Work",
+            gitUserName: "Work",
+            gitUserEmail: "work@example.com",
+            sshKeyPath: "~/.ssh/id_work",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let manager = try ProfileSettingsManager(
+            profileStore: ProfileStore(fileURL: storeURL),
+            keychainStore: InMemoryKeychainStore(),
+            seedProfiles: [work]
+        )
+        try expectThrows(FolderRuleError.ruleNotFound, {
+            try manager.removeFolderRule(id: "missing-rule-id")
+        }, "unknown rule id")
+    }),
+    ("profile settings manager upserts same-profile folder rule match mode", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        let storeURL = temporaryDirectory.appendingPathComponent("profiles.json")
+        let work = try GitProfile(
+            id: "work",
+            displayName: "Work",
+            gitUserName: "Work",
+            gitUserEmail: "work@example.com",
+            sshKeyPath: "~/.ssh/id_work",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let manager = try ProfileSettingsManager(
+            profileStore: ProfileStore(fileURL: storeURL),
+            keychainStore: InMemoryKeychainStore(),
+            seedProfiles: [work]
+        )
+        try manager.addFolderRule(path: "/Users/me/Work", profileId: "work", matchMode: .folderTree, forceMove: false)
+        try manager.addFolderRule(path: "/Users/me/Work", profileId: "work", matchMode: .singleRepo, forceMove: false)
+        let rules = manager.rules(forProfileId: "work")
+        try expect(rules.count == 1, "still one rule")
+        try expect(rules[0].matchMode == .singleRepo, "match mode updated")
+    }),
+    ("profile settings manager detects normalized path conflict", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        let storeURL = temporaryDirectory.appendingPathComponent("profiles.json")
+        let work = try GitProfile(
+            id: "work",
+            displayName: "Work",
+            gitUserName: "Work",
+            gitUserEmail: "work@example.com",
+            sshKeyPath: "~/.ssh/id_work",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let personal = try GitProfile(
+            id: "personal",
+            displayName: "Personal",
+            gitUserName: "Me",
+            gitUserEmail: "me@example.com",
+            sshKeyPath: "~/.ssh/id_ed25519",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: false
+        )
+        let manager = try ProfileSettingsManager(
+            profileStore: ProfileStore(fileURL: storeURL),
+            keychainStore: InMemoryKeychainStore(),
+            seedProfiles: [work, personal]
+        )
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let sharedPath = "\(home)/Shared"
+        try manager.addFolderRule(path: "~/Shared", profileId: "work", matchMode: .folderTree, forceMove: false)
+        try expectThrows(FolderRuleError.pathOwnedByOtherProfile(profileId: "work"), {
+            try manager.addFolderRule(path: sharedPath, profileId: "personal", matchMode: .folderTree, forceMove: false)
+        }, "tilde vs absolute conflict")
+    }),
     ("app view model refreshes and imports detected github accounts", {
         try MainActor.assumeIsolated {
             let temporaryDirectory = FileManager.default.temporaryDirectory
