@@ -1313,6 +1313,131 @@ let tests: [(String, () throws -> Void)] = [
         try expect(rootConfig.contains("path = ~/.config/git-account-switcher/global.gitconfig"), "root git config should include managed global config")
         try expect(rootConfig.contains("path = ~/.config/git-account-switcher/rules.gitconfig"), "root git config should include managed rules config")
     }),
+    ("profile settings manager adds persisted folder rule and reapplies config", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let profile = try GitProfile(
+            id: "work",
+            displayName: "Work",
+            gitUserName: "Work User",
+            gitUserEmail: "work@example.com",
+            sshKeyPath: "~/.ssh/id_work",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let storeURL = temporaryDirectory.appendingPathComponent("profiles.json")
+        let manager = try ProfileSettingsManager(
+            profileStore: ProfileStore(fileURL: storeURL),
+            keychainStore: InMemoryKeychainStore(),
+            seedProfiles: [profile],
+            gitConfigInstaller: ManagedGitConfigInstaller(homeDirectory: temporaryDirectory)
+        )
+        let rulePath = temporaryDirectory.appendingPathComponent("Projects/Work").path
+
+        let rule = try manager.addFolderRule(path: rulePath, profileId: "work")
+
+        try expect(rule.path == rulePath, "added rule should retain its normalized absolute path")
+        try expect(manager.rules == [rule], "added rule should be available from manager state")
+        let loaded = try ProfileStore(fileURL: storeURL).load()
+        try expect(loaded.rules == [rule], "added rule should persist")
+        let rulesConfig = try String(
+            contentsOf: temporaryDirectory.appendingPathComponent(".config/git-account-switcher/rules.gitconfig"),
+            encoding: .utf8
+        )
+        try expect(rulesConfig.contains(rulePath), "rules config should contain the added path")
+        try expect(rulesConfig.contains("profiles/work.gitconfig"), "rules config should include the selected profile")
+    }),
+    ("profile settings manager moves folder rule after confirmed takeover", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let personal = try GitProfile(
+            id: "personal",
+            displayName: "Personal",
+            gitUserName: "Personal User",
+            gitUserEmail: "personal@example.com",
+            sshKeyPath: "~/.ssh/id_personal",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let work = try GitProfile(
+            id: "work",
+            displayName: "Work",
+            gitUserName: "Work User",
+            gitUserEmail: "work@example.com",
+            sshKeyPath: "~/.ssh/id_work",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: false
+        )
+        let manager = try ProfileSettingsManager(
+            profileStore: ProfileStore(fileURL: temporaryDirectory.appendingPathComponent("profiles.json")),
+            keychainStore: InMemoryKeychainStore(),
+            seedProfiles: [personal, work]
+        )
+        let rulePath = temporaryDirectory.appendingPathComponent("Projects/Shared").path
+        _ = try manager.addFolderRule(path: rulePath, profileId: "personal")
+
+        try expectThrows(
+            FolderRuleMutationError.ownedByOtherProfile(profileId: "personal"),
+            {
+                _ = try manager.addFolderRule(path: "\(rulePath)/", profileId: "work")
+            },
+            "unconfirmed ownership takeover should fail"
+        )
+        let moved = try manager.addFolderRule(
+            path: "\(rulePath)/",
+            profileId: "work",
+            moveIfOwned: true
+        )
+
+        try expect(moved.profileId == "work", "confirmed takeover should change the rule owner")
+        try expect(manager.rules.count == 1, "takeover should retain one rule for the path")
+    }),
+    ("profile settings manager lists and removes folder rules by profile path and id", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let personal = try GitProfile(
+            id: "personal",
+            displayName: "Personal",
+            gitUserName: "Personal User",
+            gitUserEmail: "personal@example.com",
+            sshKeyPath: "~/.ssh/id_personal",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let work = try GitProfile(
+            id: "work",
+            displayName: "Work",
+            gitUserName: "Work User",
+            gitUserEmail: "work@example.com",
+            sshKeyPath: "~/.ssh/id_work",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: false
+        )
+        let manager = try ProfileSettingsManager(
+            profileStore: ProfileStore(fileURL: temporaryDirectory.appendingPathComponent("profiles.json")),
+            keychainStore: InMemoryKeychainStore(),
+            seedProfiles: [personal, work]
+        )
+        let personalRule = try manager.addFolderRule(
+            path: temporaryDirectory.appendingPathComponent("Personal").path,
+            profileId: "personal"
+        )
+        let workRule = try manager.addFolderRule(
+            path: temporaryDirectory.appendingPathComponent("Work").path,
+            profileId: "work"
+        )
+
+        try expect(manager.rules(forProfileId: "personal") == [personalRule], "rules listing should filter to requested profile")
+        try manager.removeFolderRule(path: "\(workRule.path)/")
+        try expect(manager.rules == [personalRule], "path removal should normalize paths")
+        try manager.removeFolderRule(id: personalRule.id)
+        try expect(manager.rules.isEmpty, "id removal should remove the remaining rule")
+    }),
     ("profile settings manager keeps selection valid when deleting profiles", {
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)

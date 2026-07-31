@@ -111,6 +111,10 @@ public enum FolderRuleMatchMode: String, Codable, Equatable, Sendable {
     case singleRepo
 }
 
+public enum FolderRuleMutationError: Error, Equatable, Sendable {
+    case ownedByOtherProfile(profileId: String)
+}
+
 public struct FolderRule: Codable, Equatable, Identifiable, Sendable {
     public let id: String
     public var path: String

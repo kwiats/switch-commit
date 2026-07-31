@@ -49,6 +49,79 @@ public final class ProfileSettingsManager {
         profiles.first { $0.id == selectedProfileId }
     }
 
+    public func rules(forProfileId profileId: String) -> [FolderRule] {
+        rules.filter { $0.profileId == profileId }
+    }
+
+    @discardableResult
+    public func addFolderRule(
+        path: String,
+        profileId: String,
+        matchMode: FolderRuleMatchMode = .folderTree,
+        moveIfOwned: Bool = false
+    ) throws -> FolderRule {
+        let normalizedPath = FolderRuleResolver.normalize(
+            path,
+            homeDirectory: FileManager.default.homeDirectoryForCurrentUser
+        )
+
+        if let index = rules.firstIndex(where: {
+            FolderRuleResolver.normalize(
+                $0.path,
+                homeDirectory: FileManager.default.homeDirectoryForCurrentUser
+            ) == normalizedPath
+        }) {
+            if rules[index].profileId != profileId && !moveIfOwned {
+                throw FolderRuleMutationError.ownedByOtherProfile(profileId: rules[index].profileId)
+            }
+            rules[index].path = normalizedPath
+            rules[index].profileId = profileId
+            rules[index].matchMode = matchMode
+            try persist()
+            try applyGitConfig()
+            return rules[index]
+        }
+
+        let rule = try FolderRule(
+            id: uniqueRuleId(base: "rule-\(rules.count + 1)"),
+            path: normalizedPath,
+            profileId: profileId,
+            matchMode: matchMode,
+            enabled: true
+        )
+        rules.append(rule)
+        try persist()
+        try applyGitConfig()
+        return rule
+    }
+
+    public func removeFolderRule(id: String) throws {
+        guard let index = rules.firstIndex(where: { $0.id == id }) else {
+            return
+        }
+        rules.remove(at: index)
+        try persist()
+        try applyGitConfig()
+    }
+
+    public func removeFolderRule(path: String) throws {
+        let normalizedPath = FolderRuleResolver.normalize(
+            path,
+            homeDirectory: FileManager.default.homeDirectoryForCurrentUser
+        )
+        guard let index = rules.firstIndex(where: {
+            FolderRuleResolver.normalize(
+                $0.path,
+                homeDirectory: FileManager.default.homeDirectoryForCurrentUser
+            ) == normalizedPath
+        }) else {
+            return
+        }
+        rules.remove(at: index)
+        try persist()
+        try applyGitConfig()
+    }
+
     public func selectProfile(id: String?) {
         guard let id else {
             selectedProfileId = nil
@@ -359,6 +432,17 @@ public final class ProfileSettingsManager {
         var candidate = base
         var suffix = 2
         let ids = Set(profiles.map(\.id))
+        while ids.contains(candidate) {
+            candidate = "\(base)-\(suffix)"
+            suffix += 1
+        }
+        return candidate
+    }
+
+    private func uniqueRuleId(base: String) -> String {
+        var candidate = base
+        var suffix = 2
+        let ids = Set(rules.map(\.id))
         while ids.contains(candidate) {
             candidate = "\(base)-\(suffix)"
             suffix += 1
