@@ -69,6 +69,12 @@ git config --includes --show-origin user.email
 cat ~/.config/git-account-switcher/global.gitconfig
 ```
 
+## Live Folder Context
+
+The menu bar checks the frontmost Finder, Terminal, iTerm2, Cursor, and VS Code window about every two seconds and previews the profile selected by its matching folder rule. This changes only the displayed context: Git continues to select the matching identity through `includeIf`, and the global active profile is never switched by application focus.
+
+Folder discovery is local-only. Finder and terminal applications may require macOS Automation permission; if a supported application's folder cannot be read, the menu bar shows that unavailable state instead of guessing.
+
 ## Host Connection Check
 
 The settings window shows a provider icon and connection status for each account:

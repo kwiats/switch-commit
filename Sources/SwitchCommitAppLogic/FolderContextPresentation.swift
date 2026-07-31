@@ -74,5 +74,6 @@ public struct FolderContextPresentation: Equatable, Sendable {
 }
 
 public protocol FrontmostPathProviding: AnyObject {
+    var frontmostIsSupportedContextApp: Bool { get }
     func currentFrontmostPath() -> (path: String, source: FrontmostPathSource)?
 }

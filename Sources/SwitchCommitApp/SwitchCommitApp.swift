@@ -15,6 +15,10 @@ final class SwitchCommitApp: NSObject, NSApplicationDelegate {
     private let settingsWindowController = SettingsWindowController()
     private var statusItem: NSStatusItem?
     private var cancellables: Set<AnyCancellable> = []
+    private lazy var frontmostContextMonitor = FrontmostContextMonitor(
+        viewModel: viewModel,
+        provider: LiveFrontmostPathProvider()
+    )
 
     static func main() {
         let app = NSApplication.shared
@@ -30,15 +34,20 @@ final class SwitchCommitApp: NSObject, NSApplicationDelegate {
         print("SwitchCommitApp did finish launching")
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.image = NSImage(systemSymbolName: "person.crop.circle.badge.checkmark", accessibilityDescription: "Switch Commit")
-        item.button?.imagePosition = .imageOnly
+        updateStatusItemPresentation(item)
         item.menu = buildMenu()
         statusItem = item
         observeMenuContentChanges()
+        frontmostContextMonitor.start()
         print("SwitchCommitApp status item installed")
     }
 
     private func buildMenu() -> NSMenu {
         let menu = NSMenu()
+        let contextItem = NSMenuItem(title: viewModel.contextPresentation.menuHeader, action: nil, keyEquivalent: "")
+        contextItem.isEnabled = false
+        menu.addItem(contextItem)
+        menu.addItem(.separator())
 
         if let activeProfile = viewModel.activeProfile {
             let activeItem = NSMenuItem(title: "Active: \(activeProfile.displayName)", action: nil, keyEquivalent: "")
@@ -75,9 +84,28 @@ final class SwitchCommitApp: NSObject, NSApplicationDelegate {
         viewModel.$menuContentRevision
             .dropFirst()
             .sink { [weak self] _ in
-                self?.statusItem?.menu = self?.buildMenu()
+                guard let self, let statusItem else {
+                    return
+                }
+                updateStatusItemPresentation(statusItem)
+                statusItem.menu = buildMenu()
             }
             .store(in: &cancellables)
+    }
+
+    private func updateStatusItemPresentation(_ item: NSStatusItem) {
+        let title = truncatedStatusTitle(viewModel.contextPresentation.menuTitle)
+        item.button?.title = title
+        item.button?.toolTip = viewModel.contextPresentation.menuHeader
+        item.button?.imagePosition = title.isEmpty ? .imageOnly : .imageLeading
+    }
+
+    private func truncatedStatusTitle(_ title: String) -> String {
+        let maximumLength = 42
+        guard title.count > maximumLength else {
+            return title
+        }
+        return String(title.prefix(maximumLength - 1)) + "…"
     }
 
     private func statusImage(for status: ProfileGitBindingStatus) -> NSImage? {
