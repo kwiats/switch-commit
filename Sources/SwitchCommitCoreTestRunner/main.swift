@@ -586,6 +586,43 @@ let tests: [(String, () throws -> Void)] = [
         let resolved = try ProfileReferenceResolver.resolve("work", in: profiles)
         try expect(resolved.id == "work", "id lookup should win over display name")
     }),
+    ("folder rule resolver prefers longest enabled prefix for folder trees", {
+        let work = try FolderRule(id: "r1", path: "/Users/demo/Dev", profileId: "work", matchMode: .folderTree, enabled: true)
+        let acme = try FolderRule(id: "r2", path: "/Users/demo/Dev/acme", profileId: "acme", matchMode: .folderTree, enabled: true)
+        let match = FolderRuleResolver.match(
+            path: "/Users/demo/Dev/acme/repo",
+            rules: [work, acme],
+            homeDirectory: URL(fileURLWithPath: "/Users/demo")
+        )
+        try expect(match?.id == "r2", "longest prefix should win")
+    }),
+    ("folder rule resolver singleRepo matches only exact path", {
+        let rule = try FolderRule(id: "r1", path: "/Users/demo/repo", profileId: "work", matchMode: .singleRepo, enabled: true)
+        let hit = FolderRuleResolver.match(path: "/Users/demo/repo", rules: [rule], homeDirectory: URL(fileURLWithPath: "/Users/demo"))
+        let miss = FolderRuleResolver.match(path: "/Users/demo/repo/sub", rules: [rule], homeDirectory: URL(fileURLWithPath: "/Users/demo"))
+        try expect(hit?.id == "r1", "exact path should match")
+        try expect(miss == nil, "descendant should not match singleRepo")
+    }),
+    ("folder rule resolver ignores disabled rules", {
+        let rule = try FolderRule(id: "r1", path: "/Users/demo/Dev", profileId: "work", matchMode: .folderTree, enabled: false)
+        let match = FolderRuleResolver.match(path: "/Users/demo/Dev/x", rules: [rule], homeDirectory: URL(fileURLWithPath: "/Users/demo"))
+        try expect(match == nil, "disabled rules must not match")
+    }),
+    ("folder rule resolver normalize expands tilde and strips trailing slash", {
+        let home = URL(fileURLWithPath: "/Users/demo")
+        try expect(
+            FolderRuleResolver.normalize("~/Dev/", homeDirectory: home) == "/Users/demo/Dev",
+            "tilde and trailing slash should normalize"
+        )
+        try expect(
+            FolderRuleResolver.normalize("/Users/demo/Dev/", homeDirectory: home) == "/Users/demo/Dev",
+            "trailing slash should strip"
+        )
+        try expect(
+            FolderRuleResolver.normalize("/", homeDirectory: home) == "/",
+            "root should stay root"
+        )
+    }),
     ("profile store round trips metadata without secret payloads", {
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
