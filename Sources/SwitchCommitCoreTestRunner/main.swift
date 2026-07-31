@@ -2170,6 +2170,142 @@ let tests: [(String, () throws -> Void)] = [
                 "status should expose dot icon"
             )
         }
+    }),
+    ("folder path normalizer expands home and strips trailing slash", {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let normalized = FolderPathNormalizer.normalize("~/Work/")
+        try expect(normalized == "\(home)/Work", "home and trailing slash should normalize")
+    }),
+    ("folder rule resolver matches folder tree children", {
+        let work = try GitProfile(
+            id: "work",
+            displayName: "Work",
+            gitUserName: "Work",
+            gitUserEmail: "work@example.com",
+            sshKeyPath: "~/.ssh/id_work",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let rule = try FolderRule(
+            id: "work-tree",
+            path: "/Users/me/Work",
+            profileId: "work",
+            matchMode: .folderTree,
+            enabled: true
+        )
+        let resolved = FolderRuleResolver.resolve(
+            path: "/Users/me/Work/acme",
+            rules: [rule],
+            profiles: [work],
+            activeProfileId: "work"
+        )
+        try expect(resolved.kind == .folderRule, "child path should match tree rule")
+        try expect(resolved.rule?.id == "work-tree", "matched rule id")
+        try expect(resolved.profile?.id == "work", "matched profile")
+    }),
+    ("folder rule resolver prefers longer prefix on overlap", {
+        let personal = try GitProfile(
+            id: "personal",
+            displayName: "Personal",
+            gitUserName: "Me",
+            gitUserEmail: "me@example.com",
+            sshKeyPath: "~/.ssh/id_ed25519",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let work = try GitProfile(
+            id: "work",
+            displayName: "Work",
+            gitUserName: "Work",
+            gitUserEmail: "work@example.com",
+            sshKeyPath: "~/.ssh/id_work",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: false
+        )
+        let broad = try FolderRule(
+            id: "dev",
+            path: "/Users/me/Dev",
+            profileId: "personal",
+            matchMode: .folderTree,
+            enabled: true
+        )
+        let nested = try FolderRule(
+            id: "dev-acme",
+            path: "/Users/me/Dev/acme",
+            profileId: "work",
+            matchMode: .folderTree,
+            enabled: true
+        )
+        let resolved = FolderRuleResolver.resolve(
+            path: "/Users/me/Dev/acme/src",
+            rules: [broad, nested],
+            profiles: [personal, work],
+            activeProfileId: "personal"
+        )
+        try expect(resolved.rule?.id == "dev-acme", "longer prefix must win")
+    }),
+    ("folder rule resolver ignores disabled rules and falls back to global", {
+        let personal = try GitProfile(
+            id: "personal",
+            displayName: "Personal",
+            gitUserName: "Me",
+            gitUserEmail: "me@example.com",
+            sshKeyPath: "~/.ssh/id_ed25519",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let rule = try FolderRule(
+            id: "disabled",
+            path: "/Users/me/Work",
+            profileId: "personal",
+            matchMode: .folderTree,
+            enabled: false
+        )
+        let resolved = FolderRuleResolver.resolve(
+            path: "/Users/me/Work",
+            rules: [rule],
+            profiles: [personal],
+            activeProfileId: "personal"
+        )
+        try expect(resolved.kind == .global, "disabled rule must not match")
+        try expect(resolved.profile?.id == "personal", "global active profile")
+    }),
+    ("folder rule resolver single repo does not match children", {
+        let work = try GitProfile(
+            id: "work",
+            displayName: "Work",
+            gitUserName: "Work",
+            gitUserEmail: "work@example.com",
+            sshKeyPath: "~/.ssh/id_work",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let rule = try FolderRule(
+            id: "single",
+            path: "/Users/me/Work/repo",
+            profileId: "work",
+            matchMode: .singleRepo,
+            enabled: true
+        )
+        let child = FolderRuleResolver.resolve(
+            path: "/Users/me/Work/repo/subdir",
+            rules: [rule],
+            profiles: [work],
+            activeProfileId: "work"
+        )
+        try expect(child.kind == .global, "singleRepo should not match nested paths")
+        let exact = FolderRuleResolver.resolve(
+            path: "/Users/me/Work/repo",
+            rules: [rule],
+            profiles: [work],
+            activeProfileId: "work"
+        )
+        try expect(exact.kind == .folderRule, "singleRepo should match exact path")
     })
 ]
 
