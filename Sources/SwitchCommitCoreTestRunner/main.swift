@@ -128,6 +128,55 @@ final class FakeCLIInstaller: CLIInstalling, @unchecked Sendable {
 }
 
 let tests: [(String, () throws -> Void)] = [
+    ("CLI version reads the packaged app version and emits JSON", {
+        let fileManager = FileManager.default
+        let temporaryDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("switch-commit-version-\(UUID().uuidString)")
+        let executable = temporaryDirectory
+            .appendingPathComponent("Switch Commit.app/Contents/MacOS/switch-commit")
+        let infoPlist = executable
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Info.plist")
+
+        try fileManager.createDirectory(
+            at: executable.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0"><dict>
+            <key>CFBundleShortVersionString</key><string>1.2.3</string>
+        </dict></plist>
+        """.write(to: infoPlist, atomically: true, encoding: .utf8)
+        defer { try? fileManager.removeItem(at: temporaryDirectory) }
+
+        try expect(
+            CLIVersion.current(executableURL: executable, environment: [:]) == "1.2.3",
+            "CLI version should read CFBundleShortVersionString from its app bundle"
+        )
+        try expect(
+            CLIOutput.jsonVersion(CLIVersion.current(executableURL: executable, environment: [:]))
+                == "{\"ok\":true,\"version\":\"1.2.3\"}",
+            "CLI version JSON should include a successful version response"
+        )
+    }),
+    ("CLI version uses environment override then development fallback", {
+        let executable = URL(fileURLWithPath: "/tmp/switch-commit")
+
+        try expect(
+            CLIVersion.current(
+                executableURL: executable,
+                environment: ["SWITCH_COMMIT_VERSION": "2.0.0"]
+            ) == "2.0.0",
+            "CLI version should prefer an explicit release environment override"
+        )
+        try expect(
+            CLIVersion.current(executableURL: executable, environment: [:]) == "0.3.0-dev",
+            "CLI version should use the development fallback outside an app bundle"
+        )
+    }),
     ("detected git account exposes stable local-only metadata", {
         let account = DetectedGitAccount(
             id: "github-pawelkwiatkowski",

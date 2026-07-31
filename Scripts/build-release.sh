@@ -121,6 +121,16 @@ trap cleanup_staging EXIT
 
 ditto "${app_bundle}" "${staging_dir}/${app_name}.app"
 cp "${release_dir}/${pkg_name}" "${staging_dir}/${pkg_name}"
+cat > "${staging_dir}/README.txt" <<'README'
+Switch Commit installation
+
+Option 1: Run "Install Switch Commit.pkg"
+Installs Switch Commit in /Applications and installs the switch-commit command-line launcher in /usr/local/bin.
+
+Option 2: Drag "Switch Commit.app" to Applications
+This installs only the app. To install or repair the command-line launcher later, open Switch Commit,
+choose Settings > General, and click Install CLI or Reinstall CLI.
+README
 ln -s /Applications "${staging_dir}/Applications"
 
 rm -f "${release_dir}/${dmg_name}"

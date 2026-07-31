@@ -65,6 +65,11 @@ public struct CLIOutput: Sendable {
         let ok = true
     }
 
+    private struct JSONVersionResponse: Encodable {
+        let ok = true
+        let version: String
+    }
+
     private struct JSONErrorResponse: Encodable {
         let ok = false
         let error: String
@@ -204,6 +209,10 @@ public struct CLIOutput: Sendable {
 
     public static func jsonOK() -> String {
         encode(JSONOKResponse())
+    }
+
+    public static func jsonVersion(_ version: String) -> String {
+        encode(JSONVersionResponse(version: version))
     }
 
     private static func sortedProfiles(_ profiles: [GitProfile]) -> [GitProfile] {

@@ -1,4 +1,5 @@
 import ArgumentParser
+import SwitchCommitCore
 
 #if canImport(Darwin)
 import Darwin
@@ -18,6 +19,7 @@ struct SwitchCommitCommand: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "switch-commit",
         abstract: "Switch Commit CLI manages local Git identities safely.",
+        version: CLIVersion.current(),
         subcommands: [
             ListCommand.self,
             StatusCommand.self,
@@ -75,8 +77,12 @@ struct SwitchCommitCommand: ParsableCommand {
             abstract: "Print the Switch Commit CLI version."
         )
 
+        @OptionGroup
+        var options: CLIOptions
+
         mutating func run() throws {
-            print("switch-commit 0.3.0-dev")
+            let version = CLIVersion.current()
+            print(options.json ? CLIOutput.jsonVersion(version) : "switch-commit \(version)")
         }
     }
 }

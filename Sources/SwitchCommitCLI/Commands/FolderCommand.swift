@@ -126,7 +126,20 @@ struct FolderCommand: ParsableCommand {
         mutating func run() throws {
             do {
                 let session = try CLIRuntime.session()
-                let rule = session.rules.first { $0.id == reference || $0.path == reference }
+                let pathReference = reference.hasPrefix("~") || reference.contains("/")
+                let rule: FolderRule?
+                if pathReference {
+                    let homeDirectory = FileManager.default.homeDirectoryForCurrentUser
+                    let normalizedPath = FolderRuleResolver.normalize(
+                        reference,
+                        homeDirectory: homeDirectory
+                    )
+                    rule = session.rules.first {
+                        FolderRuleResolver.normalize($0.path, homeDirectory: homeDirectory) == normalizedPath
+                    }
+                } else {
+                    rule = session.rules.first { $0.id == reference || $0.path == reference }
+                }
                 guard let rule else {
                     CLIRuntime.terminate(
                         code: .usage,
@@ -151,7 +164,11 @@ struct FolderCommand: ParsableCommand {
                     }
                 }
 
-                try session.removeFolderRule(id: rule.id)
+                if pathReference {
+                    try session.removeFolderRule(path: reference)
+                } else {
+                    try session.removeFolderRule(id: rule.id)
+                }
                 print(options.json ? CLIOutput.jsonOK() : "Removed folder rule: \(rule.path)")
             } catch {
                 CLIRuntime.terminate(for: error, json: options.json)
