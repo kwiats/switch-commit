@@ -53,7 +53,12 @@ public final class ProfileSettingsManager {
     }
 
     public func rules(forProfileId profileId: String) -> [FolderRule] {
-        rules.filter { $0.profileId == profileId }
+        rules
+            .filter { $0.profileId == profileId }
+            .sorted {
+                FolderRuleResolver.normalize($0.path, homeDirectory: homeDirectory)
+                    < FolderRuleResolver.normalize($1.path, homeDirectory: homeDirectory)
+            }
     }
 
     @discardableResult
@@ -102,11 +107,32 @@ public final class ProfileSettingsManager {
         return rule
     }
 
-    public func removeFolderRule(id: String) throws {
-        guard let index = rules.firstIndex(where: { $0.id == id }) else {
-            return
+    /// UI-facing overload that maps mutation errors to `FolderRuleError`.
+    public func addFolderRule(
+        path: String,
+        profileId: String,
+        matchMode: FolderRuleMatchMode,
+        forceMove: Bool
+    ) throws {
+        do {
+            _ = try addFolderRule(
+                path: path,
+                profileId: profileId,
+                matchMode: matchMode,
+                moveIfOwned: forceMove
+            )
+        } catch FolderRuleMutationError.profileNotFound {
+            throw FolderRuleError.unknownProfile
+        } catch FolderRuleMutationError.ownedByOtherProfile(let profileId) {
+            throw FolderRuleError.pathOwnedByOtherProfile(profileId: profileId)
         }
-        rules.remove(at: index)
+    }
+
+    public func removeFolderRule(id: String) throws {
+        guard rules.contains(where: { $0.id == id }) else {
+            throw FolderRuleError.ruleNotFound
+        }
+        rules.removeAll { $0.id == id }
         try persist()
         try applyGitConfig()
     }

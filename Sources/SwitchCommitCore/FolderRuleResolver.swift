@@ -1,5 +1,22 @@
 import Foundation
 
+public struct FolderRuleResolution: Equatable, Sendable {
+    public enum Kind: Equatable, Sendable {
+        case folderRule
+        case global
+    }
+
+    public var kind: Kind
+    public var rule: FolderRule?
+    public var profile: GitProfile?
+
+    public init(kind: Kind, rule: FolderRule?, profile: GitProfile?) {
+        self.kind = kind
+        self.rule = rule
+        self.profile = profile
+    }
+}
+
 public enum FolderRuleResolver: Sendable {
     public static func normalize(_ path: String, homeDirectory: URL) -> String {
         var trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -26,14 +43,7 @@ public enum FolderRuleResolver: Sendable {
         let matches = rules.filter { rule in
             guard rule.enabled else { return false }
             let normalizedRulePath = normalize(rule.path, homeDirectory: homeDirectory)
-
-            switch rule.matchMode {
-            case .folderTree:
-                return normalizedPath == normalizedRulePath
-                    || normalizedPath.hasPrefix(normalizedRulePath + "/")
-            case .singleRepo:
-                return normalizedPath == normalizedRulePath
-            }
+            return Self.matches(path: normalizedPath, rulePath: normalizedRulePath, mode: rule.matchMode)
         }
 
         return matches.max { lhs, rhs in
@@ -43,6 +53,30 @@ public enum FolderRuleResolver: Sendable {
                 return lhsPath.count < rhsPath.count
             }
             return lhsPath > rhsPath
+        }
+    }
+
+    public static func resolve(
+        path: String,
+        rules: [FolderRule],
+        profiles: [GitProfile],
+        activeProfileId: String?
+    ) -> FolderRuleResolution {
+        let homeDirectory = FileManager.default.homeDirectoryForCurrentUser
+        if let rule = match(path: path, rules: rules, homeDirectory: homeDirectory) {
+            let profile = profiles.first { $0.id == rule.profileId }
+            return FolderRuleResolution(kind: .folderRule, rule: rule, profile: profile)
+        }
+        let active = profiles.first { $0.id == activeProfileId }
+        return FolderRuleResolution(kind: .global, rule: nil, profile: active)
+    }
+
+    private static func matches(path: String, rulePath: String, mode: FolderRuleMatchMode) -> Bool {
+        switch mode {
+        case .singleRepo:
+            return path == rulePath
+        case .folderTree:
+            return path == rulePath || path.hasPrefix(rulePath + "/")
         }
     }
 }

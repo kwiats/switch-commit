@@ -1,5 +1,11 @@
 import Foundation
 
+public enum FolderRuleError: Error, Equatable, Sendable {
+    case unknownProfile
+    case pathOwnedByOtherProfile(profileId: String)
+    case ruleNotFound
+}
+
 public enum SwitchCommitError: Error, Equatable {
     case emptyDisplayName
     case emptyGitUserName

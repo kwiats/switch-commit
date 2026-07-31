@@ -66,17 +66,18 @@ Ostatnia aktualizacja: 2026-07-31
 
 **Cel:** Przypisanie konta do folderu (lub drzewa folderów) oraz automatyczne stosowanie właściwej tożsamości Git w tym kontekście.
 
-**Kontekst w repo:**
-- w core istnieją już `FolderRule` oraz generowanie / instalacja managed Git config pod reguły folderów;
-- brakuje dopracowanego UX: łatwe przypisywanie z UI, jasne rozpoznawanie „jesteś w folderze X → profil Y”, ewentualnie powiadomienia przy mismatch (punkt 1).
+**Zrobione:**
+- Settings → Accounts → Folders: przypisywanie folderów do konta (drzewo folderu / pojedyncze repo);
+- generowanie managed Git config z `includeIf "gitdir:..."` i instalacja `rules.gitconfig`;
+- podgląd kontekstu w menu bar (Finder, Terminal, iTerm2, Cursor, VS Code) bez przełączania globalnego profilu;
+- fallback do globalnego profilu, gdy brak uprawnienia Automation lub nie da się odczytać ścieżki.
 
-**Możliwe rozszerzenia:**
-- picker folderu → wybór profilu;
-- podgląd aktywnej reguły dla bieżącego katalogu;
-- automatyczne rozpoznawanie na podstawie ścieżki (includeIf / managed rules);
-- opcjonalnie: sugestia profilu na podstawie lokalnych sygnałów w danym repo.
+**Nadal poza zakresem / do rozważenia:**
+- powiadomienia przy mismatch tożsamości (punkt 1);
+- sugestia profilu na podstawie lokalnych sygnałów w danym repo;
+- CLI do odczytu / zarządzania regułami folderów (punkt 3 — pozostaje osobnym zadaniem, nie w następnym kroku tej funkcji).
 
-**Status:** pomysł / częściowo wspierane w core
+**Status:** zrobione (UI + includeIf + live context); powiadomienia i CLI nadal pomysł
 
 ---
 

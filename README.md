@@ -37,6 +37,9 @@ The app is designed to manage only these paths:
 
 ```text
 ~/.config/git-account-switcher/
+~/.config/git-account-switcher/profiles/
+~/.config/git-account-switcher/global.gitconfig
+~/.config/git-account-switcher/rules.gitconfig
 ~/.ssh/git-account-switcher.conf
 ```
 
@@ -47,6 +50,8 @@ Switching the global profile from the menu writes the selected Git identity to:
 ```text
 ~/.config/git-account-switcher/global.gitconfig
 ```
+
+Folder assignments write per-profile Git config under `~/.config/git-account-switcher/profiles/` and a shared rules file at `~/.config/git-account-switcher/rules.gitconfig`.
 
 The app adds include lines to `~/.gitconfig` when they are missing, after backing up any existing file to `~/.config/git-account-switcher/backups/`.
 
@@ -68,6 +73,57 @@ git config --includes --show-origin user.name
 git config --includes --show-origin user.email
 cat ~/.config/git-account-switcher/global.gitconfig
 ```
+
+## Folder Account Assignments
+
+Open **Settings → Accounts**, select an account, and use the **Folders** section to assign folders to that profile:
+
+- **Folder tree** applies the profile to the selected folder and everything beneath it.
+- **Single repo** applies the profile only to that one repository directory.
+- Click **+** to pick a folder; remove an assignment with the trash button.
+- If a path is already assigned to another account, Switch Commit asks before moving the rule.
+
+Assignments are stored in profile metadata only. Saving settings regenerates managed Git config; no secrets are written to JSON.
+
+## Automatic Git Identity per Folder
+
+When folder rules exist, Switch Commit writes `~/.config/git-account-switcher/rules.gitconfig` with Git `includeIf "gitdir:..."` blocks that point at per-profile config files under `~/.config/git-account-switcher/profiles/`.
+
+Git resolves `user.name`, `user.email`, and SSH profile settings from repository location automatically. You do not need to switch the global profile from the menu bar when working inside an assigned folder.
+
+The app adds managed include lines to `~/.gitconfig` when they are missing:
+
+```text
+~/.config/git-account-switcher/global.gitconfig
+~/.config/git-account-switcher/rules.gitconfig
+```
+
+To confirm Git is using the expected identity inside a repo:
+
+```bash
+git config --includes --show-origin user.name
+git config --includes --show-origin user.email
+```
+
+## Live Folder Context and Menu Bar Preview
+
+The menu bar title and the first menu item preview the profile that would apply in the frontmost supported application:
+
+- Supported apps: Finder, Terminal, iTerm2, Cursor, and VS Code.
+- The app polls about every two seconds.
+- When a folder rule matches, the title shows `Profile · ~/path` and the menu header shows `Context: /path → Profile`.
+- When no rule matches, the preview falls back to the global active profile (`Context: Global → Profile`).
+- When the frontmost app is unsupported, the preview also shows the global active profile.
+
+This is display-only. Live folder context never switches the global active profile; Git identity still comes from `includeIf` rules.
+
+Folder discovery is local-only and never scans the home directory automatically.
+
+## macOS Automation Permission
+
+Reading the current folder from Finder, Terminal, or iTerm2 uses AppleScript. macOS may prompt for **Automation** permission under **System Settings → Privacy & Security → Automation**.
+
+If permission is denied or a supported app's folder cannot be read, the menu bar shows `Context: unavailable (...)` and keeps the global profile name in the title. Git folder rules continue to work through `includeIf` regardless of Automation permission.
 
 ## Host Connection Check
 

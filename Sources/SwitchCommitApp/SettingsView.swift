@@ -14,6 +14,8 @@ struct SettingsView: View {
     @ObservedObject var viewModel: AppViewModel
     @State private var isShowingDeleteConfirmation = false
     @State private var selectedTab: SettingsTab = .accounts
+    @State private var isShowingSSHKeyPathAlert = false
+    @State private var sshKeyPathDraft = ""
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -49,6 +51,16 @@ struct SettingsView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text(DeleteAccountConfirmationContent.message)
+        }
+        .alert("Enter SSH Key Path", isPresented: $isShowingSSHKeyPathAlert) {
+            TextField("SSH key path", text: $sshKeyPathDraft)
+            Button("Cancel", role: .cancel) {}
+            Button("OK") {
+                viewModel.updateSelectedProfileSSHKeyPath(sshKeyPathDraft)
+                viewModel.refreshAvailableSSHKeyPaths()
+            }
+        } message: {
+            Text("Enter a path to a private SSH key.")
         }
     }
 
@@ -175,6 +187,7 @@ struct SettingsView: View {
             if let profile = viewModel.selectedProfile {
                 header(for: profile)
                 accountForm
+                folderAssignmentsSection
                 Spacer()
                 footer
             } else {
@@ -182,6 +195,16 @@ struct SettingsView: View {
             }
         }
         .padding(20)
+        .alert("Move Folder Rule?", isPresented: $viewModel.isShowingFolderRuleMoveConfirmation) {
+            Button("Confirm") {
+                viewModel.confirmPendingFolderRuleMove()
+            }
+            Button("Cancel", role: .cancel) {
+                viewModel.cancelPendingFolderRuleMove()
+            }
+        } message: {
+            Text("Move rule to this account?")
+        }
     }
 
     private var detectionTab: some View {
@@ -475,10 +498,47 @@ struct SettingsView: View {
                 GridRow {
                     Text("SSH key")
                         .foregroundStyle(.secondary)
-                    TextField("SSH key", text: Binding(
-                        get: { viewModel.selectedProfile?.sshKeyPath ?? "" },
-                        set: { viewModel.updateSelectedProfileSSHKeyPath($0) }
-                    ))
+                    Menu {
+                        ForEach(viewModel.availableSSHKeyPaths, id: \.self) { path in
+                            Button {
+                                viewModel.updateSelectedProfileSSHKeyPath(path)
+                            } label: {
+                                HStack {
+                                    Text(path)
+                                    if viewModel.selectedProfile?.sshKeyPath == path {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                        Divider()
+                        Button("Choose File...") {
+                            chooseSSHKeyFile()
+                        }
+                        Button("Enter Path...") {
+                            sshKeyPathDraft = viewModel.selectedProfile?.sshKeyPath ?? ""
+                            isShowingSSHKeyPathAlert = true
+                        }
+                    } label: {
+                        HStack {
+                            Text(sshKeyMenuTitle)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 5)
+                        .background(Color(nsColor: .textBackgroundColor))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 5)
+                                .stroke(Color(nsColor: .separatorColor))
+                        )
+                    }
+                    .menuStyle(.borderlessButton)
+                    .onAppear {
+                        viewModel.refreshAvailableSSHKeyPaths()
+                    }
                 }
             }
             GridRow {
@@ -511,6 +571,86 @@ struct SettingsView: View {
         .textFieldStyle(.roundedBorder)
     }
 
+    private var folderAssignmentsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Folders")
+                    .font(.headline)
+                Spacer()
+                Picker("Match mode", selection: Binding(
+                    get: { viewModel.pendingFolderMatchMode },
+                    set: { viewModel.setPendingFolderMatchMode($0) }
+                )) {
+                    Text("Folder tree").tag(FolderRuleMatchMode.folderTree)
+                    Text("Single repo").tag(FolderRuleMatchMode.singleRepo)
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 220)
+                Button {
+                    let panel = NSOpenPanel()
+                    panel.canChooseFiles = false
+                    panel.canChooseDirectories = true
+                    panel.allowsMultipleSelection = false
+                    if panel.runModal() == .OK, let url = panel.url {
+                        viewModel.addFolderRuleForSelectedProfile(path: url.path, forceMove: false)
+                    }
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .help("Add folder assignment")
+                .buttonStyle(.borderless)
+            }
+
+            if viewModel.folderAssignmentsForSelectedProfile.isEmpty {
+                Text("No folder assignments")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(viewModel.folderAssignmentsForSelectedProfile) { assignment in
+                        folderAssignmentRow(assignment)
+                    }
+                }
+            }
+        }
+    }
+
+    private func folderAssignmentRow(_ assignment: FolderAssignmentRow) -> some View {
+        HStack(spacing: 12) {
+            Text(assignment.path)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer()
+            Text(folderMatchModeBadge(assignment.matchMode))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 2)
+                .background(Color(nsColor: .separatorColor).opacity(0.3))
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+            Button(role: .destructive) {
+                viewModel.removeFolderRule(id: assignment.id)
+            } label: {
+                Image(systemName: "trash")
+            }
+            .buttonStyle(.borderless)
+            .help("Remove folder assignment")
+        }
+        .padding(10)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func folderMatchModeBadge(_ mode: FolderRuleMatchMode) -> String {
+        switch mode {
+        case .folderTree:
+            return "Tree"
+        case .singleRepo:
+            return "Repo"
+        }
+    }
+
     private var footer: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let settingsMessage = viewModel.settingsMessage {
@@ -539,5 +679,33 @@ struct SettingsView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .center)
+    }
+
+    private var sshKeyMenuTitle: String {
+        let path = viewModel.selectedProfile?.sshKeyPath
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return path.isEmpty ? "Choose SSH key" : path
+    }
+
+    private func chooseSSHKeyFile() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".ssh", isDirectory: true)
+        if panel.runModal() == .OK, let url = panel.url {
+            viewModel.updateSelectedProfileSSHKeyPath(displaySSHKeyPath(for: url))
+            viewModel.refreshAvailableSSHKeyPaths()
+        }
+    }
+
+    private func displaySSHKeyPath(for url: URL) -> String {
+        let homePath = FileManager.default.homeDirectoryForCurrentUser.standardizedFileURL.path
+        let path = url.standardizedFileURL.path
+        if path == homePath || path.hasPrefix(homePath + "/") {
+            return "~" + String(path.dropFirst(homePath.count))
+        }
+        return path
     }
 }
