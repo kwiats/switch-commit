@@ -159,6 +159,7 @@ struct SettingsView: View {
             if let profile = viewModel.selectedProfile {
                 header(for: profile)
                 accountForm
+                folderAssignmentsSection
                 Spacer()
                 footer
             } else {
@@ -166,6 +167,16 @@ struct SettingsView: View {
             }
         }
         .padding(20)
+        .alert("Move Folder Rule?", isPresented: $viewModel.isShowingFolderRuleMoveConfirmation) {
+            Button("Confirm") {
+                viewModel.confirmPendingFolderRuleMove()
+            }
+            Button("Cancel", role: .cancel) {
+                viewModel.cancelPendingFolderRuleMove()
+            }
+        } message: {
+            Text("Move rule to this account?")
+        }
     }
 
     private var detectionTab: some View {
@@ -493,6 +504,86 @@ struct SettingsView: View {
             }
         }
         .textFieldStyle(.roundedBorder)
+    }
+
+    private var folderAssignmentsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Folders")
+                    .font(.headline)
+                Spacer()
+                Picker("Match mode", selection: Binding(
+                    get: { viewModel.pendingFolderMatchMode },
+                    set: { viewModel.setPendingFolderMatchMode($0) }
+                )) {
+                    Text("Folder tree").tag(FolderRuleMatchMode.folderTree)
+                    Text("Single repo").tag(FolderRuleMatchMode.singleRepo)
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 220)
+                Button {
+                    let panel = NSOpenPanel()
+                    panel.canChooseFiles = false
+                    panel.canChooseDirectories = true
+                    panel.allowsMultipleSelection = false
+                    if panel.runModal() == .OK, let url = panel.url {
+                        viewModel.addFolderRuleForSelectedProfile(path: url.path, forceMove: false)
+                    }
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .help("Add folder assignment")
+                .buttonStyle(.borderless)
+            }
+
+            if viewModel.folderAssignmentsForSelectedProfile.isEmpty {
+                Text("No folder assignments")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(viewModel.folderAssignmentsForSelectedProfile) { assignment in
+                        folderAssignmentRow(assignment)
+                    }
+                }
+            }
+        }
+    }
+
+    private func folderAssignmentRow(_ assignment: FolderAssignmentRow) -> some View {
+        HStack(spacing: 12) {
+            Text(assignment.path)
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Spacer()
+            Text(folderMatchModeBadge(assignment.matchMode))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 2)
+                .background(Color(nsColor: .separatorColor).opacity(0.3))
+                .clipShape(RoundedRectangle(cornerRadius: 4))
+            Button(role: .destructive) {
+                viewModel.removeFolderRule(id: assignment.id)
+            } label: {
+                Image(systemName: "trash")
+            }
+            .buttonStyle(.borderless)
+            .help("Remove folder assignment")
+        }
+        .padding(10)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func folderMatchModeBadge(_ mode: FolderRuleMatchMode) -> String {
+        switch mode {
+        case .folderTree:
+            return "Tree"
+        case .singleRepo:
+            return "Repo"
+        }
     }
 
     private var footer: some View {
