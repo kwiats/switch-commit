@@ -18,7 +18,13 @@ struct SwitchCommitCommand: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "switch-commit",
         abstract: "Switch Commit CLI manages local Git identities safely.",
-        subcommands: [Version.self]
+        subcommands: [
+            ListCommand.self,
+            StatusCommand.self,
+            ShowCommand.self,
+            UseCommand.self,
+            Version.self
+        ]
     )
 
     @OptionGroup
