@@ -12,6 +12,7 @@ release_dir="${repo_root}/dist/v${version}"
 artifact_path="${release_dir}/${artifact_name}"
 checksum_path="${release_dir}/${checksum_name}"
 notes_source="${repo_root}/docs/release-notes/v${version}.md"
+notes_asset_path="${release_dir}/SwitchCommit-v${version}-macOS.md"
 site_dir="${repo_root}/site"
 tag="v${version}"
 
@@ -65,6 +66,9 @@ fi
 echo "==> Publishing GitHub Release ${tag} to ${github_repo}"
 release_assets=("${artifact_path}" "${checksum_path}")
 if [[ -f "${notes_source}" ]]; then
+    mkdir -p "${release_dir}"
+    cp "${notes_source}" "${notes_asset_path}"
+    release_assets+=("${notes_asset_path}")
     if gh release view "${tag}" --repo "${github_repo}" >/dev/null 2>&1; then
         gh release upload "${tag}" "${release_assets[@]}" --repo "${github_repo}" --clobber
         gh release edit "${tag}" --repo "${github_repo}" --notes-file "${notes_source}"
@@ -92,8 +96,8 @@ cleanup_appcast_staging() {
 trap cleanup_appcast_staging EXIT
 
 cp "${artifact_path}" "${appcast_staging}/${artifact_name}"
-if [[ -f "${notes_source}" ]]; then
-    cp "${notes_source}" "${appcast_staging}/SwitchCommit-v${version}-macOS.md"
+if [[ -f "${notes_asset_path}" ]]; then
+    cp "${notes_asset_path}" "${appcast_staging}/SwitchCommit-v${version}-macOS.md"
 fi
 
 echo "==> Generating Sparkle appcast into site/"
