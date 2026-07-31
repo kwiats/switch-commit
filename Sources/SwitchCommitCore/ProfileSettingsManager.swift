@@ -11,16 +11,19 @@ public final class ProfileSettingsManager {
     private let profileStore: ProfileStore
     private let keychainStore: KeychainStoring
     private let gitConfigInstaller: GitConfigInstalling?
+    private let homeDirectory: URL
 
     public init(
         profileStore: ProfileStore,
         keychainStore: KeychainStoring,
         seedProfiles: [GitProfile],
-        gitConfigInstaller: GitConfigInstalling? = nil
+        gitConfigInstaller: GitConfigInstalling? = nil,
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
     ) throws {
         self.profileStore = profileStore
         self.keychainStore = keychainStore
         self.gitConfigInstaller = gitConfigInstaller
+        self.homeDirectory = homeDirectory.standardizedFileURL
 
         let loaded = try profileStore.load()
         if loaded.profiles.isEmpty {
@@ -66,13 +69,13 @@ public final class ProfileSettingsManager {
         }
         let normalizedPath = FolderRuleResolver.normalize(
             path,
-            homeDirectory: FileManager.default.homeDirectoryForCurrentUser
+            homeDirectory: homeDirectory
         )
 
         if let index = rules.firstIndex(where: {
             FolderRuleResolver.normalize(
                 $0.path,
-                homeDirectory: FileManager.default.homeDirectoryForCurrentUser
+                homeDirectory: homeDirectory
             ) == normalizedPath
         }) {
             if rules[index].profileId != profileId && !moveIfOwned {
@@ -111,12 +114,12 @@ public final class ProfileSettingsManager {
     public func removeFolderRule(path: String) throws {
         let normalizedPath = FolderRuleResolver.normalize(
             path,
-            homeDirectory: FileManager.default.homeDirectoryForCurrentUser
+            homeDirectory: homeDirectory
         )
         guard let index = rules.firstIndex(where: {
             FolderRuleResolver.normalize(
                 $0.path,
-                homeDirectory: FileManager.default.homeDirectoryForCurrentUser
+                homeDirectory: homeDirectory
             ) == normalizedPath
         }) else {
             return

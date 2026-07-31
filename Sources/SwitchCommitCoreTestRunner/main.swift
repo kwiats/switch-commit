@@ -1402,6 +1402,70 @@ let tests: [(String, () throws -> Void)] = [
         try expect(status.contextProfile?.id == "work", "matching rule should select its profile")
         try expect(status.contextPath == projectPath, "status should report the inspected path")
     }),
+    ("switch commit session uses its home directory for folder rules", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let work = try GitProfile(
+            id: "work",
+            displayName: "Work",
+            gitUserName: "Work User",
+            gitUserEmail: "work@example.com",
+            sshKeyPath: "~/.ssh/id_work",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let store = ProfileStore(fileURL: temporaryDirectory.appendingPathComponent("profiles.json"))
+        try store.save(ProfileStoreData(profiles: [work]))
+        let session = try SwitchCommitSession(
+            profileStore: store,
+            keychainStore: InMemoryKeychainStore(),
+            gitConfigInstaller: nil,
+            homeDirectory: temporaryDirectory
+        )
+
+        let rule = try session.addFolderRule(path: "~/Dev", profileReference: "work")
+        try expect(
+            rule.path == temporaryDirectory.appendingPathComponent("Dev").path,
+            "folder rules should expand tilde relative to the session home directory"
+        )
+        try session.removeFolderRule(path: "~/Dev")
+        try expect(session.rules.isEmpty, "folder rule removal should use the session home directory")
+    }),
+    ("switch commit session doctor uses local git configuration only", {
+        final class RecordingRunner: CommandRunning {
+            var invocations: [(command: String, arguments: [String])] = []
+
+            func run(_ command: String, arguments: [String], workingDirectory: URL?) throws -> CommandResult {
+                invocations.append((command, arguments))
+                return CommandResult(exitCode: 0, standardOutput: "file\tvalue", standardError: "")
+            }
+        }
+
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let runner = RecordingRunner()
+        let session = try SwitchCommitSession(
+            profileStore: ProfileStore(fileURL: temporaryDirectory.appendingPathComponent("profiles.json")),
+            keychainStore: InMemoryKeychainStore(),
+            gitConfigInstaller: nil,
+            homeDirectory: temporaryDirectory,
+            commandRunner: runner
+        )
+
+        _ = session.doctor(path: temporaryDirectory.path)
+
+        try expect(runner.invocations.count == 3, "doctor should inspect three git configuration values")
+        try expect(runner.invocations.allSatisfy { $0.command == "git" }, "doctor should only invoke git")
+        try expect(
+            runner.invocations.allSatisfy { $0.arguments.first == "config" },
+            "doctor should only invoke git config commands"
+        )
+        try expect(
+            !runner.invocations.contains { $0.command == "ssh" },
+            "doctor must not invoke SSH diagnostics"
+        )
+    }),
     ("switch commit session resolves show and delete references", {
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)

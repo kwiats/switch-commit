@@ -37,13 +37,15 @@ public final class SwitchCommitSession {
         homeDirectory: URL,
         commandRunner: CommandRunning = ProcessCommandRunner()
     ) throws {
+        let standardizedHomeDirectory = homeDirectory.standardizedFileURL
         self.manager = try ProfileSettingsManager(
             profileStore: profileStore,
             keychainStore: keychainStore,
             seedProfiles: [],
-            gitConfigInstaller: gitConfigInstaller
+            gitConfigInstaller: gitConfigInstaller,
+            homeDirectory: standardizedHomeDirectory
         )
-        self.homeDirectory = homeDirectory.standardizedFileURL
+        self.homeDirectory = standardizedHomeDirectory
         self.diagnosticsService = DiagnosticsService(commandRunner: commandRunner)
     }
 
