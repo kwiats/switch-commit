@@ -2721,6 +2721,25 @@ let tests: [(String, () throws -> Void)] = [
                 "status should expose dot icon"
             )
         }
+    }),
+    ("CLI output formats doctor reports for people and JSON clients", {
+        let report = DiagnosticsReport(
+            values: [
+                "user.email": "file:.gitconfig\tme@example.com",
+                "user.name": "file:.gitconfig\tMe"
+            ],
+            warnings: ["core.sshCommand: unset"]
+        )
+
+        let human = CLIOutput.humanDoctor(report: report, style: .init(colorEnabled: false))
+        try expect(human.contains("user.email: file:.gitconfig\tme@example.com"), "human doctor output should include values")
+        try expect(human.contains("Warnings:"), "human doctor output should label warnings")
+        try expect(human.contains("core.sshCommand: unset"), "human doctor output should include warnings")
+
+        let json = CLIOutput.jsonDoctor(report: report)
+        try expect(json.contains("\"ok\":true"), "JSON doctor output should report success")
+        try expect(json.contains("\"values\""), "JSON doctor output should include values")
+        try expect(json.contains("\"warnings\""), "JSON doctor output should include warnings")
     })
 ]
 

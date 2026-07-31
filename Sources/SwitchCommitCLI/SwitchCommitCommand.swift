@@ -26,6 +26,8 @@ struct SwitchCommitCommand: ParsableCommand {
             AddCommand.self,
             EditCommand.self,
             DeleteCommand.self,
+            FolderCommand.self,
+            DoctorCommand.self,
             Version.self
         ]
     )

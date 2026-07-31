@@ -55,6 +55,12 @@ public struct CLIOutput: Sendable {
         let status: StatusPayload
     }
 
+    private struct JSONDoctorResponse: Encodable {
+        let ok = true
+        let values: [String: String]
+        let warnings: [String]
+    }
+
     private struct JSONOKResponse: Encodable {
         let ok = true
     }
@@ -133,6 +139,19 @@ public struct CLIOutput: Sendable {
         .joined(separator: "\n")
     }
 
+    public static func humanDoctor(report: DiagnosticsReport, style: Style) -> String {
+        var lines = report.values
+            .sorted { $0.key.localizedCaseInsensitiveCompare($1.key) == .orderedAscending }
+            .map { "\($0.key): \($0.value)" }
+        if report.warnings.isEmpty {
+            lines.append(styled("Warnings: none", code: ANSI.dim, style: style))
+        } else {
+            lines.append("Warnings:")
+            lines.append(contentsOf: report.warnings.sorted().map { "- \($0)" })
+        }
+        return lines.joined(separator: "\n")
+    }
+
     public static func humanRules(
         rules: [FolderRule],
         profiles: [GitProfile],
@@ -173,6 +192,10 @@ public struct CLIOutput: Sendable {
             contextSource: snapshot.contextSource.rawValue
         )
         return encode(JSONStatusResponse(status: payload))
+    }
+
+    public static func jsonDoctor(report: DiagnosticsReport) -> String {
+        encode(JSONDoctorResponse(values: report.values, warnings: report.warnings.sorted()))
     }
 
     public static func jsonError(_ message: String) -> String {
