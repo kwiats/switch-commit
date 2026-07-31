@@ -645,7 +645,7 @@
         <span class="mark-dot" aria-hidden="true"></span>
         Switch Commit
       </a>
-      <div class="nav-meta">release channel · <em>v0.2.6</em></div>
+      <div class="nav-meta">release channel · <em>v0.3.0</em></div>
     </header>
 
     <section class="hero">
@@ -669,11 +669,11 @@
         </p>
 
         <div class="cta-row">
-          <a class="btn btn-primary" href="https://github.com/kwiats/switch-commit/releases/download/v0.2.6/SwitchCommit-v0.2.6-macOS.dmg">
+          <a class="btn btn-primary" href="https://github.com/kwiats/switch-commit/releases/download/v0.3.0/SwitchCommit-v0.3.0-macOS.dmg">
             <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path d="M8 2v8m0 0L5 7.5M8 10l3-2.5M3 13h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            Pobierz v0.2.6
+            Pobierz v0.3.0
           </a>
           <a class="btn btn-ghost" href="#install">
             Instalacja
@@ -758,6 +758,12 @@
         <h2>Changelog</h2>
         <div class="changelog-entries">
           <article class="changelog-entry">
+            <div class="changelog-meta">// v0.3.0 · 31 Jul 2026</div>
+            <div class="changelog-body"><h1>Switch Commit v0.3.0</h1>
+<h2>Highlights</h2>
+<ul><li>Moves the public Sparkle feed, GitHub Releases, and download landing page into <code>kwiats/switch-commit</code> (<code>https://kwiats.github.io/switch-commit/appcast.xml</code>). This build is the bridge for 0.2.x installs still checking the legacy channel.</li><li>Adds the <code>switch-commit</code> CLI for listing, switching, creating, editing, and deleting Git profiles, managing folder rules, and running local diagnostics without opening the menu bar UI.</li><li>Ships interactive profile selection when <code>switch-commit</code> runs with no arguments on a TTY; non-TTY invocations print usage instead of waiting for input.</li><li>Supports machine-readable <code>--json</code> output and <code>--no-color</code> (respects <code>NO_COLOR</code>) for scripting and automation.</li><li>Bundles the CLI inside <code>Switch Commit.app</code> and installs it to <code>/usr/local/bin/switch-commit</code> via <code>Install Switch Commit.pkg</code> in the release DMG.</li><li>Adds Settings → General → Install CLI / Reinstall CLI to create or repair the <code>/usr/local/bin/switch-commit</code> symlink after drag-only app installs.</li><li>Keeps the CLI on the same safety contract as the app: no telemetry, no background network calls, no secret payloads in JSON or stdout, and local-only <code>doctor</code> checks.</li></ul></div>
+          </article>
+          <article class="changelog-entry">
             <div class="changelog-meta">// v0.2.6 · 31 Jul 2026</div>
             <div class="changelog-body"><h1>Switch Commit v0.2.6</h1>
 <h2>Highlights</h2>
@@ -778,7 +784,7 @@
       <span>© 2026 Switch Commit</span>
       <div class="links">
         <a href="appcast.xml">appcast.xml</a>
-        <a href="https://github.com/kwiats/switch-commit/releases/download/v0.2.6/SwitchCommit-v0.2.6-macOS.dmg.sha256">SHA-256</a>
+        <a href="https://github.com/kwiats/switch-commit/releases/download/v0.3.0/SwitchCommit-v0.3.0-macOS.dmg.sha256">SHA-256</a>
         <a href="https://github.com/kwiats/switch-commit">GitHub</a>
       </div>
     </footer>
