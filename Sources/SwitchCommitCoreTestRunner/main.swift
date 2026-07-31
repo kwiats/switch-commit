@@ -2626,8 +2626,20 @@ let tests: [(String, () throws -> Void)] = [
         try expect(source.contains("checksum_name=\"${artifact_name}.sha256\""), "publisher should upload the checksum")
         try expect(source.contains("docs/release-notes/v${version}.md"), "publisher should attach matching release notes when present")
         try expect(
+            source.contains("notes_asset_path=\"${release_dir}/SwitchCommit-v${version}-macOS.md\""),
+            "publisher should stage release notes under the Sparkle releaseNotesLink asset name"
+        )
+        try expect(
+            source.contains("release_assets+=(\"${notes_asset_path}\")"),
+            "publisher must upload the release notes markdown asset so Sparkle can download it"
+        )
+        try expect(
             source.contains("--download-url-prefix \"${github_download_prefix}/\""),
             "publisher should put GitHub Releases download URLs inside appcast enclosures"
+        )
+        try expect(
+            source.contains("--release-notes-url-prefix \"${github_download_prefix}/\""),
+            "publisher should point Sparkle releaseNotesLink at the uploaded notes asset URL"
         )
         try expect(source.contains("site/version.txt") || source.contains("version.txt"), "publisher should write the latest version marker for Pages")
         try expect(source.contains("site_dir"), "publisher should write channel metadata under site/")
