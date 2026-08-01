@@ -125,6 +125,11 @@ final class FakeCLIInstaller: CLIInstalling, @unchecked Sendable {
             throw errorToThrow
         }
     }
+
+    func installOrRepair(allowAdministrator: Bool) throws {
+        _ = allowAdministrator
+        try installOrRepair()
+    }
 }
 
 let tests: [(String, () throws -> Void)] = [
@@ -161,6 +166,71 @@ let tests: [(String, () throws -> Void)] = [
                 == "{\"ok\":true,\"version\":\"1.2.3\"}",
             "CLI version JSON should include a successful version response"
         )
+    }),
+    ("version comparator orders dotted releases", {
+        try expect(VersionComparator.isNewer("0.3.5", than: "0.3.4"), "0.3.5 should be newer than 0.3.4")
+        try expect(!VersionComparator.isNewer("0.3.4", than: "0.3.5"), "0.3.4 should not be newer than 0.3.5")
+        try expect(VersionComparator.isNewer("0.3.5", than: "0.3.5-dev"), "release should beat -dev suffix")
+        try expect(VersionComparator.compare("1.0.0", "1.0.0") == .orderedSame, "equal versions compare equal")
+    }),
+    ("insteadOf remediator removes unmanaged HTTPS rewrite opposing SSH profile", {
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent("insteadOf-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: home) }
+        let root = home.appendingPathComponent(".gitconfig")
+        try """
+        [url "https://github.com/"]
+            insteadOf = git@github.com:
+        [include]
+            path = ~/.config/git-account-switcher/global.gitconfig
+
+        """.write(to: root, atomically: true, encoding: .utf8)
+
+        let profile = try GitProfile(
+            id: "private",
+            displayName: "Private",
+            gitUserName: "me",
+            gitUserEmail: "me@example.com",
+            accessMethod: .ssh,
+            sshKeyPath: "~/.ssh/id",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let remediator = InsteadOfConflictRemediator(homeDirectory: home)
+        let entries = remediator.parseRootGitConfig(try String(contentsOf: root, encoding: .utf8), originPath: root.path)
+        let result = try remediator.remediate(
+            entries: entries,
+            activeProfile: profile,
+            rootGitConfigURL: root,
+            backup: { _ in }
+        )
+        try expect(result.removed.count == 1, "should remove one conflicting insteadOf")
+        let updated = try String(contentsOf: root, encoding: .utf8)
+        try expect(!updated.lowercased().contains("insteadof = git@github.com:"), "conflicting insteadOf should be gone")
+        try expect(updated.contains("git-account-switcher/global.gitconfig"), "include lines must remain")
+    }),
+    ("release channel appcast parser reads newest enclosure", {
+        let xml = """
+        <?xml version="1.0" standalone="yes"?>
+        <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+          <channel>
+            <item>
+              <title>0.3.5</title>
+              <sparkle:shortVersionString>0.3.5</sparkle:shortVersionString>
+              <enclosure url="https://example.com/SwitchCommit-v0.3.5-macOS.dmg" length="1" type="application/octet-stream"/>
+            </item>
+            <item>
+              <title>0.3.4</title>
+              <sparkle:shortVersionString>0.3.4</sparkle:shortVersionString>
+              <enclosure url="https://example.com/SwitchCommit-v0.3.4-macOS.dmg" length="1" type="application/octet-stream"/>
+            </item>
+          </channel>
+        </rss>
+        """
+        let parsed = try ReleaseChannelUpdateService.parseAppcast(xml)
+        try expect(parsed.version == "0.3.5", "parser should use first/newest item version")
+        try expect(parsed.enclosureURL.absoluteString.contains("0.3.5"), "parser should use newest enclosure")
     }),
     ("CLI version uses environment override then development fallback", {
         let executable = URL(fileURLWithPath: "/tmp/switch-commit")
@@ -878,7 +948,7 @@ let tests: [(String, () throws -> Void)] = [
             name = Work User
             email = work@example.com
         [core]
-            sshCommand = ssh -i '~/.ssh/id_work' -F ~/.ssh/config
+            sshCommand = ssh -i '~/.ssh/id_work'
         [url "git@github.com:"]
             insteadOf = https://github.com/
             insteadOf = ssh://git@github.com/
@@ -888,7 +958,8 @@ let tests: [(String, () throws -> Void)] = [
         try expect(profileConfig.contains("[user]"), "profile config should contain user section")
         try expect(profileConfig.contains("name = Work User"), "profile config should contain name")
         try expect(profileConfig.contains("email = work@example.com"), "profile config should contain email")
-        try expect(profileConfig.contains("sshCommand = ssh -i '~/.ssh/id_work' -F ~/.ssh/config"), "profile config should contain ssh command")
+        try expect(profileConfig.contains("sshCommand = ssh -i '~/.ssh/id_work'"), "profile config should contain ssh command")
+        try expect(!profileConfig.contains("-F ~/.ssh/config"), "sshCommand must not require ~/.ssh/config via -F")
         try expect(profileConfig.contains("[url \"git@github.com:\"]"), "ssh profile should rewrite URLs to SSH")
         try expect(profileConfig.contains("insteadOf = https://github.com/"), "ssh profile should rewrite HTTPS remotes")
         try expect(profileConfig.contains("insteadOf = ssh://git@github.com/"), "ssh profile should normalize ssh URL form")
@@ -918,7 +989,8 @@ let tests: [(String, () throws -> Void)] = [
             isDefault: false
         )
         let config = GitConfigGenerator().profileConfig(for: profile)
-        try expect(config.contains("sshCommand = ssh -i '/Users/me/My Keys/id_work'\\''; env' -F ~/.ssh/config"), "ssh key path should be shell quoted")
+        try expect(config.contains("sshCommand = ssh -i '/Users/me/My Keys/id_work'\\''; env'"), "ssh key path should be shell quoted")
+        try expect(!config.contains("-F ~/.ssh/config"), "quoted sshCommand must not require -F ~/.ssh/config")
     }),
     ("git config generator omits ssh command for https profiles", {
         let profile = try GitProfile(
