@@ -6,11 +6,12 @@ Switch Commit is a local-only macOS menu bar app for switching Git identities gl
 
 The project is intentionally privacy-preserving:
 
-- no telemetry, analytics, crash upload, or background network calls;
-- no automatic background update checks (Sparkle runs only after an explicit `Check for Updates`);
+- no telemetry, analytics, crash upload, or other background product network calls;
+- menu bar Sparkle update checks run only after an explicit `Check for Updates`;
+- the `switch-commit` CLI may contact the public Switch Commit release channel (Sparkle appcast) on a 12-hour cache TTL to surface security/update notices, and always on `switch-commit update`;
 - no secrets in JSON profile files or generated Git config;
 - manual diagnostics only for SSH/Git checks;
-- existing `~/.gitconfig` and `~/.ssh/config` must never be replaced wholesale.
+- existing `~/.gitconfig` and `~/.ssh/config` must never be replaced wholesale (surgical insteadOf conflict removal in `~/.gitconfig` is allowed after backup).
 
 ## Repository Layout
 
@@ -59,9 +60,10 @@ Preserve these constraints in every change:
 - `SafeFileWriter` must reject writes outside configured managed roots.
 - Managed Git files live under `~/.config/git-account-switcher/`.
 - Managed SSH include content lives at `~/.ssh/git-account-switcher.conf`.
-- User-owned `~/.gitconfig` and `~/.ssh/config` may only receive explicit include lines after backup logic is in place.
+- User-owned `~/.gitconfig` and `~/.ssh/config` must never be replaced wholesale; `~/.gitconfig` may receive explicit include lines and surgical removal of conflicting unmanaged `insteadOf` keys after backup.
 - Diagnostics may run local commands through injected runners, but must not make network checks automatically.
-- Update checks may contact only the public Switch Commit release channel, and only after the user clicks `Check for Updates`.
+- Menu bar Sparkle update checks contact only the public Switch Commit release channel after explicit `Check for Updates`.
+- CLI update notices/`switch-commit update` may contact only that same public release channel (appcast + release assets), with opportunistic checks cached for 12 hours.
 
 ## Implementation Guidance
 

@@ -65,6 +65,11 @@ public struct CLIOutput: Sendable {
         let ok = true
     }
 
+    private struct JSONMessageResponse: Encodable {
+        let ok = true
+        let message: String
+    }
+
     private struct JSONVersionResponse: Encodable {
         let ok = true
         let version: String
@@ -209,6 +214,10 @@ public struct CLIOutput: Sendable {
 
     public static func jsonOK() -> String {
         encode(JSONOKResponse())
+    }
+
+    public static func jsonMessage(_ message: String) -> String {
+        encode(JSONMessageResponse(message: message))
     }
 
     public static func jsonVersion(_ version: String) -> String {

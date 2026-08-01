@@ -54,6 +54,28 @@ public struct ManagedGitConfigInstaller: GitConfigInstalling {
         )
 
         try ensureRootGitConfigIncludesManagedFiles()
+        try remediateConflictingInsteadOf(activeProfile: activeProfile)
+    }
+
+    private func remediateConflictingInsteadOf(activeProfile: GitProfile?) throws {
+        let remediator = InsteadOfConflictRemediator(
+            homeDirectory: homeDirectory,
+            fileManager: fileManager
+        )
+        let rootGitConfigURL = homeDirectory.appendingPathComponent(".gitconfig")
+        let content: String
+        if fileManager.fileExists(atPath: rootGitConfigURL.path) {
+            content = try String(contentsOf: rootGitConfigURL, encoding: .utf8)
+        } else {
+            content = ""
+        }
+        let entries = remediator.parseRootGitConfig(content, originPath: rootGitConfigURL.path)
+        _ = try remediator.remediate(
+            entries: entries,
+            activeProfile: activeProfile,
+            rootGitConfigURL: rootGitConfigURL,
+            backup: backupExistingRootGitConfig(at:)
+        )
     }
 
     private func ensureRootGitConfigIncludesManagedFiles() throws {

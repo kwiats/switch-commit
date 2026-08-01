@@ -175,7 +175,8 @@ public final class SwitchCommitSession {
 
     public func doctor(path: String?) -> DiagnosticsReport {
         let inspectedPath = path ?? FileManager.default.currentDirectoryPath
-        var report = diagnosticsService.inspectGitIdentity(at: URL(fileURLWithPath: inspectedPath))
+        let folderURL = URL(fileURLWithPath: inspectedPath)
+        var report = diagnosticsService.inspectGitIdentity(at: folderURL)
         let snapshot = status(path: inspectedPath)
         if snapshot.contextSource == .folder,
            let active = snapshot.activeProfile,
@@ -184,6 +185,17 @@ public final class SwitchCommitSession {
             report.warnings.append(
                 "Folder profile '\(context.displayName)' uses \(context.accessMethod.rawValue) while global profile '\(active.displayName)' uses \(active.accessMethod.rawValue); url.insteadOf access method rules from both profiles may conflict."
             )
+        }
+
+        if let active = snapshot.contextProfile ?? snapshot.activeProfile {
+            let remediator = InsteadOfConflictRemediator(homeDirectory: homeDirectory)
+            let entries = diagnosticsService.inspectInsteadOfEntries(at: folderURL)
+            let conflicts = remediator.conflictingEntries(entries: entries, activeProfile: active)
+            for conflict in conflicts {
+                report.warnings.append(
+                    "Conflicting insteadOf in \(conflict.originPath): \(conflict.key) = \(conflict.value) (opposes \(active.accessMethod.rawValue) profile '\(active.displayName)'). Re-run any switch-commit command to auto-remove entries in ~/.gitconfig, or delete this key manually."
+                )
+            }
         }
         return report
     }

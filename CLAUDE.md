@@ -39,12 +39,13 @@ Unless the user explicitly asks for a different flow, handle implementation task
 
 ## Non-Negotiable Safety Rules
 
-- Do not add telemetry, analytics, background network calls, crash upload, or automatic background update behavior.
-- Sparkle update checks are allowed only after an explicit user `Check for Updates`, and only against the public release channel.
+- Do not add telemetry, analytics, crash upload, or unrelated background product network calls.
+- Menu bar Sparkle update checks are allowed only after an explicit user `Check for Updates`, and only against the public release channel.
+- The `switch-commit` CLI may query that same public appcast on a 12-hour TTL to warn about newer releases, and must contact the channel on `switch-commit update`.
 - Do not persist tokens, passwords, or credential payloads in JSON, Git config, logs, previews, or generated files.
 - Keep secret storage behind Keychain abstractions.
-- Do not replace the user's full `~/.gitconfig` or `~/.ssh/config`.
-- Writes must stay constrained to app-managed paths and should keep backup behavior intact.
+- Do not replace the user's full `~/.gitconfig` or `~/.ssh/config`; surgical insteadOf conflict removal in `~/.gitconfig` after backup is allowed.
+- Writes must stay constrained to app-managed paths (plus the surgical gitconfig remediation above) and should keep backup behavior intact.
 - SSH and GitHub checks must be explicit user-triggered diagnostics, not automatic probes.
 
 ## Current Architecture Notes

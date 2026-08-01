@@ -82,7 +82,13 @@ public protocol LaunchAtLoginManaging: Sendable {
 
 public protocol CLIInstalling: Sendable {
     var statusMessage: String { get }
-    func installOrRepair() throws
+    func installOrRepair(allowAdministrator: Bool) throws
+}
+
+extension CLIInstalling {
+    public func installOrRepair() throws {
+        try installOrRepair(allowAdministrator: true)
+    }
 }
 
 public struct UnavailableCLIInstaller: CLIInstalling {
@@ -92,7 +98,7 @@ public struct UnavailableCLIInstaller: CLIInstalling {
         "CLI installation is unavailable in this runtime."
     }
 
-    public func installOrRepair() throws {}
+    public func installOrRepair(allowAdministrator: Bool) throws {}
 }
 
 public struct UnavailableLaunchAtLoginManager: LaunchAtLoginManaging {
@@ -283,6 +289,13 @@ public final class AppViewModel: ObservableObject {
         self.cliInstallStatusText = cliInstaller.statusMessage
         self.isCLIInstalled = Self.isInstalledCLIStatus(cliInstaller.statusMessage)
         self.availableSSHKeyPaths = sshKeyDiscovery.discoverKeyPaths()
+
+        // After app updates, repair a stale/broken CLI stub without prompting for admin.
+        if Self.shouldAutoRepairCLI(cliInstaller.statusMessage) {
+            try? cliInstaller.installOrRepair(allowAdministrator: false)
+            self.cliInstallStatusText = cliInstaller.statusMessage
+            self.isCLIInstalled = Self.isInstalledCLIStatus(cliInstaller.statusMessage)
+        }
     }
 
     public var activeProfile: GitProfile? {
@@ -762,6 +775,12 @@ public final class AppViewModel: ObservableObject {
 
     private static func isInstalledCLIStatus(_ statusMessage: String) -> Bool {
         statusMessage.hasPrefix("CLI is installed at ")
+    }
+
+    private static func shouldAutoRepairCLI(_ statusMessage: String) -> Bool {
+        statusMessage.contains("is broken")
+            || statusMessage.contains("is not a symbolic link")
+            || statusMessage.contains("points to a different")
     }
 
     private func isDuplicateDetectedAccount(_ account: DetectedGitAccount) -> Bool {
