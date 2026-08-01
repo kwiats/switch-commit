@@ -4,11 +4,31 @@ import SwitchCommitCore
 import SwiftUI
 
 struct SettingsView: View {
-    private enum SettingsTab: Hashable {
+    private enum SettingsTab: String, Hashable, CaseIterable, Identifiable {
         case general
         case accounts
         case detection
         case updates
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .general: return "General"
+            case .accounts: return "Accounts"
+            case .detection: return "Detection"
+            case .updates: return "Updates"
+            }
+        }
+
+        var systemImage: String {
+            switch self {
+            case .general: return "gearshape"
+            case .accounts: return "person.2"
+            case .detection: return "magnifyingglass"
+            case .updates: return "arrow.down.circle"
+            }
+        }
     }
 
     @ObservedObject var viewModel: AppViewModel
@@ -18,31 +38,29 @@ struct SettingsView: View {
     @State private var sshKeyPathDraft = ""
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            generalTab
-                .tabItem {
-                    Label("General", systemImage: "gearshape")
+        NavigationSplitView {
+            List(SettingsTab.allCases, selection: $selectedTab) { tab in
+                Label(tab.title, systemImage: tab.systemImage)
+                    .tag(tab)
+            }
+            .navigationSplitViewColumnWidth(min: 160, ideal: 180, max: 220)
+        } detail: {
+            Group {
+                switch selectedTab {
+                case .general:
+                    generalTab
+                case .accounts:
+                    accountsTab
+                case .detection:
+                    detectionTab
+                case .updates:
+                    updatesTab
                 }
-                .tag(SettingsTab.general)
-
-            accountsTab
-                .tabItem {
-                    Label("Accounts", systemImage: "person.2")
-                }
-                .tag(SettingsTab.accounts)
-
-            detectionTab
-                .tabItem {
-                    Label("Detection", systemImage: "magnifyingglass")
-                }
-                .tag(SettingsTab.detection)
-
-            updatesTab
-                .tabItem {
-                    Label("Updates", systemImage: "arrow.down.circle")
-                }
-                .tag(SettingsTab.updates)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
+        .navigationSplitViewStyle(.balanced)
+        .frame(minWidth: 640, minHeight: 420)
         .frame(width: 760, height: 500)
         .alert(DeleteAccountConfirmationContent.title, isPresented: $isShowingDeleteConfirmation) {
             Button(DeleteAccountConfirmationContent.confirmButtonTitle, role: .destructive) {
