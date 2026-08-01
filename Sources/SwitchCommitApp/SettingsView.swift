@@ -40,8 +40,9 @@ struct SettingsView: View {
     var body: some View {
         NavigationSplitView {
             List(SettingsTab.allCases, selection: $selectedTab) { tab in
-                Label(tab.title, systemImage: tab.systemImage)
-                    .tag(tab)
+                NavigationLink(value: tab) {
+                    Label(tab.title, systemImage: tab.systemImage)
+                }
             }
             .navigationSplitViewColumnWidth(min: 160, ideal: 180, max: 220)
         } detail: {
@@ -60,8 +61,7 @@ struct SettingsView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
         .navigationSplitViewStyle(.balanced)
-        .frame(minWidth: 640, minHeight: 420)
-        .frame(width: 760, height: 500)
+        .frame(minWidth: 720, minHeight: 440)
         .alert(DeleteAccountConfirmationContent.title, isPresented: $isShowingDeleteConfirmation) {
             Button(DeleteAccountConfirmationContent.confirmButtonTitle, role: .destructive) {
                 viewModel.deleteSelectedProfile()
