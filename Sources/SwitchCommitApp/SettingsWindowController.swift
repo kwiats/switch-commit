@@ -7,12 +7,16 @@ final class SettingsWindowController {
     private var window: NSWindow?
 
     func show(viewModel: AppViewModel) {
-        if window == nil {
-            let hostingController = NSHostingController(rootView: SettingsView(viewModel: viewModel))
+        let hostingController = NSHostingController(rootView: SettingsView(viewModel: viewModel))
+
+        if let window {
+            window.contentViewController = hostingController
+        } else {
             let createdWindow = NSWindow(contentViewController: hostingController)
             createdWindow.title = "Switch Commit Settings"
             createdWindow.styleMask = [.titled, .closable, .miniaturizable, .resizable]
-            createdWindow.minSize = NSSize(width: 640, height: 420)
+            createdWindow.minSize = NSSize(width: 720, height: 440)
+            createdWindow.setContentSize(NSSize(width: 900, height: 560))
             createdWindow.isReleasedWhenClosed = false
             createdWindow.center()
             window = createdWindow
