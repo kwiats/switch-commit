@@ -190,11 +190,17 @@ public final class SwitchCommitSession {
 
     public static func live() throws -> SwitchCommitSession {
         let homeDirectory = FileManager.default.homeDirectoryForCurrentUser
-        return try SwitchCommitSession(
+        let session = try SwitchCommitSession(
             profileStore: ProfileStore(fileURL: SwitchCommitPaths.defaultProfilesURL(homeDirectory: homeDirectory)),
             keychainStore: SystemKeychainStore(),
             gitConfigInstaller: ManagedGitConfigInstaller(homeDirectory: homeDirectory),
             homeDirectory: homeDirectory
         )
+        try session.reapplyManagedGitConfig()
+        return session
+    }
+
+    public func reapplyManagedGitConfig() throws {
+        try manager.reapplyManagedGitConfig()
     }
 }

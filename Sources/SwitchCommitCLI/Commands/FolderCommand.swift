@@ -44,17 +44,17 @@ struct FolderCommand: ParsableCommand {
     struct Add: ParsableCommand {
         static let configuration = CommandConfiguration(
             commandName: "add",
-            abstract: "Assign a profile to a folder."
+            abstract: "Assign a profile to a folder. Defaults to the current directory, active profile, and single-repo when .git exists."
         )
 
-        @Argument(help: "Folder path to assign.")
-        var path: String
+        @Argument(help: "Folder path to assign. Defaults to the current directory.")
+        var path: String?
 
-        @Option(name: .long, help: "Profile ID or display name.")
-        var profile: String
+        @Option(name: .long, help: "Profile ID or display name. Defaults to the active global profile.")
+        var profile: String?
 
-        @Option(name: .long, help: "Rule mode: folder-tree or single-repo.")
-        var mode = "folder-tree"
+        @Option(name: .long, help: "Rule mode: folder-tree or single-repo. Defaults from .git presence.")
+        var mode: String?
 
         @Flag(name: .long, help: "Take over an existing rule without prompting.")
         var yes = false
@@ -63,32 +63,53 @@ struct FolderCommand: ParsableCommand {
         var options: CLIOptions
 
         mutating func run() throws {
-            guard let matchMode = folderRuleMatchMode else {
-                CLIRuntime.terminate(
-                    code: .usage,
-                    message: "Mode must be 'folder-tree' or 'single-repo'.",
-                    json: options.json
-                )
-            }
-
             do {
-                let rule = try CLIRuntime.session().addFolderRule(
-                    path: path,
-                    profileReference: profile,
-                    matchMode: matchMode,
+                let session = try CLIRuntime.session()
+                let defaults: FolderAssignmentDefaults
+                do {
+                    defaults = try FolderAssignmentDefaults.resolve(
+                        path: path,
+                        profileReference: profile,
+                        mode: mode,
+                        activeProfile: session.activeProfile,
+                        currentDirectory: FileManager.default.currentDirectoryPath,
+                        homeDirectory: FileManager.default.homeDirectoryForCurrentUser
+                    )
+                } catch let error as FolderAssignmentDefaults.ResolutionError {
+                    switch error {
+                    case .missingActiveProfile:
+                        CLIRuntime.terminate(
+                            code: .usage,
+                            message: "No active profile. Pass --profile or run 'switch-commit use <profile>' first.",
+                            json: options.json
+                        )
+                    case .invalidMode(let value):
+                        CLIRuntime.terminate(
+                            code: .usage,
+                            message: "Mode must be 'folder-tree' or 'single-repo' (got '\(value)').",
+                            json: options.json
+                        )
+                    }
+                }
+
+                let rule = try session.addFolderRule(
+                    path: defaults.path,
+                    profileReference: defaults.profileReference,
+                    matchMode: defaults.matchMode,
                     moveIfOwned: yes
                 )
                 if options.json {
                     print(CLIOutput.jsonRules(rules: [rule]))
                 } else {
-                    print("Added folder rule: \(rule.path) → \(rule.profileId)")
+                    let modeLabel = defaults.matchMode == .singleRepo ? "single-repo" : "folder-tree"
+                    print("Added folder rule: \(rule.path) → \(rule.profileId) (\(modeLabel))")
                 }
             } catch let error as FolderRuleMutationError {
                 switch error {
                 case .ownedByOtherProfile(let profileId):
                     CLIRuntime.terminate(
                         code: .usage,
-                        message: "Folder '\(path)' is owned by profile '\(profileId)'. Pass --yes to take it over.",
+                        message: "Folder is owned by profile '\(profileId)'. Pass --yes to take it over.",
                         json: options.json
                     )
                 case .profileNotFound:
@@ -96,14 +117,6 @@ struct FolderCommand: ParsableCommand {
                 }
             } catch {
                 CLIRuntime.terminate(for: error, json: options.json)
-            }
-        }
-
-        private var folderRuleMatchMode: FolderRuleMatchMode? {
-            switch mode {
-            case "folder-tree": .folderTree
-            case "single-repo": .singleRepo
-            default: nil
             }
         }
     }
@@ -126,7 +139,7 @@ struct FolderCommand: ParsableCommand {
         mutating func run() throws {
             do {
                 let session = try CLIRuntime.session()
-                let pathReference = reference.hasPrefix("~") || reference.contains("/")
+                let pathReference = reference.hasPrefix("~") || reference.contains("/") || reference == "."
                 let rule: FolderRule?
                 if pathReference {
                     let homeDirectory = FileManager.default.homeDirectoryForCurrentUser

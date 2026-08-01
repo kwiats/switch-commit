@@ -1790,6 +1790,92 @@ let tests: [(String, () throws -> Void)] = [
             "doctor should warn when folder SSH conflicts with global HTTPS"
         )
     }),
+    ("folder assignment defaults use cwd active profile and infer single-repo from .git", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let repoPath = temporaryDirectory.appendingPathComponent("repo", isDirectory: true)
+        try FileManager.default.createDirectory(at: repoPath.appendingPathComponent(".git"), withIntermediateDirectories: true)
+        let plainPath = temporaryDirectory.appendingPathComponent("plain", isDirectory: true)
+        try FileManager.default.createDirectory(at: plainPath, withIntermediateDirectories: true)
+        let active = try GitProfile(
+            id: "personal",
+            displayName: "Personal",
+            gitUserName: "Personal",
+            gitUserEmail: "me@example.com",
+            sshKeyPath: "~/.ssh/id_ed25519",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+
+        let inferredRepo = try FolderAssignmentDefaults.resolve(
+            path: nil,
+            profileReference: nil,
+            mode: nil,
+            activeProfile: active,
+            currentDirectory: repoPath.path,
+            homeDirectory: temporaryDirectory
+        )
+        try expect(inferredRepo.path == repoPath.path, "path should default to cwd")
+        try expect(inferredRepo.profileReference == "personal", "profile should default to active id")
+        try expect(inferredRepo.matchMode == .singleRepo, "git repo should default to single-repo")
+
+        let inferredPlain = try FolderAssignmentDefaults.resolve(
+            path: plainPath.path,
+            profileReference: nil,
+            mode: nil,
+            activeProfile: active,
+            currentDirectory: temporaryDirectory.path,
+            homeDirectory: temporaryDirectory
+        )
+        try expect(inferredPlain.matchMode == .folderTree, "non-repo folder should default to folder-tree")
+
+        try expectThrows(FolderAssignmentDefaults.ResolutionError.missingActiveProfile, {
+            _ = try FolderAssignmentDefaults.resolve(
+                path: nil,
+                profileReference: nil,
+                mode: nil,
+                activeProfile: nil,
+                currentDirectory: repoPath.path,
+                homeDirectory: temporaryDirectory
+            )
+        }, "missing active profile should fail when --profile is omitted")
+    }),
+    ("profile settings manager reapply writes insteadOf into managed profile config", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        let profile = try GitProfile(
+            id: "personal",
+            displayName: "Personal",
+            gitUserName: "kwiats",
+            gitUserEmail: "me@example.com",
+            sshKeyPath: "~/.ssh/id_ed25519_kwiats",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let storeURL = temporaryDirectory.appendingPathComponent("profiles.json")
+        try ProfileStore(fileURL: storeURL).save(ProfileStoreData(profiles: [profile]))
+        let manager = try ProfileSettingsManager(
+            profileStore: ProfileStore(fileURL: storeURL),
+            keychainStore: InMemoryKeychainStore(),
+            seedProfiles: [],
+            gitConfigInstaller: ManagedGitConfigInstaller(homeDirectory: temporaryDirectory),
+            homeDirectory: temporaryDirectory
+        )
+
+        try manager.reapplyManagedGitConfig()
+
+        let profileConfig = try String(
+            contentsOf: temporaryDirectory.appendingPathComponent(
+                ".config/git-account-switcher/profiles/personal.gitconfig"
+            ),
+            encoding: .utf8
+        )
+        try expect(profileConfig.contains("[url \"git@github.com:\"]"), "reapply should emit SSH insteadOf")
+        try expect(profileConfig.contains("insteadOf = https://github.com/"), "reapply should rewrite HTTPS remotes")
+    }),
     ("switch commit session resolves show and delete references", {
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)

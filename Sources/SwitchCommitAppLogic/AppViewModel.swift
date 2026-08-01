@@ -241,6 +241,8 @@ public final class AppViewModel: ObservableObject {
 
         if let activeProfileId, let profile = manager.profiles.first(where: { $0.id == activeProfileId }) {
             try? manager.switchGlobalProfile(to: profile)
+        } else {
+            try? manager.reapplyManagedGitConfig()
         }
 
         self.profileSettingsManager = manager
