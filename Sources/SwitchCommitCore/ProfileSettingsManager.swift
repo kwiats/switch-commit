@@ -44,6 +44,13 @@ public final class ProfileSettingsManager {
         }
     }
 
+    /// Rewrites managed Git config from the current in-memory profiles and rules.
+    /// Call on app/CLI startup after updates so generator changes (for example `url.insteadOf`)
+    /// are applied without a manual profile switch.
+    public func reapplyManagedGitConfig() throws {
+        try applyGitConfig()
+    }
+
     public var activeProfile: GitProfile? {
         profiles.first { $0.id == activeProfileId }
     }

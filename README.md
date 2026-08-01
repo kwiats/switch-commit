@@ -113,6 +113,8 @@ switch-commit doctor
 
 `doctor` warns when a folder profile’s access method differs from the global profile, because both sets of `url.insteadOf` rules can be active at once.
 
+Starting the app or any `switch-commit` CLI command rewrites managed Git config from the current profiles and folder rules, so generator updates (such as new `url.insteadOf` output) apply without a manual profile switch.
+
 ## Live Folder Context and Menu Bar Preview
 
 The menu bar title and the first menu item preview the profile that would apply in the frontmost supported application:
@@ -303,15 +305,23 @@ switch-commit folder list --json
 
 #### `folder add`
 
-Assign a profile to a folder. Git `includeIf` rules are regenerated so identity applies automatically inside that path.
+Assign a profile to a folder. Git `includeIf` rules are regenerated so identity and transport (`url.insteadOf`) apply automatically inside that path.
+
+Path, profile, and mode are optional:
+
+- path defaults to the current directory;
+- profile defaults to the active global profile (`switch-commit use …`);
+- mode defaults to `single-repo` when the path contains `.git`, otherwise `folder-tree`.
 
 | Flag | Description |
 |---|---|
-| `--profile <name\|id>` | Profile to assign (required) |
-| `--mode <folder-tree\|single-repo>` | Match mode (default: `folder-tree`) |
+| `--profile <name\|id>` | Profile to assign (default: active profile) |
+| `--mode <folder-tree\|single-repo>` | Match mode (default: inferred from `.git`) |
 | `--yes` | Take over an existing rule without prompting |
 
 ```bash
+switch-commit folder add
+switch-commit folder add .
 switch-commit folder add ~/Dev/acme --profile work
 switch-commit folder add ~/Dev/acme --profile work --mode folder-tree
 switch-commit folder add ~/Dev/solo-repo --profile personal --mode single-repo
