@@ -2105,6 +2105,119 @@ let tests: [(String, () throws -> Void)] = [
         try expect(json.contains("\"ok\":true"), "ok envelope required")
         try expect(!json.contains("\"error\""), "ok envelope should not include error")
     }),
+    ("profile settings manager reloadFromStore picks up externally added folder rule", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        let storeURL = temporaryDirectory.appendingPathComponent("profiles.json")
+        let work = try GitProfile(
+            id: "work",
+            displayName: "Work",
+            gitUserName: "Work User",
+            gitUserEmail: "work@example.com",
+            sshKeyPath: "~/.ssh/id_work",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        try ProfileStore(fileURL: storeURL).save(ProfileStoreData(profiles: [work], rules: []))
+        let manager = try ProfileSettingsManager(
+            profileStore: ProfileStore(fileURL: storeURL),
+            keychainStore: InMemoryKeychainStore(),
+            seedProfiles: [work]
+        )
+        try expect(manager.rules.isEmpty, "manager starts with no rules")
+
+        let externalRule = try FolderRule(
+            id: "rule-external",
+            path: "/Users/me/Work",
+            profileId: "work",
+            matchMode: .folderTree,
+            enabled: true
+        )
+        try ProfileStore(fileURL: storeURL).save(ProfileStoreData(profiles: [work], rules: [externalRule]))
+        try manager.reloadFromStore()
+
+        try expect(manager.rules == [externalRule], "reload should load externally added rule")
+        try expect(
+            manager.rules(forProfileId: "work").map(\.id) == ["rule-external"],
+            "reloaded rule should appear for profile"
+        )
+    }),
+    ("profile settings manager reloadFromStore drops externally removed folder rule", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        let storeURL = temporaryDirectory.appendingPathComponent("profiles.json")
+        let work = try GitProfile(
+            id: "work",
+            displayName: "Work",
+            gitUserName: "Work User",
+            gitUserEmail: "work@example.com",
+            sshKeyPath: "~/.ssh/id_work",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        let rule = try FolderRule(
+            id: "rule-1",
+            path: "/Users/me/Work",
+            profileId: "work",
+            matchMode: .folderTree,
+            enabled: true
+        )
+        try ProfileStore(fileURL: storeURL).save(ProfileStoreData(profiles: [work], rules: [rule]))
+        let manager = try ProfileSettingsManager(
+            profileStore: ProfileStore(fileURL: storeURL),
+            keychainStore: InMemoryKeychainStore(),
+            seedProfiles: [work]
+        )
+        try expect(manager.rules.count == 1, "manager starts with one rule")
+
+        try ProfileStore(fileURL: storeURL).save(ProfileStoreData(profiles: [work], rules: []))
+        try manager.reloadFromStore()
+
+        try expect(manager.rules.isEmpty, "reload should drop externally removed rule")
+    }),
+    ("profile settings manager write reloads disk rules before persisting", {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        let storeURL = temporaryDirectory.appendingPathComponent("profiles.json")
+        let work = try GitProfile(
+            id: "work",
+            displayName: "Work",
+            gitUserName: "Work User",
+            gitUserEmail: "work@example.com",
+            sshKeyPath: "~/.ssh/id_work",
+            hosts: ["github.com"],
+            httpsCredentialRef: nil,
+            isDefault: true
+        )
+        try ProfileStore(fileURL: storeURL).save(ProfileStoreData(profiles: [work], rules: []))
+        let manager = try ProfileSettingsManager(
+            profileStore: ProfileStore(fileURL: storeURL),
+            keychainStore: InMemoryKeychainStore(),
+            seedProfiles: [work]
+        )
+        try expect(manager.rules.isEmpty, "stale manager has empty rules")
+
+        let externalRule = try FolderRule(
+            id: "cli-rule",
+            path: "/Users/me/CLI",
+            profileId: "work",
+            matchMode: .folderTree,
+            enabled: true
+        )
+        try ProfileStore(fileURL: storeURL).save(ProfileStoreData(profiles: [work], rules: [externalRule]))
+
+        try manager.updateSelectedProfileDisplayName("Work Renamed")
+
+        let loaded = try ProfileStore(fileURL: storeURL).load()
+        try expect(loaded.rules == [externalRule], "unrelated write must not wipe CLI rules")
+        try expect(loaded.profiles.first?.displayName == "Work Renamed", "local rename still persists")
+        try expect(manager.rules == [externalRule], "manager memory should include reloaded rule")
+    }),
     ("profile settings manager adds persisted folder rule and reapplies config", {
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -3780,6 +3893,88 @@ let tests: [(String, () throws -> Void)] = [
             activeProfileId: "work"
         )
         try expect(exact.kind == .folderRule, "singleRepo should match exact path")
+    }),
+    ("view model reloadFromProfileStore surfaces externally added folder rule", {
+        try MainActor.assumeIsolated {
+            let temporaryDirectory = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+            let storeURL = temporaryDirectory.appendingPathComponent("profiles.json")
+            let work = try GitProfile(
+                id: "work",
+                displayName: "Work",
+                gitUserName: "Work",
+                gitUserEmail: "work@example.com",
+                sshKeyPath: "~/.ssh/id_work",
+                hosts: ["github.com"],
+                httpsCredentialRef: nil,
+                isDefault: true
+            )
+            try ProfileStore(fileURL: storeURL).save(ProfileStoreData(profiles: [work], rules: []))
+            let viewModel = AppViewModel(
+                profileStore: ProfileStore(fileURL: storeURL),
+                keychainStore: InMemoryKeychainStore(),
+                gitConfigInstaller: nil
+            )
+            viewModel.selectProfile(id: "work")
+            try expect(viewModel.folderAssignmentsForSelectedProfile.isEmpty, "starts empty")
+
+            let rule = try FolderRule(
+                id: "cli-1",
+                path: "/Users/me/Work",
+                profileId: "work",
+                matchMode: .folderTree,
+                enabled: true
+            )
+            try ProfileStore(fileURL: storeURL).save(ProfileStoreData(profiles: [work], rules: [rule]))
+            viewModel.reloadFromProfileStore()
+
+            try expect(
+                viewModel.folderAssignmentsForSelectedProfile.map(\.id) == ["cli-1"],
+                "Settings rows should show CLI-added rule after reload"
+            )
+        }
+    }),
+    ("view model reloadFromProfileStore drops externally removed folder rule", {
+        try MainActor.assumeIsolated {
+            let temporaryDirectory = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            try FileManager.default.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+            let storeURL = temporaryDirectory.appendingPathComponent("profiles.json")
+            let work = try GitProfile(
+                id: "work",
+                displayName: "Work",
+                gitUserName: "Work",
+                gitUserEmail: "work@example.com",
+                sshKeyPath: "~/.ssh/id_work",
+                hosts: ["github.com"],
+                httpsCredentialRef: nil,
+                isDefault: true
+            )
+            let rule = try FolderRule(
+                id: "cli-1",
+                path: "/Users/me/Work",
+                profileId: "work",
+                matchMode: .folderTree,
+                enabled: true
+            )
+            try ProfileStore(fileURL: storeURL).save(ProfileStoreData(profiles: [work], rules: [rule]))
+            let viewModel = AppViewModel(
+                profileStore: ProfileStore(fileURL: storeURL),
+                keychainStore: InMemoryKeychainStore(),
+                gitConfigInstaller: nil
+            )
+            viewModel.selectProfile(id: "work")
+            try expect(viewModel.folderAssignmentsForSelectedProfile.count == 1, "starts with rule")
+
+            try ProfileStore(fileURL: storeURL).save(ProfileStoreData(profiles: [work], rules: []))
+            viewModel.reloadFromProfileStore()
+
+            try expect(
+                viewModel.folderAssignmentsForSelectedProfile.isEmpty,
+                "Settings rows should clear after CLI remove"
+            )
+        }
     }),
     ("view model lists folder rules for selected profile only", {
         try MainActor.assumeIsolated {

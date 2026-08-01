@@ -68,6 +68,33 @@ public final class ProfileSettingsManager {
             }
     }
 
+    /// Reloads profiles, folder rules, and connection state from disk.
+    /// Does not re-seed empty stores; callers keep prior selection when IDs still exist.
+    /// If the store file is missing while in-memory profiles exist, throws instead of wiping memory.
+    public func reloadFromStore() throws {
+        let storeFileExists = FileManager.default.fileExists(atPath: profileStore.fileURL.path)
+        let loaded = try profileStore.load()
+        if !storeFileExists && !profiles.isEmpty {
+            throw SwitchCommitError.profileStoreUnavailable
+        }
+
+        profiles = loaded.profiles
+        rules = loaded.rules
+        profileConnectionStates = loaded.profileConnectionStates
+
+        if let activeProfileId, profiles.contains(where: { $0.id == activeProfileId }) == false {
+            self.activeProfileId = Self.initialProfileId(from: profiles)
+        } else if activeProfileId == nil {
+            activeProfileId = Self.initialProfileId(from: profiles)
+        }
+
+        if let selectedProfileId, profiles.contains(where: { $0.id == selectedProfileId }) == false {
+            self.selectedProfileId = activeProfileId
+        } else if selectedProfileId == nil {
+            selectedProfileId = activeProfileId
+        }
+    }
+
     @discardableResult
     public func addFolderRule(
         path: String,
@@ -75,6 +102,7 @@ public final class ProfileSettingsManager {
         matchMode: FolderRuleMatchMode = .folderTree,
         moveIfOwned: Bool = false
     ) throws -> FolderRule {
+        try reloadFromStore()
         try SecurityValidation.requireSafeIdentifier(profileId)
         guard profiles.contains(where: { $0.id == profileId }) else {
             throw FolderRuleMutationError.profileNotFound(profileId: profileId)
@@ -136,6 +164,7 @@ public final class ProfileSettingsManager {
     }
 
     public func removeFolderRule(id: String) throws {
+        try reloadFromStore()
         guard rules.contains(where: { $0.id == id }) else {
             throw FolderRuleError.ruleNotFound
         }
@@ -145,6 +174,7 @@ public final class ProfileSettingsManager {
     }
 
     public func removeFolderRule(path: String) throws {
+        try reloadFromStore()
         let normalizedPath = FolderRuleResolver.normalize(
             path,
             homeDirectory: homeDirectory
@@ -173,6 +203,7 @@ public final class ProfileSettingsManager {
     }
 
     public func switchGlobalProfile(to profile: GitProfile) throws {
+        try reloadFromStore()
         guard profiles.contains(where: { $0.id == profile.id }) else {
             return
         }
@@ -185,6 +216,7 @@ public final class ProfileSettingsManager {
     }
 
     public func addProfile() throws {
+        try reloadFromStore()
         let number = profiles.count + 1
         let profile = try GitProfile(
             id: uniqueProfileId(base: "account-\(number)"),
@@ -208,6 +240,7 @@ public final class ProfileSettingsManager {
     }
 
     public func addProfile(_ profile: GitProfile) throws {
+        try reloadFromStore()
         var updatedProfiles = profiles
         var addedProfile = profile
         let updatedActiveProfileId = activeProfileId ?? addedProfile.id
@@ -229,6 +262,7 @@ public final class ProfileSettingsManager {
     }
 
     public func updateProfile(_ profile: GitProfile) throws {
+        try reloadFromStore()
         guard let index = profiles.firstIndex(where: { $0.id == profile.id }) else {
             return
         }
@@ -247,6 +281,7 @@ public final class ProfileSettingsManager {
     }
 
     public func deleteProfile(id: String) throws {
+        try reloadFromStore()
         guard profiles.contains(where: { $0.id == id }) else {
             return
         }
@@ -272,6 +307,7 @@ public final class ProfileSettingsManager {
     }
 
     public func importDetectedAccount(_ account: DetectedGitAccount) throws {
+        try reloadFromStore()
         let displayName = account.username ?? account.gitUserName ?? "GitHub Account"
         let gitUserName = account.gitUserName ?? account.username ?? ""
         let gitUserEmail = account.gitUserEmail ?? ""
@@ -357,6 +393,7 @@ public final class ProfileSettingsManager {
     }
 
     public func updateSelectedProfileAccessMethod(_ accessMethod: GitAccessMethod) throws {
+        try reloadFromStore()
         guard let index = selectedProfileIndex else {
             return
         }
@@ -418,6 +455,7 @@ public final class ProfileSettingsManager {
     }
 
     public func resetAccessForSelectedProfile() throws {
+        try reloadFromStore()
         guard let index = selectedProfileIndex else {
             return
         }
@@ -445,6 +483,7 @@ public final class ProfileSettingsManager {
     }
 
     public func saveConnectionState(_ state: PersistedProfileConnectionState, forProfileId profileId: String) throws {
+        try reloadFromStore()
         guard profiles.contains(where: { $0.id == profileId }) else {
             return
         }
@@ -453,6 +492,7 @@ public final class ProfileSettingsManager {
     }
 
     public func clearConnectionState(forProfileId profileId: String) throws {
+        try reloadFromStore()
         guard profileConnectionStates.removeValue(forKey: profileId) != nil else {
             return
         }
@@ -467,6 +507,7 @@ public final class ProfileSettingsManager {
     }
 
     private func updateSelectedProfile(_ mutate: (inout GitProfile) -> Void) throws {
+        try reloadFromStore()
         guard let index = selectedProfileIndex else {
             return
         }

@@ -349,7 +349,19 @@ public final class AppViewModel: ObservableObject {
     }
 
     public func requestSettingsPresentation() {
+        reloadFromProfileStore()
         presentationRequest = .settings
+    }
+
+    public func reloadFromProfileStore() {
+        do {
+            try profileSettingsManager.reloadFromStore()
+            settingsMessage = profileSettingsManager.statusMessage
+            refreshFromProfileSettings()
+            menuContentRevision += 1
+        } catch {
+            settingsMessage = "Could not refresh settings: \(error.localizedDescription)"
+        }
     }
 
     public func clearPresentationRequest() {

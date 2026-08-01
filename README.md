@@ -91,7 +91,7 @@ Open **Settings → Accounts**, select an account, and use the **Folders** secti
 - Click **+** to pick a folder; remove an assignment with the trash button.
 - If a path is already assigned to another account, Switch Commit asks before moving the rule.
 
-Assignments are stored in profile metadata only. Saving settings regenerates managed Git config; no secrets are written to JSON.
+Assignments are stored in profile metadata only. Saving settings regenerates managed Git config; no secrets are written to JSON. The same assignments can be managed with `switch-commit folder add` / `folder remove`; Settings reloads them when you open the window or the app becomes active.
 
 ## Automatic Git Identity per Folder
 
