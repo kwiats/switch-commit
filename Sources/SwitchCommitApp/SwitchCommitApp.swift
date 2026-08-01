@@ -47,6 +47,10 @@ final class SwitchCommitApp: NSObject, NSApplicationDelegate {
         print("SwitchCommitApp status item installed")
     }
 
+    func applicationDidBecomeActive(_ notification: Notification) {
+        viewModel.reloadFromProfileStore()
+    }
+
     private func buildMenu() -> NSMenu {
         let menu = NSMenu()
         let contextItem = NSMenuItem(title: viewModel.contextPresentation.menuHeader, action: nil, keyEquivalent: "")

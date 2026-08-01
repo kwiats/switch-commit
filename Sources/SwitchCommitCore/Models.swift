@@ -16,6 +16,7 @@ public enum SwitchCommitError: Error, Equatable {
     case writeOutsideManagedRoots
     case unsafeConfigValue
     case unsafeIdentifier
+    case profileStoreUnavailable
 }
 
 public enum GitAccessMethod: String, Codable, Equatable, Sendable {
