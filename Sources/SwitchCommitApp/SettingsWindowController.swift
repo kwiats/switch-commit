@@ -12,6 +12,7 @@ final class SettingsWindowController {
             let createdWindow = NSWindow(contentViewController: hostingController)
             createdWindow.title = "Switch Commit Settings"
             createdWindow.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+            createdWindow.minSize = NSSize(width: 640, height: 420)
             createdWindow.isReleasedWhenClosed = false
             createdWindow.center()
             window = createdWindow

@@ -35,7 +35,7 @@ struct CLIInstallManager: CLIInstalling {
         }
     }
 
-    func installOrRepair() throws {
+    func installOrRepair(allowAdministrator: Bool) throws {
         guard FileManager.default.fileExists(atPath: bundledCLIURL.path) else {
             throw CLIInstallError.bundledExecutableMissing
         }
@@ -43,7 +43,7 @@ struct CLIInstallManager: CLIInstalling {
         do {
             try installLink()
         } catch {
-            guard Self.isPermissionError(error) else {
+            guard allowAdministrator, Self.isPermissionError(error) else {
                 throw error
             }
             try installLinkWithAdministratorPrivileges()
@@ -51,15 +51,13 @@ struct CLIInstallManager: CLIInstalling {
     }
 
     private func installLink() throws {
-        do {
-            _ = try FileManager.default.destinationOfSymbolicLink(atPath: linkURL.path)
+        if FileManager.default.fileExists(atPath: linkURL.path) {
             try FileManager.default.removeItem(at: linkURL)
-        } catch {
-            if FileManager.default.fileExists(atPath: linkURL.path) {
-                throw CLIInstallError.existingNonSymlink(linkURL.path)
-            }
         }
-        try FileManager.default.createDirectory(at: linkURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(
+            at: linkURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
         try FileManager.default.createSymbolicLink(at: linkURL, withDestinationURL: bundledCLIURL)
     }
 
@@ -100,15 +98,12 @@ struct CLIInstallManager: CLIInstalling {
 
 private enum CLIInstallError: LocalizedError {
     case bundledExecutableMissing
-    case existingNonSymlink(String)
     case administratorInstallFailed
 
     var errorDescription: String? {
         switch self {
         case .bundledExecutableMissing:
             return "The bundled switch-commit executable is unavailable."
-        case .existingNonSymlink(let path):
-            return "\(path) exists and is not a symbolic link."
         case .administratorInstallFailed:
             return "Administrator authorization was cancelled or the link could not be created."
         }

@@ -6,11 +6,12 @@ Local-only macOS menu bar tool for switching Git identities globally and per fol
 
 - No telemetry.
 - No analytics.
-- No broad automatic network calls.
-- Manual update checks contact the public Switch Commit release channel only after the user clicks `Check for Updates`.
+- No broad automatic product network calls.
+- Menu bar update checks contact the public Switch Commit release channel only after the user clicks `Check for Updates`.
+- The `switch-commit` CLI may contact that same public channel on a 12-hour cache to print an update notice, and always on `switch-commit update` (download + install app + repair CLI).
 - No secrets in JSON profile files.
 - Managed writes are constrained to app-owned config files.
-- `~/.gitconfig` only receives explicit include lines for managed Git config files.
+- `~/.gitconfig` receives explicit include lines for managed Git config files and may have conflicting unmanaged `url.*.insteadOf` keys removed after backup when they oppose the active profile.
 - SSH/GitHub discovery and diagnostics remain manual.
 - Host connection status updates after the user clicks `Test Connection` and after the user switches the active SSH profile.
 - Persisted host connection status stores only host names, status, messages, and timestamps; it does not store secrets.
@@ -21,7 +22,9 @@ Local-only macOS menu bar tool for switching Git identities globally and per fol
 
 Switch Commit uses a public release channel for update metadata and signed app artifacts. The source repository can remain private because the app never downloads updates from the private repository and never embeds GitHub tokens.
 
-The app checks for updates only when the user clicks `Check for Updates` in Settings. Update artifacts must be signed before publication, and Sparkle verifies the downloaded update before installation.
+The menu bar app checks for updates only when the user clicks `Check for Updates` in Settings. Update artifacts must be signed before publication, and Sparkle verifies the downloaded update before installation.
+
+The CLI reads `https://kwiats.github.io/switch-commit/appcast.xml` (cached for 12 hours) so any `switch-commit` command can print when a newer release exists. Run `switch-commit update` to refresh live, download the DMG (SHA-256 verified when the companion `.sha256` asset exists), install `Switch Commit.app` into `/Applications`, and repair `/usr/local/bin/switch-commit`.
 
 ### Local GitHub Discovery
 
@@ -353,6 +356,17 @@ switch-commit doctor
 switch-commit doctor --path ~/Dev/acme --json
 ```
 
+#### `update`
+
+Check the public release channel live, download the latest DMG when newer than this CLI, install `Switch Commit.app` into `/Applications` (may prompt for admin), and repair `/usr/local/bin/switch-commit`.
+
+```bash
+switch-commit update
+switch-commit update --json
+```
+
+Other CLI commands may print an stderr notice when a newer release is known from the 12-hour appcast cache (suppressed with `--json`).
+
 #### `version`
 
 Print the CLI version.
@@ -364,18 +378,19 @@ switch-commit version --json
 
 ### Broken symlink repair
 
-If you delete or move `Switch Commit.app` without uninstalling the package, `/usr/local/bin/switch-commit` may point to a missing executable. Reinstall the app, then either run `Install Switch Commit.pkg` again or open Settings → General and click **Reinstall CLI**.
+If you delete or move `Switch Commit.app` without uninstalling the package, `/usr/local/bin/switch-commit` may point to a missing executable. Reinstall the app, then either run `Install Switch Commit.pkg` again, open Settings → General and click **Reinstall CLI**, or run `switch-commit update`.
 
-If another file already occupies `/usr/local/bin/switch-commit` and it is not a symlink, the installer reports the conflict. Remove or rename that file before reinstalling.
+**Reinstall CLI** / `switch-commit update` replace a stale non-symlink stub at `/usr/local/bin/switch-commit` (for example an old copied binary or package launch script) with a symlink to the bundled CLI.
 
 ### Safety
 
 The CLI follows the same safety contract as the app:
 
-- no telemetry, analytics, or background network calls;
+- no telemetry or analytics;
+- opportunistic update notices and `switch-commit update` contact only the public Switch Commit release channel;
 - profile JSON and CLI output show metadata and Keychain reference identifiers only — never tokens, passwords, or private key contents;
 - `doctor` runs local Git and config checks only; it does not probe hosts over the network;
-- managed writes stay under app-owned paths; user `~/.gitconfig` and `~/.ssh/config` are never replaced wholesale.
+- managed writes stay under app-owned paths; user `~/.gitconfig` and `~/.ssh/config` are never replaced wholesale (conflicting unmanaged `insteadOf` keys in `~/.gitconfig` may be removed after backup).
 
 ## Development
 

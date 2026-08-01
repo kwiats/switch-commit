@@ -12,6 +12,20 @@ enum CLIRuntime {
         try SwitchCommitSession.live()
     }
 
+    static func emitUpdateNoticeIfNeeded(json: Bool) {
+        guard !json else {
+            return
+        }
+        guard let update = ReleaseChannelUpdateService().availableUpdate(
+            currentVersion: CLIVersion.current(),
+            forceRefresh: false
+        ) else {
+            return
+        }
+        let message = "Update available: v\(update.latestVersion) — run: switch-commit update\n"
+        FileHandle.standardError.write(Data(message.utf8))
+    }
+
     static func terminate(for error: Error, json: Bool) -> Never {
         if let error = error as? ProfileReferenceError {
             terminate(
