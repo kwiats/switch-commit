@@ -30,6 +30,7 @@ struct SwitchCommitCommand: ParsableCommand {
             DeleteCommand.self,
             FolderCommand.self,
             DoctorCommand.self,
+            UpdateCommand.self,
             Version.self
         ]
     )

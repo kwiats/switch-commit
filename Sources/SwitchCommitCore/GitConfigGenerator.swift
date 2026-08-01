@@ -16,7 +16,7 @@ public struct GitConfigGenerator: Sendable {
             sections.append(
                 """
                 [core]
-                    sshCommand = ssh -i \(shellQuote(profile.sshKeyPath)) -F ~/.ssh/config
+                    sshCommand = ssh -i \(shellQuote(profile.sshKeyPath))
                 """
             )
         }

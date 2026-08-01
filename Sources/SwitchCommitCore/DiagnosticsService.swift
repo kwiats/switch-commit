@@ -73,6 +73,22 @@ public struct DiagnosticsService {
         self.commandRunner = commandRunner
     }
 
+    public func inspectInsteadOfEntries(at folderURL: URL) -> [InsteadOfEntry] {
+        do {
+            let result = try commandRunner.run(
+                "git",
+                arguments: ["config", "--show-origin", "--get-regexp", #"url\..*\.insteadof"#],
+                workingDirectory: folderURL
+            )
+            guard result.exitCode == 0 else {
+                return []
+            }
+            return InsteadOfConflictRemediator().parseGitConfigShowOriginRegexp(output: result.standardOutput)
+        } catch {
+            return []
+        }
+    }
+
     public func inspectGitIdentity(at folderURL: URL) -> DiagnosticsReport {
         var report = DiagnosticsReport()
         for key in ["user.name", "user.email", "core.sshCommand"] {
