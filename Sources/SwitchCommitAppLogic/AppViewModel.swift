@@ -34,11 +34,14 @@ public struct AppUpdatePresentation: Equatable, Sendable {
 @MainActor
 public protocol AppUpdateChecking: AnyObject {
     var canCheckForUpdates: Bool { get }
+    var successfulUpdateCycleHandler: (() -> Void)? { get set }
     func checkForUpdates()
 }
 
 @MainActor
 public final class DisabledAppUpdateChecker: AppUpdateChecking {
+    public var successfulUpdateCycleHandler: (() -> Void)?
+
     public init() {}
 
     public var canCheckForUpdates: Bool {
@@ -577,6 +580,17 @@ public final class AppViewModel: ObservableObject {
         } catch {
             refreshCLIInstallState()
             cliInstallStatusText = "Could not install CLI: \(error.localizedDescription)"
+        }
+    }
+
+    public func syncCLIAfterSuccessfulUpdateCheck() {
+        do {
+            try cliInstaller.installOrRepair()
+            refreshCLIInstallState()
+            settingsMessage = "CLI synced with Switch Commit."
+        } catch {
+            refreshCLIInstallState()
+            settingsMessage = "Could not sync CLI: \(error.localizedDescription)"
         }
     }
 

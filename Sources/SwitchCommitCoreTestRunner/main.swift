@@ -2933,6 +2933,7 @@ let tests: [(String, () throws -> Void)] = [
     ("app view model exposes Switch Commit update presentation", {
         final class RecordingUpdateChecker: AppUpdateChecking {
             var canCheckForUpdates = true
+            var successfulUpdateCycleHandler: (() -> Void)?
             private(set) var checkCount = 0
 
             func checkForUpdates() {
@@ -2964,6 +2965,7 @@ let tests: [(String, () throws -> Void)] = [
     ("app view model reports disabled update checker without network access", {
         final class DisabledRecordingUpdateChecker: AppUpdateChecking {
             var canCheckForUpdates = false
+            var successfulUpdateCycleHandler: (() -> Void)?
             private(set) var checkCount = 0
 
             func checkForUpdates() {
@@ -2990,6 +2992,82 @@ let tests: [(String, () throws -> Void)] = [
         try expect(checker.checkCount == 0, "disabled checker must not be called")
         try expect(viewModel.settingsMessage == "Updates are not available in this build.", "disabled checker should explain why nothing happened")
     }),
+    ("app view model syncs CLI after successful update check", {
+        let installer = FakeCLIInstaller(statusMessage: "CLI is installed at /usr/local/bin/switch-commit.")
+        let viewModel = AppViewModel(profiles: [], cliInstaller: installer)
+        viewModel.syncCLIAfterSuccessfulUpdateCheck()
+        try expect(installer.installCallCount == 1, "successful update cycle should repair CLI")
+        try expect(
+            viewModel.settingsMessage == "CLI synced with Switch Commit.",
+            "settings should confirm CLI sync"
+        )
+        try expect(
+            viewModel.cliInstallStatusText == "CLI is installed at /usr/local/bin/switch-commit.",
+            "CLI status should refresh after sync"
+        )
+    }),
+    ("app view model reports CLI sync failure after successful update check", {
+        let installer = FakeCLIInstaller(statusMessage: "CLI is missing from /usr/local/bin/switch-commit.")
+        installer.errorToThrow = FakeCLIInstallerError.denied
+        let viewModel = AppViewModel(profiles: [], cliInstaller: installer)
+        viewModel.syncCLIAfterSuccessfulUpdateCheck()
+        try expect(installer.installCallCount == 1, "sync should still attempt repair")
+        try expect(
+            viewModel.settingsMessage?.contains("Could not sync CLI") == true,
+            "settings should surface sync failure without undoing app update"
+        )
+    }),
+    ("menu bar app relauncher no-ops when app is not running", {
+        final class RecordingRunner: CommandRunning {
+            private(set) var commands: [(String, [String])] = []
+            func run(_ command: String, arguments: [String], workingDirectory: URL?) throws -> CommandResult {
+                commands.append((command, arguments))
+                return CommandResult(exitCode: 1, standardOutput: "false\n", standardError: "")
+            }
+        }
+        let runner = RecordingRunner()
+        let relauncher = MenuBarAppRelauncher(commandRunner: runner)
+        let didRelaunch = try relauncher.relaunchIfRunning()
+        try expect(!didRelaunch, "should not relaunch when not running")
+        try expect(runner.commands.count == 1, "only the running check should run")
+        try expect(runner.commands[0].0 == "osascript", "running check should use osascript")
+    }),
+    ("menu bar app relauncher quits then opens when app is running", {
+        final class RecordingRunner: CommandRunning {
+            private(set) var commands: [(String, [String])] = []
+            func run(_ command: String, arguments: [String], workingDirectory: URL?) throws -> CommandResult {
+                commands.append((command, arguments))
+                return CommandResult(exitCode: 0, standardOutput: "true\n", standardError: "")
+            }
+        }
+        let runner = RecordingRunner()
+        let relauncher = MenuBarAppRelauncher(commandRunner: runner)
+        let didRelaunch = try relauncher.relaunchIfRunning()
+        try expect(didRelaunch, "should relaunch when running")
+        try expect(runner.commands.count == 3, "probe + quit + open")
+        try expect(runner.commands[0].0 == "osascript", "probe uses osascript")
+        try expect(runner.commands[1].0 == "osascript", "quit uses osascript")
+        try expect(
+            runner.commands[1].1.contains(where: { $0.contains("quit") }),
+            "second command should quit the app"
+        )
+        try expect(runner.commands[2].0 == "open", "third command opens the app")
+        try expect(
+            runner.commands[2].1 == ["/Applications/Switch Commit.app"],
+            "open should target the installed app path"
+        )
+    }),
+    ("update command relaunches menu bar app after install", {
+        let url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("Sources/SwitchCommitCLI/Commands/UpdateCommand.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        try expect(source.contains("MenuBarAppRelauncher"), "update should use MenuBarAppRelauncher")
+        try expect(source.contains("relaunchIfRunning"), "update should attempt relaunch after install")
+        try expect(
+            source.contains("Could not restart Switch Commit"),
+            "update should warn when relaunch fails without failing the install"
+        )
+    }),
     ("sparkle adapter does not start automatic update cycle at initialization", {
         let adapterURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent("Sources/SwitchCommitApp/SparkleAppUpdateChecker.swift")
@@ -3009,6 +3087,27 @@ let tests: [(String, () throws -> Void)] = [
         try expect(source.contains("updaterShouldPromptForPermissionToCheck"), "sparkle adapter should suppress permission prompts")
         try expect(source.contains("feedParameters"), "sparkle adapter should return no feed parameters")
         try expect(!source.contains("checkForUpdatesInBackground"), "sparkle adapter must not perform background update checks")
+        try expect(source.contains("successfulUpdateCycleHandler"), "sparkle adapter should expose a successful cycle handler for CLI sync")
+        try expect(source.contains("updaterWillRelaunchApplication"), "sparkle adapter should sync CLI before relaunch")
+        try expect(source.contains("didFinishUpdateCycleFor"), "sparkle adapter should observe finished update cycles")
+        try expect(source.contains("SUError.noUpdateError") || source.contains("noUpdateError"), "sparkle adapter should treat already-up-to-date as success for CLI sync")
+        try expect(
+            source.contains("SUSparkleErrorDomain"),
+            "sparkle adapter should only treat Sparkle no-update errors as successful sync triggers"
+        )
+    }),
+    ("app wires successful sparkle cycle to CLI sync", {
+        let appURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("Sources/SwitchCommitApp/SwitchCommitApp.swift")
+        let source = try String(contentsOf: appURL, encoding: .utf8)
+        try expect(
+            source.contains("successfulUpdateCycleHandler"),
+            "app should wire sparkle success handler"
+        )
+        try expect(
+            source.contains("syncCLIAfterSuccessfulUpdateCheck"),
+            "app should sync CLI after a successful update cycle"
+        )
     }),
     ("release build script embeds Switch Commit Sparkle channel configuration", {
         let scriptURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)

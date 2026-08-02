@@ -8,6 +8,11 @@ final class SparkleAppUpdateChecker: NSObject, AppUpdateChecking {
     private let updaterController: SPUStandardUpdaterController
     private var hasStartedUpdater = false
 
+    var successfulUpdateCycleHandler: (() -> Void)? {
+        get { updaterDelegate.successfulUpdateCycleHandler }
+        set { updaterDelegate.successfulUpdateCycleHandler = newValue }
+    }
+
     override init() {
         let createdUpdaterDelegate = ManualSparkleUpdaterDelegate()
         self.updaterDelegate = createdUpdaterDelegate
@@ -49,11 +54,38 @@ final class SparkleAppUpdateChecker: NSObject, AppUpdateChecking {
 }
 
 private final class ManualSparkleUpdaterDelegate: NSObject, SPUUpdaterDelegate {
+    var successfulUpdateCycleHandler: (() -> Void)?
+
     func updaterShouldPromptForPermissionToCheck(forUpdates updater: SPUUpdater) -> Bool {
         false
     }
 
     func feedParameters(for updater: SPUUpdater, sendingSystemProfile sendingProfile: Bool) -> [[String: String]] {
         []
+    }
+
+    func updaterWillRelaunchApplication(_ updater: SPUUpdater) {
+        successfulUpdateCycleHandler?()
+    }
+
+    func updater(
+        _ updater: SPUUpdater,
+        didFinishUpdateCycleFor updateCheck: SPUUpdateCheck,
+        error: (any Error)?
+    ) {
+        if shouldSyncCLI(afterCycleError: error) {
+            successfulUpdateCycleHandler?()
+        }
+    }
+
+    private func shouldSyncCLI(afterCycleError error: (any Error)?) -> Bool {
+        guard let error else {
+            return true
+        }
+        let nsError = error as NSError
+        guard nsError.domain == SUSparkleErrorDomain else {
+            return false
+        }
+        return nsError.code == Int(SUError.noUpdateError.rawValue)
     }
 }
