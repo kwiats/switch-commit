@@ -8,8 +8,20 @@
 | Bug reports and feature requests | [GitHub Issues](https://github.com/kwiats/switch-commit/issues) |
 | Contributing / development setup | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | Security vulnerabilities | [SECURITY.md](SECURITY.md) (private reporting only) |
-| Downloads and release notes | [GitHub Releases](https://github.com/kwiats/switch-commit/releases) and the [landing page](https://kwiats.github.io/switch-commit/) |
+| Releases, installers, and release notes | [GitHub Releases](https://github.com/kwiats/switch-commit/releases), [CHANGELOG.md](CHANGELOG.md), and the [landing page](https://kwiats.github.io/switch-commit/) |
 | Community conduct concerns | [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) |
+
+## Product and Pricing
+
+Switch Commit is a **paid** macOS product with an intended retail price of about
+**$2.50**. A dedicated purchase checkout is not wired in this repository yet;
+when a buy link is published, it will appear on the
+[landing page](https://kwiats.github.io/switch-commit/) and in the README.
+Until then, release artifacts and update metadata still ship through the public
+GitHub release channel and landing site for install and Sparkle updates.
+
+Purchasing the app does **not** include a paid support plan or guaranteed
+response time. Community help for bugs and questions stays on GitHub Issues.
 
 ## Before Opening an Issue
 
@@ -34,8 +46,9 @@ Settings (user-triggered).
 
 ## Product Support Expectations
 
-Switch Commit is distributed as a free download from the public GitHub release
-channel. There is **no paid support plan** and **no guaranteed response SLA**.
+There is **no paid support plan** and **no guaranteed response SLA**, whether
+you obtained Switch Commit via a future purchase flow or from the public
+release channel.
 
 Maintainers review GitHub issues as capacity allows. Useful reports include
 reproduction steps, expected vs actual behavior, and sanitized diagnostic

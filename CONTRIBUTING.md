@@ -26,8 +26,9 @@ agree to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 | `Sources/SwitchCommitCLI/` | `switch-commit` CLI |
 | `Sources/SwitchCommitCoreTestRunner/` | Local executable test runner (not XCTest) |
 | `Scripts/` | Release, checks, and landing-site tooling |
-| `site/` | Public landing page and Sparkle appcast |
-| `docs/release-notes/` | Committed product release notes |
+| `site/` | Public landing page and Sparkle appcast (changelog sync from root `CHANGELOG.md`) |
+| `CHANGELOG.md` | Single source of truth for release notes |
+| `LICENSE.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `SUPPORT.md` | License and community / support docs |
 
 Keep AppKit/SwiftUI out of `SwitchCommitCore`. Prefer deterministic, pure
 functions in core and reuse core services from the CLI instead of duplicating
@@ -89,7 +90,7 @@ Contributions must preserve these constraints:
   `docs/superpowers/plans/` — those are local agent design/plan artifacts only.
 - Do not commit secrets, Keychain payloads, Sparkle private keys, or local
   `dist/` artifacts.
-- Prefer focused diffs; update `README.md` and relevant release notes when
+- Prefer focused diffs; update `README.md` and root `CHANGELOG.md` when
   user-facing behavior changes.
 
 ## Pull Requests

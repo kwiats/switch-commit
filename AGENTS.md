@@ -4,6 +4,8 @@
 
 Switch Commit is a local-only macOS menu bar app for switching Git identities globally and per folder. The app is implemented as a Swift Package using Swift 6.2 and targets macOS 14. It also ships a `switch-commit` CLI.
 
+The product is a **paid** macOS app (intended retail price about **$2.50**). It remains privacy-first and local-only: there is no in-app telemetry, analytics, or payment/backend network stack in this repository. Treat pricing as product positioning for docs and support copy; do not invent purchase-provider or license-server details that are not implemented in code.
+
 The project is intentionally privacy-preserving:
 
 - no telemetry, analytics, crash upload, or other background product network calls;
@@ -15,6 +17,8 @@ The project is intentionally privacy-preserving:
 
 ## Repository Layout
 
+### Product / source
+
 - `Package.swift`: Swift package manifest.
 - `Sources/SwitchCommitCore/`: pure core logic for models, config generation, persistence, safe writes, diagnostics, discovery, and Keychain abstractions.
 - `Sources/SwitchCommitAppLogic/`: UI-facing view model and presentation state.
@@ -22,10 +26,28 @@ The project is intentionally privacy-preserving:
 - `Sources/SwitchCommitCLI/`: `switch-commit` command-line interface.
 - `Sources/SwitchCommitCoreTestRunner/`: local test runner used instead of XCTest or Swift Testing.
 - `Scripts/`: release, checks, and landing-site tooling.
-- `site/`: public landing page and Sparkle appcast.
-- `docs/release-notes/`: release notes (committed product docs).
+- `site/`: public landing page and Sparkle appcast (landing changelog sync reads root `CHANGELOG.md`).
+
+### Community / governance (repo root)
+
+- `LICENSE.md`: project license.
+- `CODE_OF_CONDUCT.md`: community conduct expectations.
+- `CONTRIBUTING.md`: how to contribute, verify, and open PRs.
+- `SECURITY.md`: private vulnerability reporting.
+- `SUPPORT.md`: where users get help; product is paid (~$2.50), community Issues for bugs, no support SLA.
+- `CHANGELOG.md`: **single source of truth** for release notes (site landing syncs from this file via `Scripts/site-landing`).
+
+### GitHub templates and CI
+
+- `.github/ISSUE_TEMPLATE/`: issue forms — `bug_report.yml`, `feature_request.yml`, `custom.md`, plus `config.yml`.
+- `.github/PULL_REQUEST_TEMPLATE.md`: pull request template.
+- `.github/`: also CI workflows and Dependabot.
+
+### Local agent artifacts only
+
 - `docs/superpowers/specs/` and `docs/superpowers/plans/`: local agent design/plan artifacts only — never commit these.
-- `.github/`: CI workflows and Dependabot.
+
+Do **not** reintroduce `docs/release-notes/`; that path was consolidated into root `CHANGELOG.md`.
 
 ## Build And Test
 
@@ -81,5 +103,6 @@ Preserve these constraints in every change:
 ## Documentation Guidance
 
 - Keep user-facing docs focused on local safety, managed files, CLI commands, and release behavior.
-- When behavior changes, update `README.md` and relevant release notes.
+- When behavior changes, update `README.md` and root `CHANGELOG.md` (not a separate release-notes directory).
+- Point contributors and support seekers at `CONTRIBUTING.md`, `SECURITY.md`, and `SUPPORT.md` as appropriate.
 - Do not commit specs, plans, brainstorming notes, or other agent-process artifacts.

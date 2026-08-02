@@ -2,7 +2,7 @@
 
 ## Working In This Repo
 
-This repository contains Switch Commit, a Swift 6.2 macOS 14 menu bar app for safely switching Git identities, plus a `switch-commit` CLI. Treat it as a local-first security-sensitive tool.
+This repository contains Switch Commit, a Swift 6.2 macOS 14 menu bar app for safely switching Git identities, plus a `switch-commit` CLI. Treat it as a local-first security-sensitive tool and a **paid** product (intended retail price about **$2.50**) that stays privacy-first — no telemetry and no payment/backend details invented beyond what exists in code.
 
 Before editing, inspect the relevant source files and preserve the existing split:
 
@@ -11,6 +11,19 @@ Before editing, inspect the relevant source files and preserve the existing spli
 - Menu bar, settings, Sparkle, and launch-at-login belong in `Sources/SwitchCommitApp/`.
 - CLI belongs in `Sources/SwitchCommitCLI/`.
 - Focused executable tests belong in `Sources/SwitchCommitCoreTestRunner/`.
+
+### Repo docs layout (keep in sync)
+
+| Path | Role |
+|---|---|
+| `LICENSE.md`, `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, `SECURITY.md`, `SUPPORT.md` | Community / governance at repo root |
+| `CHANGELOG.md` | Single source of truth for release notes; site landing syncs via `Scripts/site-landing` |
+| `.github/ISSUE_TEMPLATE/` | Bug, feature, and custom issue templates |
+| `.github/PULL_REQUEST_TEMPLATE.md` | PR template |
+| `site/` | Landing page + Sparkle appcast |
+| `docs/superpowers/specs/`, `docs/superpowers/plans/` | Local agent artifacts only — never commit |
+
+Do **not** use or recreate `docs/release-notes/`.
 
 ## Required Commands
 
@@ -67,4 +80,5 @@ Unless the user explicitly asks for a different flow, handle implementation task
 - Prefer plain Foundation and SwiftUI/AppKit APIs already in use.
 - Add comments only when they clarify a non-obvious safety or platform decision.
 - Keep generated output deterministic so tests and diffs stay stable.
-- When behavior changes, update `README.md` and release notes — not committed specs or plans.
+- When behavior changes, update `README.md` and root `CHANGELOG.md` — not committed specs, plans, or a separate release-notes tree.
+- For contribution, security, and user-help questions, prefer `CONTRIBUTING.md`, `SECURITY.md`, and `SUPPORT.md`.
