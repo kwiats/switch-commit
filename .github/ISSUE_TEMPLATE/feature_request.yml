@@ -1,0 +1,51 @@
+name: Feature request
+description: Suggest an improvement or new capability for Switch Commit
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the problem you want solved. Switch Commit stays local-first and privacy-preserving — proposals that require telemetry, automatic network probes, or storing secrets outside Keychain are out of scope.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What problem or workflow friction are you trying to solve?
+      placeholder: As a user switching between work and personal Git identities, I need…
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How would you like Switch Commit to help?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches you tried or considered (CLI workarounds, manual config, other tools).
+    validations:
+      required: false
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope notes
+      description: |
+        Relevant constraints or non-goals. Examples: app-only vs CLI, SSH vs HTTPS profiles,
+        folder rules, diagnostics, updates, no wholesale ~/.gitconfig or ~/.ssh/config replacement.
+      placeholder: Affects menu bar UI only; no change to managed SSH include behavior.
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Mockups, related issues, or other notes (no secrets).
