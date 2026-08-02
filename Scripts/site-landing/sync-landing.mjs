@@ -52,7 +52,29 @@ function fetchReleases(repo) {
     );
 }
 
-function resolveLatestDownloadCta(latest) {
+function resolvePolarCheckoutUrl({ required = true } = {}) {
+  const url = (process.env.POLAR_CHECKOUT_URL || "").trim();
+  if (!url) {
+    if (!required) {
+      return "https://buy.polar.sh/PLACEHOLDER-SET-POLAR_CHECKOUT_URL";
+    }
+    throw new Error(
+      "POLAR_CHECKOUT_URL is required (Polar Checkout Link for Buy & Download)"
+    );
+  }
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(`POLAR_CHECKOUT_URL is not a valid URL: ${url}`);
+  }
+  if (parsed.protocol !== "https:") {
+    throw new Error("POLAR_CHECKOUT_URL must use https:");
+  }
+  return url;
+}
+
+function resolveLatestDownloadCta(latest, { requirePolarCheckout = true } = {}) {
   if (!latest) {
     throw new Error("No usable latest release to build download CTA");
   }
@@ -76,6 +98,7 @@ function resolveLatestDownloadCta(latest) {
     versionTag: tag,
     dmgUrl: dmg.browser_download_url,
     sha256Url: sha.browser_download_url,
+    polarCheckoutUrl: resolvePolarCheckoutUrl({ required: requirePolarCheckout }),
   };
 }
 
@@ -100,7 +123,9 @@ const repo = resolveRepo();
 const releases = fetchReleases(repo);
 const changelogReleases = loadChangelogReleases();
 const section = buildChangelogSection(changelogReleases);
-const cta = resolveLatestDownloadCta(releases[0]);
+const cta = resolveLatestDownloadCta(releases[0], {
+  requirePolarCheckout: !dryRun,
+});
 
 if (dryRun) {
   process.stdout.write(section + "\n");

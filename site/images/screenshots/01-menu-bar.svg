@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="800" viewBox="0 0 1280 800" role="img" aria-label="Menu bar mock">
+  <rect width="1280" height="800" fill="#070908"/>
+  <rect x="140" y="90" width="1000" height="620" rx="10" fill="#0a0e0b" stroke="#1c2620"/>
+  <rect x="140" y="90" width="1000" height="48" fill="#121816" stroke="#1c2620"/>
+  <circle cx="168" cy="114" r="6" fill="#ff5f57"/>
+  <circle cx="188" cy="114" r="6" fill="#febc2e"/>
+  <circle cx="208" cy="114" r="6" fill="#28c840"/>
+  <text x="240" y="120" fill="#7f8f84" font-family="ui-monospace,monospace" font-size="14">menu bar · identity</text>
+  <rect x="160" y="160" width="320" height="420" rx="8" fill="#101612" stroke="#1c2620"/>
+  <text x="180" y="195" fill="#3d4a42" font-family="ui-monospace,monospace" font-size="12">ACTIVE</text>
+  <rect x="180" y="215" width="280" height="72" rx="6" fill="#0e1210" stroke="#c8f542"/>
+  <text x="198" y="248" fill="#e8efe6" font-family="Syne,sans-serif" font-size="20" font-weight="700">kwiats</text>
+  <text x="198" y="272" fill="#7f8f84" font-family="ui-monospace,monospace" font-size="13">work@example.com</text>
+  <rect x="180" y="305" width="280" height="72" rx="6" fill="#0e1210" stroke="#1c2620"/>
+  <text x="198" y="338" fill="#e8efe6" font-family="Syne,sans-serif" font-size="20" font-weight="700">personal</text>
+  <text x="198" y="362" fill="#7f8f84" font-family="ui-monospace,monospace" font-size="13">me@example.com</text>
+  <text x="520" y="220" fill="#c8f542" font-family="Syne,sans-serif" font-size="36" font-weight="800">Switch Commit</text>
+  <text x="520" y="265" fill="#7f8f84" font-family="ui-monospace,monospace" font-size="16">Global profile · menu bar switch</text>
+</svg>

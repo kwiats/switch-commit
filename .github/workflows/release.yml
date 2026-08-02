@@ -52,10 +52,21 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Sync DMG to Polar
+        env:
+          POLAR_ACCESS_TOKEN: ${{ secrets.POLAR_ACCESS_TOKEN }}
+          POLAR_ORGANIZATION_ID: ${{ secrets.POLAR_ORGANIZATION_ID }}
+          POLAR_BENEFIT_ID: ${{ secrets.POLAR_BENEFIT_ID }}
+        run: >
+          node Scripts/polar-sync-dmg.mjs
+          --dmg "dist/v${{ steps.version.outputs.version }}/SwitchCommit-v${{ steps.version.outputs.version }}-macOS.dmg"
+          --version "${{ steps.version.outputs.version }}"
+
       - name: Sync landing changelog and download CTA
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+          POLAR_CHECKOUT_URL: ${{ vars.POLAR_CHECKOUT_URL }}
         run: node Scripts/site-landing/sync-landing.mjs
 
       - name: Open PR with site metadata

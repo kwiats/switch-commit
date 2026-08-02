@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="800" viewBox="0 0 1280 800" role="img" aria-label="Settings Accounts mock">
+  <rect width="1280" height="800" fill="#070908"/>
+  <rect x="120" y="80" width="1040" height="640" rx="10" fill="#0a0e0b" stroke="#1c2620"/>
+  <rect x="120" y="80" width="240" height="640" fill="#0e1210" stroke="#1c2620"/>
+  <text x="150" y="130" fill="#c8f542" font-family="Syne,sans-serif" font-size="18" font-weight="700">Accounts</text>
+  <text x="150" y="170" fill="#7f8f84" font-family="ui-monospace,monospace" font-size="14">Updates</text>
+  <text x="150" y="210" fill="#7f8f84" font-family="ui-monospace,monospace" font-size="14">About</text>
+  <text x="400" y="140" fill="#e8efe6" font-family="Syne,sans-serif" font-size="28" font-weight="700">Accounts</text>
+  <rect x="400" y="180" width="700" height="100" rx="8" fill="#101612" stroke="#1c2620"/>
+  <text x="430" y="225" fill="#e8efe6" font-family="ui-monospace,monospace" font-size="16">kwiats · SSH · work@example.com</text>
+  <text x="430" y="255" fill="#7f8f84" font-family="ui-monospace,monospace" font-size="13">2 folder assignments</text>
+  <rect x="400" y="310" width="700" height="100" rx="8" fill="#101612" stroke="#1c2620"/>
+  <text x="430" y="355" fill="#e8efe6" font-family="ui-monospace,monospace" font-size="16">personal · HTTPS · me@example.com</text>
+  <text x="430" y="385" fill="#7f8f84" font-family="ui-monospace,monospace" font-size="13">No folder assignments</text>
+</svg>
