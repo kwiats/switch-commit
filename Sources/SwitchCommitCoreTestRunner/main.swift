@@ -1149,6 +1149,69 @@ let tests: [(String, () throws -> Void)] = [
             try writer.write("bad", to: outside)
         }, "outside writes should be rejected")
     }),
+    ("safe file writer concurrent overwrites create unique backups without error", {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let managed = root.appendingPathComponent("managed", isDirectory: true)
+        let backups = root.appendingPathComponent("backups", isDirectory: true)
+        let writer = SafeFileWriter(allowedRoots: [managed], backupDirectory: backups)
+        let target = managed.appendingPathComponent("global.gitconfig")
+
+        try writer.write("seed", to: target)
+
+        let group = DispatchGroup()
+        let lock = NSLock()
+        var failures: [String] = []
+        let writerCount = 24
+        for index in 0..<writerCount {
+            group.enter()
+            DispatchQueue.global(qos: .userInitiated).async {
+                defer { group.leave() }
+                do {
+                    try writer.write("content-\(index)", to: target)
+                } catch {
+                    lock.lock()
+                    failures.append(String(describing: error))
+                    lock.unlock()
+                }
+            }
+        }
+        group.wait()
+
+        try expect(
+            failures.isEmpty,
+            "concurrent managed writes should not collide on backup names: \(failures.prefix(3).joined(separator: "; "))"
+        )
+        let backupFiles = try FileManager.default.contentsOfDirectory(atPath: backups.path)
+        try expect(backupFiles.count == writerCount, "each overwrite should create its own backup")
+        try expect(
+            Set(backupFiles).count == backupFiles.count,
+            "backup filenames must be unique under concurrency"
+        )
+        try expect(
+            backupFiles.allSatisfy { $0.contains("global.gitconfig") },
+            "backups should retain original filename suffix"
+        )
+    }),
+    ("safe file writer skips backup when content is unchanged", {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let managed = root.appendingPathComponent("managed", isDirectory: true)
+        let backups = root.appendingPathComponent("backups", isDirectory: true)
+        let writer = SafeFileWriter(allowedRoots: [managed], backupDirectory: backups)
+        let target = managed.appendingPathComponent("global.gitconfig")
+
+        try writer.write("unchanged", to: target)
+        try writer.write("unchanged", to: target)
+
+        let backupFiles: [String]
+        if FileManager.default.fileExists(atPath: backups.path) {
+            backupFiles = try FileManager.default.contentsOfDirectory(atPath: backups.path)
+        } else {
+            backupFiles = []
+        }
+        try expect(backupFiles.isEmpty, "identical rewrite should not create a backup")
+        let content = try String(contentsOf: target, encoding: .utf8)
+        try expect(content == "unchanged", "identical rewrite should leave managed content intact")
+    }),
     ("safe file writer rejects writes through symlinked directories", {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let managed = root.appendingPathComponent("managed", isDirectory: true)
