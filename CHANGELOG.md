@@ -5,6 +5,14 @@ All notable changes to Switch Commit are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.9] - 2026-08-02
+
+### Documentation
+
+- Adds community and governance docs at the repo root: license, code of conduct, contributing guide, security policy, and support channels (paid product ~$2.50; community Issues for bugs).
+- Adds GitHub issue forms (bug, feature, custom) and a pull request template.
+- Consolidates historical release notes into root `CHANGELOG.md` as the single source of truth for Sparkle notes and the landing changelog (replacing `docs/release-notes/`).
+
 ## [0.3.8] - 2026-08-02
 
 ### Highlights
