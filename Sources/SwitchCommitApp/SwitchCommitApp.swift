@@ -22,6 +22,11 @@ final class SwitchCommitApp: NSObject, NSApplicationDelegate {
     )
 
     static func main() {
+        if CommandLine.arguments.contains("--smoke-settings-navigation") {
+            let code = SettingsNavigationSmoke.run()
+            Foundation.exit(code)
+        }
+
         let app = NSApplication.shared
         let delegate = SwitchCommitApp()
         sharedDelegate = delegate
