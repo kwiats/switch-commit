@@ -761,34 +761,29 @@
         <div class="changelog-entries">
           <article class="changelog-entry">
             <div class="changelog-meta">// v0.3.8 · 2 Aug 2026</div>
-            <div class="changelog-body"><h1>Switch Commit v0.3.8</h1>
-<h2>Highlights</h2>
+            <div class="changelog-body"><h3>Highlights</h3>
 <ul><li>Settings → Check for Updates also syncs/repairs <code>/usr/local/bin/switch-commit</code> to the CLI inside the current app bundle (including when the app is already up to date).</li><li><code>switch-commit update</code> still installs the app and repairs the CLI, and now restarts a running Switch Commit menu bar app when possible.</li></ul>
-<h2>Fixes</h2>
+<h3>Fixes</h3>
 <ul><li>Settings uses a custom HStack sidebar instead of <code>NavigationSplitView</code>, so switching to Updates no longer blanks the detail pane.</li><li>Managed-file backups no longer collide when the CLI or app reapplies config concurrently (unique backup names).</li><li>Rewriting a managed file with identical content skips the backup and write, so read-heavy CLI commands stop growing the backups folder unnecessarily.</li></ul></div>
           </article>
           <article class="changelog-entry">
             <div class="changelog-meta">// v0.3.7 · 1 Aug 2026</div>
-            <div class="changelog-body"><h1>Switch Commit v0.3.7</h1>
-<h2>Highlights</h2>
+            <div class="changelog-body"><h3>Highlights</h3>
 <ul><li>Selecting Updates in Settings no longer blanks the whole window (sidebar and content stay usable).</li><li>Closing and reopening Settings recovers without quitting the app — each open installs a fresh Settings view.</li><li>The Settings window is freely resizable, with a wider default size so Accounts labels and actions fit better.</li></ul></div>
           </article>
           <article class="changelog-entry">
             <div class="changelog-meta">// v0.3.6 · 1 Aug 2026</div>
-            <div class="changelog-body"><h1>Switch Commit v0.3.6</h1>
-<h2>Highlights</h2>
+            <div class="changelog-body"><h3>Highlights</h3>
 <ul><li>Switching profiles surgically removes unmanaged <code>url.*.insteadOf</code> keys in <code>~/.gitconfig</code> that reverse the active profile rewrite (after backup); <code>doctor</code> still warns about remaining conflicts outside that file.</li><li>SSH profiles no longer force <code>ssh -F ~/.ssh/config</code>, so a missing SSH config file no longer breaks Git push.</li><li><code>switch-commit update</code> checks the public appcast live, downloads the DMG (SHA-256 verified when available), installs the app, and repairs the CLI; other CLI commands can print a 12-hour cached update notice.</li><li>Settings uses a sidebar (<code>NavigationSplitView</code>) so section tabs are no longer clipped by the title bar.</li><li>Settings and the menu bar app reload folder rules from disk when opening Settings or becoming active, and before each Settings write, so <code>switch-commit folder add</code> / <code>folder remove</code> stay in sync and are not overwritten.</li></ul></div>
           </article>
           <article class="changelog-entry">
             <div class="changelog-meta">// v0.3.5 · 1 Aug 2026</div>
-            <div class="changelog-body"><h1>Switch Commit v0.3.5</h1>
-<h2>Highlights</h2>
+            <div class="changelog-body"><h3>Highlights</h3>
 <ul><li>Starting the app or any <code>switch-commit</code> CLI command rewrites managed Git config from the current profiles and folder rules, so generator updates such as <code>url.insteadOf</code> apply without a manual profile switch.</li><li><code>switch-commit folder add</code> can omit path, profile, and mode: it uses the current directory, the active global profile, and <code>single-repo</code> when <code>.git</code> is present (otherwise <code>folder-tree</code>).</li></ul></div>
           </article>
           <article class="changelog-entry">
             <div class="changelog-meta">// v0.3.4 · 31 Jul 2026</div>
-            <div class="changelog-body"><h1>Switch Commit v0.3.4</h1>
-<h2>Highlights</h2>
+            <div class="changelog-body"><h3>Highlights</h3>
 <ul><li>SSH and HTTPS profile access methods now drive Git transport through managed <code>url.insteadOf</code> rules, so folder assignments rewrite <code>https://</code> ↔ <code>git@</code> automatically without changing remotes in <code>.git/config</code>.</li><li>SSH profiles continue to set <code>core.sshCommand</code> with the profile key, so HTTPS remotes in an assigned folder authenticate with that key instead of global HTTPS credentials.</li><li><code>switch-commit doctor</code> warns when a folder profile’s access method differs from the global profile, where accumulated <code>insteadOf</code> rules may conflict.</li></ul></div>
           </article>
         </div>
