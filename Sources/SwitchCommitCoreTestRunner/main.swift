@@ -3314,6 +3314,35 @@ let tests: [(String, () throws -> Void)] = [
             "release workflow should sync landing changelog/CTA after publishing the GitHub Release"
         )
         try expect(
+            source.contains("Scripts/polar-sync-dmg.mjs"),
+            "release workflow should upload the DMG to Polar File Downloads"
+        )
+        try expect(
+            FileManager.default.fileExists(
+                atPath: URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+                    .appendingPathComponent("Scripts/polar-sync-dmg.mjs")
+                    .path
+            ),
+            "polar DMG sync script must exist in the repository"
+        )
+        try expect(
+            source.contains("POLAR_ACCESS_TOKEN"),
+            "release workflow should pass Polar API secrets into the DMG sync step"
+        )
+        try expect(
+            source.contains("POLAR_CHECKOUT_URL"),
+            "release workflow should inject the Polar checkout link when syncing the landing"
+        )
+        let template = try String(
+            contentsOf: URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+                .appendingPathComponent("Scripts/site-landing/index.template.html"),
+            encoding: .utf8
+        )
+        try expect(
+            template.contains("__POLAR_CHECKOUT_URL__"),
+            "landing template must keep the Polar checkout placeholder"
+        )
+        try expect(
             source.contains("site/index.html"),
             "release workflow should include landing HTML in the site metadata PR"
         )
@@ -3346,6 +3375,9 @@ let tests: [(String, () throws -> Void)] = [
         )
         try expect(source.contains("SwitchCommit-v"), "README should document SwitchCommit DMG artifact naming")
         try expect(source.contains("macOS.dmg"), "README should document DMG release artifacts")
+        try expect(source.contains("POLAR_ACCESS_TOKEN"), "README should document Polar API secrets for paid DMG delivery")
+        try expect(source.contains("POLAR_CHECKOUT_URL"), "README should document the Polar checkout URL variable")
+        try expect(source.contains("soft paywall") || source.contains("Buy & Download"), "README should document Polar soft-paywall buy path")
         try expect(source.contains("swift run SwitchCommitCoreTestRunner"), "README should document the renamed test runner")
         try expect(!source.contains("macOS.zip"), "README should not document ZIP release artifacts")
     }),

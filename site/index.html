@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="pl">
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="Switch Commit — lokalna aplikacja menu bar i CLI na macOS do przełączania tożsamości Git globalnie i per folder." />
+  <meta name="description" content="Switch Commit — local macOS menu bar app and CLI for switching Git identities globally and per folder." />
   <title>Switch Commit</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -257,6 +257,168 @@
     .specs span::before {
       content: "//";
       color: var(--dim);
+    }
+
+    .price {
+      display: flex;
+      align-items: baseline;
+      gap: 0.65rem;
+      margin-bottom: 1rem;
+      font-family: var(--font-display);
+      animation: fadeUp 0.8s 0.2s ease both;
+    }
+
+    .price .was {
+      font-size: 1rem;
+      color: var(--dim);
+      text-decoration: line-through;
+      font-weight: 600;
+    }
+
+    .price .now {
+      font-size: 1.75rem;
+      font-weight: 800;
+      color: var(--accent);
+      letter-spacing: -0.03em;
+    }
+
+    .price .tag {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      color: var(--amber);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .free-link {
+      margin-top: 0.95rem;
+      font-size: 0.75rem;
+      color: var(--muted);
+      animation: fadeUp 0.8s 0.3s ease both;
+    }
+
+    .free-link a {
+      color: var(--muted);
+      text-decoration: underline;
+      text-underline-offset: 0.2em;
+      text-decoration-color: var(--dim);
+    }
+
+    .free-link a:hover { color: var(--fg); }
+
+    /* Screenshots carousel */
+    .screenshots {
+      width: min(72rem, 100%);
+      margin: 0 auto;
+      padding: 0 clamp(1.25rem, 4vw, 3rem) 3rem;
+    }
+
+    .screenshots-inner {
+      border: 1px solid var(--line);
+      border-radius: 0.35rem;
+      background: linear-gradient(165deg, #101612 0%, #0a0e0b 100%);
+      padding: clamp(1.25rem, 3vw, 2rem);
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+    }
+
+    .screenshots h2 {
+      font-family: var(--font-display);
+      font-size: clamp(1.4rem, 3vw, 1.85rem);
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      margin-bottom: 0.35rem;
+    }
+
+    .screenshots .section-lede {
+      color: var(--muted);
+      font-size: 0.82rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .carousel {
+      position: relative;
+    }
+
+    .carousel-viewport {
+      overflow: hidden;
+      border-radius: 0.25rem;
+      border: 1px solid var(--line);
+      background: #070908;
+      aspect-ratio: 16 / 10;
+    }
+
+    .carousel-track {
+      display: flex;
+      height: 100%;
+      transition: transform 0.35s ease;
+    }
+
+    .carousel-slide {
+      flex: 0 0 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #0a0e0b;
+    }
+
+    .carousel-slide img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+
+    .carousel-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+
+    .carousel-btn {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--fg);
+      background: transparent;
+      border: 1px solid var(--dim);
+      border-radius: 0.2rem;
+      padding: 0.55rem 0.85rem;
+      cursor: pointer;
+    }
+
+    .carousel-btn:hover {
+      border-color: var(--muted);
+      background: var(--accent-dim);
+    }
+
+    .carousel-dots {
+      display: flex;
+      gap: 0.45rem;
+      align-items: center;
+    }
+
+    .carousel-dots button {
+      width: 0.45rem;
+      height: 0.45rem;
+      border-radius: 50%;
+      border: none;
+      padding: 0;
+      background: var(--dim);
+      cursor: pointer;
+    }
+
+    .carousel-dots button[aria-current="true"] {
+      background: var(--accent);
+      box-shadow: 0 0 10px var(--glow);
+    }
+
+    .carousel-caption {
+      font-size: 0.72rem;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
     }
 
     /* Visual panel — menu bar mock */
@@ -663,22 +825,29 @@
         </h1>
 
         <p class="lede">
-          Lokalna aplikacja <strong>menu bar</strong> i CLI <strong>switch-commit</strong> na macOS.
-          Ustaw profil Git globalnie albo per folder —
-          bez telemetrii, bez automatycznych połączeń sieciowych.
+          Local <strong>menu bar</strong> app and <strong>switch-commit</strong> CLI for macOS.
+          Switch Git identity globally or per folder —
+          no telemetry, no automatic network calls.
         </p>
 
+        <div class="price">
+          <span class="was">$2.50</span>
+          <span class="now">$1</span>
+          <span class="tag">launch price</span>
+        </div>
+
         <div class="cta-row">
-          <a class="btn btn-primary" href="https://github.com/kwiats/switch-commit/releases/download/v0.3.9/SwitchCommit-v0.3.9-macOS.dmg">
+          <a class="btn btn-primary" href="https://buy.polar.sh/PLACEHOLDER-SET-POLAR_CHECKOUT_URL">
             <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path d="M8 2v8m0 0L5 7.5M8 10l3-2.5M3 13h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            Pobierz v0.3.9
+            Buy &amp; Download
           </a>
           <a class="btn btn-ghost" href="#install">
-            Instalacja
+            Install
           </a>
         </div>
+        <p class="free-link">or <a href="https://github.com/kwiats/switch-commit/releases/download/v0.3.9/SwitchCommit-v0.3.9-macOS.dmg">download free from GitHub Releases</a> · <span>v0.3.9</span></p>
 
         <div class="specs">
           <span>macOS 14+</span>
@@ -737,19 +906,47 @@
       </div>
     </section>
 
+    <section class="screenshots" id="screenshots" aria-label="Product screenshots">
+      <div class="screenshots-inner">
+        <h2>Inside the app</h2>
+        <p class="section-lede">Menu bar identity switching, Settings, and per-folder rules.</p>
+        <div class="carousel" data-carousel>
+          <div class="carousel-viewport">
+            <div class="carousel-track" data-carousel-track>
+              <figure class="carousel-slide">
+                <img src="images/screenshots/01-menu-bar.svg" alt="Switch Commit menu bar with active profile" width="1280" height="800" />
+              </figure>
+              <figure class="carousel-slide">
+                <img src="images/screenshots/02-settings-accounts.svg" alt="Settings Accounts with profiles and folders" width="1280" height="800" />
+              </figure>
+              <figure class="carousel-slide">
+                <img src="images/screenshots/03-folder-rules.svg" alt="Folder assignment rules in Settings" width="1280" height="800" />
+              </figure>
+            </div>
+          </div>
+          <div class="carousel-nav">
+            <button type="button" class="carousel-btn" data-carousel-prev>Prev</button>
+            <p class="carousel-caption" data-carousel-caption>Menu bar</p>
+            <div class="carousel-dots" data-carousel-dots role="tablist" aria-label="Screenshot slides"></div>
+            <button type="button" class="carousel-btn" data-carousel-next>Next</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <section class="install" id="install">
       <div class="install-inner">
-        <h2>Instalacja</h2>
+        <h2>Install</h2>
         <ol class="steps">
-          <li><span class="n">01</span><span>Otwórz DMG i przeciągnij <strong>Switch Commit.app</strong> do Aplikacji.</span></li>
-          <li><span class="n">02</span><span>Wyrzuć DMG do Kosza po instalacji.</span></li>
-          <li><span class="n">03</span><span>Uruchom — ikona pojawi się na pasku menu.</span></li>
-          <li><span class="n">04</span><span>Aktualizacje: Settings → <strong>Check for Updates</strong>.</span></li>
+          <li><span class="n">01</span><span>Open the DMG and drag <strong>Switch Commit.app</strong> to Applications.</span></li>
+          <li><span class="n">02</span><span>Eject the DMG after installing.</span></li>
+          <li><span class="n">03</span><span>Launch — the icon appears in the menu bar.</span></li>
+          <li><span class="n">04</span><span>Updates: Settings → <strong>Check for Updates</strong>.</span></li>
         </ol>
         <p class="gatekeeper-note">
-          <strong>macOS blokuje pierwsze uruchomienie?</strong>
-          Zamknij dialog, w Finderze kliknij appkę prawym przyciskiem → Open → potwierdź Open.
-          Wydanie nie jest jeszcze notarized przez Apple.
+          <strong>macOS blocks the first launch?</strong>
+          Dismiss the dialog, then in Finder Control-click the app → Open → confirm Open.
+          This build is not notarized by Apple yet.
         </p>
       </div>
     </section>
@@ -800,5 +997,43 @@
       </div>
     </footer>
   </div>
+  <script>
+    (function () {
+      var root = document.querySelector("[data-carousel]");
+      if (!root) return;
+      var track = root.querySelector("[data-carousel-track]");
+      var slides = Array.prototype.slice.call(root.querySelectorAll(".carousel-slide"));
+      var dots = root.querySelector("[data-carousel-dots]");
+      var caption = root.querySelector("[data-carousel-caption]");
+      var captions = ["Menu bar", "Settings · Accounts", "Folder rules"];
+      var index = 0;
+
+      function go(i) {
+        index = (i + slides.length) % slides.length;
+        track.style.transform = "translateX(" + (-index * 100) + "%)";
+        if (caption) caption.textContent = captions[index] || "";
+        slides.forEach(function (slide, si) {
+          slide.setAttribute("aria-hidden", si === index ? "false" : "true");
+          var img = slide.querySelector("img");
+          if (img) img.tabIndex = si === index ? 0 : -1;
+        });
+        Array.prototype.forEach.call(dots.children, function (dot, di) {
+          dot.setAttribute("aria-current", di === index ? "true" : "false");
+        });
+      }
+
+      captions.forEach(function (label, i) {
+        var b = document.createElement("button");
+        b.type = "button";
+        b.setAttribute("aria-label", label);
+        b.addEventListener("click", function () { go(i); });
+        dots.appendChild(b);
+      });
+
+      root.querySelector("[data-carousel-prev]").addEventListener("click", function () { go(index - 1); });
+      root.querySelector("[data-carousel-next]").addEventListener("click", function () { go(index + 1); });
+      go(0);
+    })();
+  </script>
 </body>
 </html>

@@ -31,6 +31,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
+          POLAR_CHECKOUT_URL: ${{ vars.POLAR_CHECKOUT_URL }}
         run: node Scripts/site-landing/sync-landing.mjs
 
       - name: Open PR if landing changed

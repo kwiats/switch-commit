@@ -17,28 +17,48 @@ test("throws when markers missing", () => {
   assert.throws(() => patchChangelog("<html></html>", "x"), /changelog:start/);
 });
 
-test("patches download CTA placeholders", () => {
+test("patches Polar checkout URL with other CTA placeholders", () => {
   const input =
-    '<em>__VERSION_TAG__</em><a href="__DMG_URL__">Pobierz __VERSION_TAG__</a><a href="__SHA256_URL__">sha</a>';
+    '<a href="__POLAR_CHECKOUT_URL__">Buy</a><em>__VERSION_TAG__</em><a href="__DMG_URL__">free</a><a href="__SHA256_URL__">sha</a>';
   const out = patchDownloadCta(input, {
     versionTag: "v0.3.0",
     dmgUrl: "https://example.test/app.dmg",
     sha256Url: "https://example.test/app.dmg.sha256",
+    polarCheckoutUrl: "https://buy.polar.sh/test",
   });
   assert.equal(
     out,
-    '<em>v0.3.0</em><a href="https://example.test/app.dmg">Pobierz v0.3.0</a><a href="https://example.test/app.dmg.sha256">sha</a>'
+    '<a href="https://buy.polar.sh/test">Buy</a><em>v0.3.0</em><a href="https://example.test/app.dmg">free</a><a href="https://example.test/app.dmg.sha256">sha</a>'
   );
 });
 
-test("throws when CTA placeholders missing", () => {
+test("throws when Polar checkout placeholder missing", () => {
   assert.throws(
     () =>
-      patchDownloadCta("<html></html>", {
-        versionTag: "v1.0.0",
-        dmgUrl: "https://example.test/a.dmg",
-        sha256Url: "https://example.test/a.dmg.sha256",
-      }),
-    /__VERSION_TAG__/
+      patchDownloadCta(
+        '<em>__VERSION_TAG__</em><a href="__DMG_URL__">x</a><a href="__SHA256_URL__">y</a>',
+        {
+          versionTag: "v1.0.0",
+          dmgUrl: "https://example.test/a.dmg",
+          sha256Url: "https://example.test/a.dmg.sha256",
+          polarCheckoutUrl: "https://buy.polar.sh/x",
+        }
+      ),
+    /__POLAR_CHECKOUT_URL__/
+  );
+});
+
+test("throws when polarCheckoutUrl missing", () => {
+  assert.throws(
+    () =>
+      patchDownloadCta(
+        '<a href="__POLAR_CHECKOUT_URL__">Buy</a><em>__VERSION_TAG__</em><a href="__DMG_URL__">x</a><a href="__SHA256_URL__">y</a>',
+        {
+          versionTag: "v1.0.0",
+          dmgUrl: "https://example.test/a.dmg",
+          sha256Url: "https://example.test/a.dmg.sha256",
+        }
+      ),
+    /polarCheckoutUrl/
   );
 });

@@ -2,6 +2,36 @@
 
 Local-only macOS menu bar tool for switching Git identities globally and per folder.
 
+## Buy / soft paywall
+
+The landing page offers **Buy & Download** via [Polar](https://polar.sh) (Merchant of Record) at a **$1** launch price (compare-at **$2.50**). After payment, Polar delivers the DMG through File Downloads.
+
+GitHub Releases DMG assets remain public (soft paywall) — the free secondary link on the landing still points at the latest release asset. Paid delivery is updated automatically on each version tag: `Scripts/polar-sync-dmg.mjs` uploads the DMG and refreshes the Polar downloadables benefit.
+
+**Release operators must configure:**
+
+| Name | Where | Purpose |
+| --- | --- | --- |
+| `POLAR_ACCESS_TOKEN` | GitHub Actions secret | Polar API token (`files:write`, benefits write) |
+| `POLAR_ORGANIZATION_ID` | GitHub Actions secret | Polar organization UUID |
+| `POLAR_BENEFIT_ID` | GitHub Actions secret | Downloadables benefit UUID |
+| `POLAR_CHECKOUT_URL` | GitHub Actions variable (public) | Stable Checkout Link used by the landing Buy button |
+
+Local landing sync:
+
+```bash
+export POLAR_CHECKOUT_URL='https://buy.polar.sh/your-checkout-link'
+node Scripts/site-landing/sync-landing.mjs
+```
+
+**Polar Checkout Link → Success URL** (after payment):
+
+```text
+https://kwiats.github.io/switch-commit/thanks.html
+```
+
+Optional with session id: `https://kwiats.github.io/switch-commit/thanks.html?checkout_id={CHECKOUT_ID}`
+
 ## Safety Contract
 
 - No telemetry.
