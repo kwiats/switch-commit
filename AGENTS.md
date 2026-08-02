@@ -100,9 +100,75 @@ Preserve these constraints in every change:
 - Add comments only when they clarify a non-obvious safety or platform decision.
 - Use app-owned identifiers for Keychain references, for example `git-account-switcher.<profile-id>.<purpose>`.
 
+## Version Bump And Release
+
+Only start a release when the user explicitly asks to bump/ship a version. Ship from up-to-date `main` (or a release branch that already contains the intended commits). Do **not** invent a release while finishing an unrelated feature PR.
+
+### Source of truth
+
+- Root `CHANGELOG.md` is the **only** release-notes source of truth (Keep a Changelog + SemVer).
+- Do **not** create or revive `docs/release-notes/vX.Y.Z.md`.
+- App/CLI marketing version is stamped at build time by `Scripts/build-release.sh <X.Y.Z>` into the app `Info.plist` (not a separate committed version file for agents to edit by hand).
+- Landing page changelog + download CTA are generated into `site/index.html` by `Scripts/site-landing/sync-landing.mjs` (reads `CHANGELOG.md` for notes; GitHub Releases for the latest DMG/SHA CTA).
+
+### How to draft the changelog
+
+1. Find the previous release tag (`git tag --sort=-v:refname | head`) and list user-facing commits since then, for example:
+   ```bash
+   git log --oneline "v0.3.8..HEAD"
+   ```
+2. Rewrite those commits into clear user-facing bullets (not raw commit subjects). Drop noise: merges, chore-only, CI, internal refactors with no user impact.
+3. Categorize by Conventional Commit type / intent into Keep a Changelog subsections under the new version heading:
+   - `feat` → `### Added` (or `### Highlights` when a short “what shipped” summary fits better)
+   - `fix` → `### Fixed`
+   - `docs` → `### Documentation` (only when the docs change is user-visible; skip pure agent-guide edits)
+   - `perf` / notable `refactor` that users feel → `### Changed`
+   - security-relevant fixes → `### Security`
+   - omit empty sections
+4. Prepend a new section at the top of `CHANGELOG.md` (newest first):
+   ```markdown
+   ## [X.Y.Z] - YYYY-MM-DD
+
+   ### Added
+   - …
+
+   ### Fixed
+   - …
+   ```
+5. Choose SemVer for `X.Y.Z`: patch for fixes/docs-only shipping; minor for new features; major only for breaking user-facing changes. Confirm the target version with the user if ambiguous.
+
+### Release checklist (agent)
+
+1. Ensure the intended product commits are already on `main` (merge feature PRs first).
+2. Add/update the `## [X.Y.Z] - YYYY-MM-DD` section in root `CHANGELOG.md` from the commit review above.
+3. Update `README.md` only if the release changes user-facing install/CLI/update docs.
+4. Commit the changelog (and any README tweak) with a Conventional Commit such as `docs: add vX.Y.Z release notes`, push, and land it on `main` (draft PR unless the user asks for ready/direct).
+5. After the changelog is on `main`, create and push an annotated SemVer tag — this triggers `.github/workflows/release.yml`:
+   ```bash
+   git checkout main && git pull
+   git tag -a "vX.Y.Z" -m "Switch Commit vX.Y.Z"
+   git push origin "vX.Y.Z"
+   ```
+6. Do **not** manually run `Scripts/build-release.sh` / `Scripts/publish-release-channel.sh` in normal CD flow unless the user asks for a local/manual publish. The tag workflow:
+   - runs `Scripts/pr-checks.sh` and `Scripts/build-release.sh`;
+   - extracts notes for `vX.Y.Z` from `CHANGELOG.md` via `Scripts/site-landing/extract-release-notes.mjs`;
+   - creates/updates the GitHub Release + Sparkle notes asset;
+   - regenerates `site/appcast.xml` and `site/version.txt`;
+   - runs `node Scripts/site-landing/sync-landing.mjs` so `site/index.html` shows the changelog (from `CHANGELOG.md`) and the download CTA for the latest release;
+   - opens an automation PR with the `site/` channel metadata for merge under branch protection.
+7. Missing `## [X.Y.Z]` in `CHANGELOG.md` fails publish — never tag without that section merged first.
+8. Report the tag, Release URL, and Release Channel workflow status; if site metadata needs a follow-up merge, link that PR.
+
+### Landing display notes
+
+- `sync-landing.mjs` renders the newest changelog entries from `CHANGELOG.md` into the `<!-- changelog:start -->` … `<!-- changelog:end -->` block of `site/index.html`.
+- Download buttons / version label on the landing page come from the latest published GitHub Release assets (`SwitchCommit-v*-macOS.dmg` + `.sha256`), not from hand-edited HTML.
+- A separate `Sync landing` workflow can re-sync the page via `workflow_dispatch` if needed; prefer the tag-triggered Release Channel path for normal ships.
+
 ## Documentation Guidance
 
 - Keep user-facing docs focused on local safety, managed files, CLI commands, and release behavior.
 - When behavior changes, update `README.md` and root `CHANGELOG.md` (not a separate release-notes directory).
+- When shipping a version, follow **Version Bump And Release** above (draft from commits → categorize → tag → Release Channel syncs `site/index.html`).
 - Point contributors and support seekers at `CONTRIBUTING.md`, `SECURITY.md`, and `SUPPORT.md` as appropriate.
 - Do not commit specs, plans, brainstorming notes, or other agent-process artifacts.

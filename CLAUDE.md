@@ -74,6 +74,38 @@ Unless the user explicitly asks for a different flow, handle implementation task
 - `AppViewModel` owns menu/settings presentation, profile actions, folder context, diagnostics text, and connection-status UI state.
 - `SwitchCommitCLI` exposes profile, folder, status, and doctor commands through ArgumentParser on top of core services.
 
+## Version Bump And Release
+
+Only bump/ship when the user explicitly asks. Root `CHANGELOG.md` is the single release-notes source of truth — never recreate `docs/release-notes/`.
+
+### Draft notes from commits
+
+1. Compare against the previous tag: `git log --oneline vX.Y.Z..HEAD` (use the latest `v*` tag).
+2. Turn user-facing commits into clear bullets; skip merges, CI, and no-user-impact chores.
+3. Split by Conventional Commit intent into Keep a Changelog subsections:
+   - `feat` → `### Added` (or `### Highlights` for a short shipped summary)
+   - `fix` → `### Fixed`
+   - `docs` → `### Documentation` (user-visible docs only)
+   - notable `perf` / user-visible `refactor` → `### Changed`
+   - security fixes → `### Security`
+4. Prepend at the top of `CHANGELOG.md`:
+   ```markdown
+   ## [X.Y.Z] - YYYY-MM-DD
+   ```
+   Use SemVer (patch = fixes/docs ship, minor = features, major = breaking). Ask if the bump level is unclear.
+
+### Ship
+
+1. Land the new `CHANGELOG.md` section on `main` first (missing section fails publish).
+2. Tag and push to trigger Release Channel CD:
+   ```bash
+   git tag -a "vX.Y.Z" -m "Switch Commit vX.Y.Z"
+   git push origin "vX.Y.Z"
+   ```
+3. Tag workflow builds the DMG, creates the GitHub Release from the matching `CHANGELOG.md` section (`Scripts/site-landing/extract-release-notes.mjs`), updates Sparkle `site/appcast.xml` + `site/version.txt`, and runs `Scripts/site-landing/sync-landing.mjs` so **`site/index.html` shows the changelog and download CTA**.
+4. Merge the automation `site/` metadata PR if branch protection requires it. Do not hand-edit `site/index.html` changelog/CTA for a normal release.
+5. Prefer the tag path over local `Scripts/build-release.sh` / `publish-release-channel.sh` unless the user requests a manual publish.
+
 ## Style Preferences
 
 - Keep changes small and aligned with existing Swift style.
