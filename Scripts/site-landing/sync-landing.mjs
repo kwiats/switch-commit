@@ -4,12 +4,14 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { buildChangelogSection } from "./lib/changelog-html.mjs";
+import { parseChangelog } from "./lib/parse-changelog.mjs";
 import { patchChangelog, patchDownloadCta } from "./lib/patch-index.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, "../..");
 const INDEX = join(REPO_ROOT, "site/index.html");
 const TEMPLATE = join(__dirname, "index.template.html");
+const CHANGELOG = join(REPO_ROOT, "CHANGELOG.md");
 const LIMIT = 5;
 const dryRun = process.argv.includes("--dry-run");
 
@@ -77,13 +79,26 @@ function resolveLatestDownloadCta(latest) {
   };
 }
 
+function loadChangelogReleases() {
+  let markdown;
+  try {
+    markdown = readFileSync(CHANGELOG, "utf8");
+  } catch (e) {
+    die(`Cannot read ${CHANGELOG}: ${e.message}`);
+  }
+  return parseChangelog(markdown)
+    .filter((entry) => entry.version !== "Unreleased")
+    .slice(0, LIMIT)
+    .map((entry) => ({
+      tagName: `v${entry.version}`,
+      publishedAt: entry.date ? `${entry.date}T12:00:00Z` : undefined,
+      body: entry.body || "",
+    }));
+}
+
 const repo = resolveRepo();
 const releases = fetchReleases(repo);
-const changelogReleases = releases.slice(0, LIMIT).map((r) => ({
-  tagName: r.tag_name,
-  publishedAt: r.published_at,
-  body: r.body || "",
-}));
+const changelogReleases = loadChangelogReleases();
 const section = buildChangelogSection(changelogReleases);
 const cta = resolveLatestDownloadCta(releases[0]);
 
@@ -117,5 +132,5 @@ try {
 }
 
 console.log(
-  `Updated site/index.html changelog (${changelogReleases.length}) and CTA ${cta.versionTag} from ${repo}.`
+  `Updated site/index.html changelog (${changelogReleases.length}) from CHANGELOG.md and CTA ${cta.versionTag} from ${repo}.`
 );
