@@ -1,0 +1,105 @@
+name: Bug report
+description: Report unexpected behavior in the Switch Commit app or CLI
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Switch Commit is a local-only, privacy-first tool — **do not paste secrets, tokens, passwords, private keys, or Keychain material** into this issue.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the bug
+      description: A clear and concise description of what went wrong.
+      placeholder: What happened?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps that reliably reproduce the problem.
+      placeholder: |
+        1. …
+        2. …
+        3. …
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What you expected to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What actually happened (error messages, incorrect identity, etc.). Redact any secrets.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Where did this happen?
+      description: App, CLI, or both.
+      options:
+        - Menu bar app
+        - CLI (`switch-commit`)
+        - Both
+        - Unsure
+    validations:
+      required: true
+
+  - type: input
+    id: macos_version
+    attributes:
+      label: macOS version
+      description: e.g. macOS 14.7 or macOS 15.2
+      placeholder: macOS 14.x
+    validations:
+      required: true
+
+  - type: input
+    id: app_version
+    attributes:
+      label: App / CLI version
+      description: Version from Settings, About, or `switch-commit --version` / release notes.
+      placeholder: e.g. 0.3.8
+    validations:
+      required: true
+
+  - type: dropdown
+    id: diagnostics
+    attributes:
+      label: Did you run diagnostics?
+      description: Prefer `switch-commit doctor` or in-app diagnostics. Paste only non-secret output below if useful.
+      options:
+        - Yes — `switch-commit doctor`
+        - Yes — in-app diagnostics
+        - Yes — both
+        - No
+    validations:
+      required: true
+
+  - type: textarea
+    id: diagnostics_output
+    attributes:
+      label: Diagnostics output (optional)
+      description: |
+        Paste relevant doctor / diagnostics output only. Redact paths or hosts if sensitive.
+        Do not include SSH private keys, tokens, passwords, or full credential dumps.
+      render: text
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional context
+      description: Screenshots (no secrets visible), related profiles setup (metadata only), or other notes.
