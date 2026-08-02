@@ -11,7 +11,8 @@ checksum_name="${artifact_name}.sha256"
 release_dir="${repo_root}/dist/v${version}"
 artifact_path="${release_dir}/${artifact_name}"
 checksum_path="${release_dir}/${checksum_name}"
-notes_source="${repo_root}/docs/release-notes/v${version}.md"
+changelog_source="${repo_root}/CHANGELOG.md"
+extract_notes="${repo_root}/Scripts/site-landing/extract-release-notes.mjs"
 notes_asset_path="${release_dir}/SwitchCommit-v${version}-macOS.md"
 site_dir="${repo_root}/site"
 tag="v${version}"
@@ -63,15 +64,30 @@ if [[ -z "${generate_appcast_tool}" ]]; then
     exit 1
 fi
 
-if [[ ! -f "${notes_source}" ]]; then
-    echo "error: missing release notes ${notes_source}" >&2
-    echo "error: add docs/release-notes/v${version}.md before tagging v${version}" >&2
+if [[ ! -f "${changelog_source}" ]]; then
+    echo "error: missing changelog ${changelog_source}" >&2
+    echo "error: add CHANGELOG.md before tagging v${version}" >&2
+    exit 1
+fi
+
+if [[ ! -f "${extract_notes}" ]]; then
+    echo "error: missing release-notes extractor ${extract_notes}" >&2
+    exit 1
+fi
+
+if ! command -v node >/dev/null 2>&1; then
+    echo "error: node is required to extract release notes from CHANGELOG.md" >&2
     exit 1
 fi
 
 echo "==> Publishing GitHub Release ${tag} to ${github_repo}"
 mkdir -p "${release_dir}"
-cp "${notes_source}" "${notes_asset_path}"
+if ! node "${extract_notes}" "${version}" > "${notes_asset_path}"; then
+    echo "error: missing release notes for ${version} in CHANGELOG.md" >&2
+    echo "error: add ## [${version}] - YYYY-MM-DD to CHANGELOG.md before tagging v${version}" >&2
+    exit 1
+fi
+notes_source="${notes_asset_path}"
 release_assets=("${artifact_path}" "${checksum_path}" "${notes_asset_path}")
 if gh release view "${tag}" --repo "${github_repo}" >/dev/null 2>&1; then
     gh release upload "${tag}" "${release_assets[@]}" --repo "${github_repo}" --clobber

@@ -3258,7 +3258,11 @@ let tests: [(String, () throws -> Void)] = [
         try expect(source.contains("SwitchCommit-v${version}-macOS.dmg"), "publisher should upload the release DMG")
         try expect(!source.contains("macOS.zip"), "publisher should not publish a ZIP artifact")
         try expect(source.contains("checksum_name=\"${artifact_name}.sha256\""), "publisher should upload the checksum")
-        try expect(source.contains("docs/release-notes/v${version}.md"), "publisher should require matching release notes")
+        try expect(source.contains("CHANGELOG.md"), "publisher should require root CHANGELOG.md")
+        try expect(
+            source.contains("Scripts/site-landing/extract-release-notes.mjs"),
+            "publisher should extract version notes from CHANGELOG.md"
+        )
         try expect(
             source.contains("missing release notes"),
             "publisher must fail when release notes are missing instead of publishing an empty body"
@@ -3328,7 +3332,7 @@ let tests: [(String, () throws -> Void)] = [
         let source = try String(contentsOf: readmeURL, encoding: .utf8)
 
         try expect(source.contains("git tag v0.2.0"), "README should show how to tag a release")
-        try expect(source.contains("docs/release-notes/"), "README should document required release notes path")
+        try expect(source.contains("CHANGELOG.md"), "README should document required CHANGELOG.md path")
         try expect(!source.contains("RELEASE_CHANNEL_TOKEN"), "README should not require a legacy cross-repo release channel token")
         try expect(source.contains("SPARKLE_PRIVATE_ED_KEY"), "README should document the Sparkle private key secret")
         try expect(source.contains("generate_keys -x /tmp/sparkle-private-key.txt"), "README should show how to export the Sparkle private key")
