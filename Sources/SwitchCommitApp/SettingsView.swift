@@ -3,64 +3,105 @@ import SwitchCommitAppLogic
 import SwitchCommitCore
 import SwiftUI
 
-struct SettingsView: View {
-    private enum SettingsTab: String, Hashable, CaseIterable, Identifiable {
-        case general
-        case accounts
-        case detection
-        case updates
+enum SettingsTab: String, Hashable, CaseIterable, Identifiable {
+    case general
+    case accounts
+    case detection
+    case updates
 
-        var id: String { rawValue }
+    var id: String { rawValue }
 
-        var title: String {
-            switch self {
-            case .general: return "General"
-            case .accounts: return "Accounts"
-            case .detection: return "Detection"
-            case .updates: return "Updates"
-            }
-        }
-
-        var systemImage: String {
-            switch self {
-            case .general: return "gearshape"
-            case .accounts: return "person.2"
-            case .detection: return "magnifyingglass"
-            case .updates: return "arrow.down.circle"
-            }
+    var title: String {
+        switch self {
+        case .general: return "General"
+        case .accounts: return "Accounts"
+        case .detection: return "Detection"
+        case .updates: return "Updates"
         }
     }
 
+    var systemImage: String {
+        switch self {
+        case .general: return "gearshape"
+        case .accounts: return "person.2"
+        case .detection: return "magnifyingglass"
+        case .updates: return "arrow.down.circle"
+        }
+    }
+}
+
+struct SettingsView: View {
     @ObservedObject var viewModel: AppViewModel
+    @Environment(\.settingsSmokeProbe) private var environmentSmokeProbe
+    private let injectedSmokeProbe: SettingsSmokeProbe?
     @State private var isShowingDeleteConfirmation = false
-    @State private var selectedTab: SettingsTab = .accounts
+    @State private var internalSelectedTab: SettingsTab = .accounts
     @State private var isShowingSSHKeyPathAlert = false
     @State private var sshKeyPathDraft = ""
+    private let externalSelectedTab: Binding<SettingsTab>?
+
+    init(
+        viewModel: AppViewModel,
+        selectedTab: Binding<SettingsTab>? = nil,
+        smokeProbe: SettingsSmokeProbe? = nil
+    ) {
+        self.viewModel = viewModel
+        self.externalSelectedTab = selectedTab
+        self.injectedSmokeProbe = smokeProbe
+    }
+
+    private var smokeProbe: SettingsSmokeProbe? {
+        injectedSmokeProbe ?? environmentSmokeProbe
+    }
+
+    private var selectedTab: Binding<SettingsTab> {
+        externalSelectedTab ?? $internalSelectedTab
+    }
 
     var body: some View {
-        NavigationSplitView {
-            List(SettingsTab.allCases, selection: $selectedTab) { tab in
-                NavigationLink(value: tab) {
-                    Label(tab.title, systemImage: tab.systemImage)
+        HStack(spacing: 0) {
+            List(SettingsTab.allCases, selection: selectedTab) { tab in
+                Label(tab.title, systemImage: tab.systemImage)
+                    .tag(tab)
+                    .accessibilityIdentifier("settings.tab.\(tab.rawValue)")
+            }
+            .listStyle(.sidebar)
+            .frame(minWidth: 160, idealWidth: 180, maxWidth: 220)
+            .onAppear {
+                for tab in SettingsTab.allCases {
+                    smokeProbe?.markSidebar(tab)
                 }
             }
-            .navigationSplitViewColumnWidth(min: 160, ideal: 180, max: 220)
-        } detail: {
+            .onChange(of: selectedTab.wrappedValue) { _, _ in
+                for tab in SettingsTab.allCases {
+                    smokeProbe?.markSidebar(tab)
+                }
+            }
+
+            Divider()
+
             Group {
-                switch selectedTab {
+                switch selectedTab.wrappedValue {
                 case .general:
                     generalTab
+                        .accessibilityIdentifier("settings.detail.general")
+                        .onAppear { smokeProbe?.markDetail(.general) }
                 case .accounts:
                     accountsTab
+                        .accessibilityIdentifier("settings.detail.accounts")
+                        .onAppear { smokeProbe?.markDetail(.accounts) }
                 case .detection:
                     detectionTab
+                        .accessibilityIdentifier("settings.detail.detection")
+                        .onAppear { smokeProbe?.markDetail(.detection) }
                 case .updates:
                     updatesTab
+                        .accessibilityIdentifier("settings.detail.updates")
+                        .onAppear { smokeProbe?.markDetail(.updates) }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .navigationSplitViewStyle(.balanced)
         .frame(minWidth: 720, minHeight: 440)
         .alert(DeleteAccountConfirmationContent.title, isPresented: $isShowingDeleteConfirmation) {
             Button(DeleteAccountConfirmationContent.confirmButtonTitle, role: .destructive) {
