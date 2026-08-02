@@ -645,7 +645,7 @@
         <span class="mark-dot" aria-hidden="true"></span>
         Switch Commit
       </a>
-      <div class="nav-meta">release channel · <em>v0.3.7</em></div>
+      <div class="nav-meta">release channel · <em>v0.3.8</em></div>
     </header>
 
     <section class="hero">
@@ -669,11 +669,11 @@
         </p>
 
         <div class="cta-row">
-          <a class="btn btn-primary" href="https://github.com/kwiats/switch-commit/releases/download/v0.3.7/SwitchCommit-v0.3.7-macOS.dmg">
+          <a class="btn btn-primary" href="https://github.com/kwiats/switch-commit/releases/download/v0.3.8/SwitchCommit-v0.3.8-macOS.dmg">
             <svg viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path d="M8 2v8m0 0L5 7.5M8 10l3-2.5M3 13h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            Pobierz v0.3.7
+            Pobierz v0.3.8
           </a>
           <a class="btn btn-ghost" href="#install">
             Instalacja
@@ -760,6 +760,14 @@
         <h2>Changelog</h2>
         <div class="changelog-entries">
           <article class="changelog-entry">
+            <div class="changelog-meta">// v0.3.8 · 2 Aug 2026</div>
+            <div class="changelog-body"><h1>Switch Commit v0.3.8</h1>
+<h2>Highlights</h2>
+<ul><li>Settings → Check for Updates also syncs/repairs <code>/usr/local/bin/switch-commit</code> to the CLI inside the current app bundle (including when the app is already up to date).</li><li><code>switch-commit update</code> still installs the app and repairs the CLI, and now restarts a running Switch Commit menu bar app when possible.</li></ul>
+<h2>Fixes</h2>
+<ul><li>Settings uses a custom HStack sidebar instead of <code>NavigationSplitView</code>, so switching to Updates no longer blanks the detail pane.</li><li>Managed-file backups no longer collide when the CLI or app reapplies config concurrently (unique backup names).</li><li>Rewriting a managed file with identical content skips the backup and write, so read-heavy CLI commands stop growing the backups folder unnecessarily.</li></ul></div>
+          </article>
+          <article class="changelog-entry">
             <div class="changelog-meta">// v0.3.7 · 1 Aug 2026</div>
             <div class="changelog-body"><h1>Switch Commit v0.3.7</h1>
 <h2>Highlights</h2>
@@ -783,12 +791,6 @@
 <h2>Highlights</h2>
 <ul><li>SSH and HTTPS profile access methods now drive Git transport through managed <code>url.insteadOf</code> rules, so folder assignments rewrite <code>https://</code> ↔ <code>git@</code> automatically without changing remotes in <code>.git/config</code>.</li><li>SSH profiles continue to set <code>core.sshCommand</code> with the profile key, so HTTPS remotes in an assigned folder authenticate with that key instead of global HTTPS credentials.</li><li><code>switch-commit doctor</code> warns when a folder profile’s access method differs from the global profile, where accumulated <code>insteadOf</code> rules may conflict.</li></ul></div>
           </article>
-          <article class="changelog-entry">
-            <div class="changelog-meta">// v0.3.3 · 31 Jul 2026</div>
-            <div class="changelog-body"><h1>Switch Commit v0.3.3</h1>
-<h2>Highlights</h2>
-<ul><li>Folder rules from relative paths such as <code>.</code> now resolve to absolute paths, so Git <code>includeIf gitdir:</code> matches the real repository and per-folder identity switching works again.</li><li>SSH connection tests use the selected profile’s key (<code>-i</code> with <code>IdentitiesOnly</code>), so a newly added key is not ignored in favor of the default agent identity.</li></ul></div>
-          </article>
         </div>
       </div>
     </section>
@@ -798,7 +800,7 @@
       <span>© 2026 Switch Commit</span>
       <div class="links">
         <a href="appcast.xml">appcast.xml</a>
-        <a href="https://github.com/kwiats/switch-commit/releases/download/v0.3.7/SwitchCommit-v0.3.7-macOS.dmg.sha256">SHA-256</a>
+        <a href="https://github.com/kwiats/switch-commit/releases/download/v0.3.8/SwitchCommit-v0.3.8-macOS.dmg.sha256">SHA-256</a>
         <a href="https://github.com/kwiats/switch-commit">GitHub</a>
       </div>
     </footer>
