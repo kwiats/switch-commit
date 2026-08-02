@@ -1149,6 +1149,69 @@ let tests: [(String, () throws -> Void)] = [
             try writer.write("bad", to: outside)
         }, "outside writes should be rejected")
     }),
+    ("safe file writer concurrent overwrites create unique backups without error", {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let managed = root.appendingPathComponent("managed", isDirectory: true)
+        let backups = root.appendingPathComponent("backups", isDirectory: true)
+        let writer = SafeFileWriter(allowedRoots: [managed], backupDirectory: backups)
+        let target = managed.appendingPathComponent("global.gitconfig")
+
+        try writer.write("seed", to: target)
+
+        let group = DispatchGroup()
+        let lock = NSLock()
+        var failures: [String] = []
+        let writerCount = 24
+        for index in 0..<writerCount {
+            group.enter()
+            DispatchQueue.global(qos: .userInitiated).async {
+                defer { group.leave() }
+                do {
+                    try writer.write("content-\(index)", to: target)
+                } catch {
+                    lock.lock()
+                    failures.append(String(describing: error))
+                    lock.unlock()
+                }
+            }
+        }
+        group.wait()
+
+        try expect(
+            failures.isEmpty,
+            "concurrent managed writes should not collide on backup names: \(failures.prefix(3).joined(separator: "; "))"
+        )
+        let backupFiles = try FileManager.default.contentsOfDirectory(atPath: backups.path)
+        try expect(backupFiles.count == writerCount, "each overwrite should create its own backup")
+        try expect(
+            Set(backupFiles).count == backupFiles.count,
+            "backup filenames must be unique under concurrency"
+        )
+        try expect(
+            backupFiles.allSatisfy { $0.contains("global.gitconfig") },
+            "backups should retain original filename suffix"
+        )
+    }),
+    ("safe file writer skips backup when content is unchanged", {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let managed = root.appendingPathComponent("managed", isDirectory: true)
+        let backups = root.appendingPathComponent("backups", isDirectory: true)
+        let writer = SafeFileWriter(allowedRoots: [managed], backupDirectory: backups)
+        let target = managed.appendingPathComponent("global.gitconfig")
+
+        try writer.write("unchanged", to: target)
+        try writer.write("unchanged", to: target)
+
+        let backupFiles: [String]
+        if FileManager.default.fileExists(atPath: backups.path) {
+            backupFiles = try FileManager.default.contentsOfDirectory(atPath: backups.path)
+        } else {
+            backupFiles = []
+        }
+        try expect(backupFiles.isEmpty, "identical rewrite should not create a backup")
+        let content = try String(contentsOf: target, encoding: .utf8)
+        try expect(content == "unchanged", "identical rewrite should leave managed content intact")
+    }),
     ("safe file writer rejects writes through symlinked directories", {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let managed = root.appendingPathComponent("managed", isDirectory: true)
@@ -3294,6 +3357,57 @@ let tests: [(String, () throws -> Void)] = [
         try expect(!appSource.contains("#selector(runLocalDiagnostics)"), "menu should not wire a diagnostics menu action")
         try expect(appSource.contains("accessibilityDescription: \"Switch Commit\""), "status item should use Switch Commit in app chrome")
         try expect(windowSource.contains("createdWindow.title = \"Switch Commit Settings\""), "settings window header should use Switch Commit")
+    }),
+    ("settings navigation avoids NavigationSplitView blanking Updates", {
+        let settingsURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("Sources/SwitchCommitApp/SettingsView.swift")
+        let windowURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("Sources/SwitchCommitApp/SettingsWindowController.swift")
+        let smokeURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("Sources/SwitchCommitApp/SettingsNavigationSmoke.swift")
+        let appURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("Sources/SwitchCommitApp/SwitchCommitApp.swift")
+        let settingsSource = try String(contentsOf: settingsURL, encoding: .utf8)
+        let windowSource = try String(contentsOf: windowURL, encoding: .utf8)
+        let smokeSource = try String(contentsOf: smokeURL, encoding: .utf8)
+        let appSource = try String(contentsOf: appURL, encoding: .utf8)
+
+        try expect(
+            !settingsSource.contains("NavigationSplitView"),
+            "Settings must not use NavigationSplitView; it blanks the window when selecting Updates"
+        )
+        try expect(
+            !settingsSource.contains("NavigationLink(value:"),
+            "Settings sidebar must not use NavigationLink values inside a hosted split view"
+        )
+        try expect(
+            settingsSource.contains("HStack(spacing: 0)"),
+            "Settings should use an explicit HStack sidebar + detail chrome"
+        )
+        try expect(
+            settingsSource.contains(".listStyle(.sidebar)"),
+            "Settings section list should use sidebar list style"
+        )
+        try expect(
+            settingsSource.contains("accessibilityIdentifier(\"settings.tab.\\(tab.rawValue)\")"),
+            "Updates tab needs a stable accessibility identifier for smoke coverage"
+        )
+        try expect(
+            settingsSource.contains("accessibilityIdentifier(\"settings.detail.updates\")"),
+            "Updates detail needs a stable accessibility identifier for smoke coverage"
+        )
+        try expect(
+            windowSource.contains("window.contentViewController = hostingController"),
+            "Settings window must reinstall hosting content on each show for recovery"
+        )
+        try expect(
+            smokeSource.contains("SettingsNavigationSmoke"),
+            "App target must include a Settings navigation smoke harness"
+        )
+        try expect(
+            appSource.contains("--smoke-settings-navigation"),
+            "App entrypoint must expose --smoke-settings-navigation for end-to-end Settings tab checks"
+        )
     }),
     ("run local diagnostics requests settings presentation", {
         try MainActor.assumeIsolated {
