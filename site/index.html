@@ -360,13 +360,137 @@
       align-items: center;
       justify-content: center;
       background: #0a0e0b;
+      position: relative;
     }
 
-    .carousel-slide img {
+    .shot-frame {
+      position: relative;
+      width: 100%;
+      height: 100%;
+    }
+
+    .shot-media {
+      position: absolute;
+      inset: 0;
       width: 100%;
       height: 100%;
       object-fit: contain;
       display: block;
+      background: #070908;
+      z-index: 2;
+    }
+
+    .shot-mock {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      padding: clamp(0.85rem, 2.5vw, 1.35rem);
+      gap: 0.75rem;
+      background:
+        radial-gradient(600px 280px at 20% 0%, rgba(200, 245, 66, 0.07), transparent 55%),
+        #0a0e0b;
+      z-index: 1;
+    }
+
+    .shot-mock-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.55rem 0.7rem;
+      border: 1px solid var(--line);
+      border-radius: 0.25rem;
+      background: #121816;
+    }
+
+    .shot-mock-bar i {
+      width: 0.45rem;
+      height: 0.45rem;
+      border-radius: 50%;
+      background: var(--dim);
+    }
+
+    .shot-mock-bar i:nth-child(1) { background: #ff5f57; }
+    .shot-mock-bar i:nth-child(2) { background: #febc2e; }
+    .shot-mock-bar i:nth-child(3) { background: #28c840; }
+
+    .shot-mock-bar span {
+      margin-left: 0.4rem;
+      font-size: 0.68rem;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .shot-mock-body {
+      flex: 1;
+      display: grid;
+      grid-template-columns: minmax(9rem, 0.9fr) 1.4fr;
+      gap: 0.75rem;
+      min-height: 0;
+    }
+
+    .shot-mock-body.single {
+      grid-template-columns: 1fr;
+    }
+
+    .shot-panel {
+      border: 1px solid var(--line);
+      border-radius: 0.25rem;
+      background: #101612;
+      padding: 0.85rem;
+      min-height: 0;
+    }
+
+    .shot-panel.active {
+      border-color: rgba(200, 245, 66, 0.45);
+      box-shadow: 0 0 0 1px rgba(200, 245, 66, 0.08);
+    }
+
+    .shot-label {
+      font-size: 0.62rem;
+      color: var(--dim);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 0.65rem;
+    }
+
+    .shot-row {
+      padding: 0.65rem 0.7rem;
+      border: 1px solid var(--line);
+      border-radius: 0.2rem;
+      margin-bottom: 0.45rem;
+      background: #0e1210;
+    }
+
+    .shot-row.hilite {
+      border-color: rgba(200, 245, 66, 0.5);
+    }
+
+    .shot-row strong {
+      display: block;
+      color: var(--fg);
+      font-size: 0.82rem;
+      font-weight: 500;
+      margin-bottom: 0.2rem;
+    }
+
+    .shot-row span {
+      color: var(--muted);
+      font-size: 0.72rem;
+    }
+
+    .shot-badge {
+      align-self: flex-start;
+      margin-top: auto;
+      font-size: 0.65rem;
+      color: var(--amber);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      border: 1px dashed var(--dim);
+      border-radius: 0.2rem;
+      padding: 0.35rem 0.55rem;
+      width: fit-content;
     }
 
     .carousel-nav {
@@ -913,14 +1037,64 @@
         <div class="carousel" data-carousel>
           <div class="carousel-viewport">
             <div class="carousel-track" data-carousel-track>
+              <!-- Drop GIFs later as images/screenshots/01-menu-bar.gif (etc.); mocks hide automatically when the file loads. -->
               <figure class="carousel-slide">
-                <img src="images/screenshots/01-menu-bar.svg" alt="Switch Commit menu bar with active profile" width="1280" height="800" />
+                <div class="shot-frame">
+                  <div class="shot-mock" data-shot-mock>
+                    <div class="shot-mock-bar"><i></i><i></i><i></i><span>menu bar · identity</span></div>
+                    <div class="shot-mock-body">
+                      <div class="shot-panel">
+                        <div class="shot-label">active</div>
+                        <div class="shot-row hilite"><strong>kwiats</strong><span>work@example.com</span></div>
+                        <div class="shot-row"><strong>personal</strong><span>me@example.com</span></div>
+                      </div>
+                      <div class="shot-panel active">
+                        <div class="shot-label">preview</div>
+                        <div class="shot-row"><strong>Switch Commit</strong><span>Global profile · menu bar switch</span></div>
+                        <div class="shot-badge">GIF placeholder · 01-menu-bar.gif</div>
+                      </div>
+                    </div>
+                  </div>
+                  <img class="shot-media" src="images/screenshots/01-menu-bar.gif" alt="Switch Commit menu bar with active profile" width="1280" height="800" hidden />
+                </div>
               </figure>
               <figure class="carousel-slide">
-                <img src="images/screenshots/02-settings-accounts.svg" alt="Settings Accounts with profiles and folders" width="1280" height="800" />
+                <div class="shot-frame">
+                  <div class="shot-mock" data-shot-mock>
+                    <div class="shot-mock-bar"><i></i><i></i><i></i><span>settings · accounts</span></div>
+                    <div class="shot-mock-body">
+                      <div class="shot-panel">
+                        <div class="shot-label">sidebar</div>
+                        <div class="shot-row hilite"><strong>Accounts</strong><span>profiles</span></div>
+                        <div class="shot-row"><strong>Updates</strong><span>Sparkle</span></div>
+                        <div class="shot-row"><strong>About</strong><span>version</span></div>
+                      </div>
+                      <div class="shot-panel active">
+                        <div class="shot-label">accounts</div>
+                        <div class="shot-row hilite"><strong>kwiats · SSH</strong><span>work@example.com · 2 folders</span></div>
+                        <div class="shot-row"><strong>personal · HTTPS</strong><span>me@example.com</span></div>
+                        <div class="shot-badge">GIF placeholder · 02-settings-accounts.gif</div>
+                      </div>
+                    </div>
+                  </div>
+                  <img class="shot-media" src="images/screenshots/02-settings-accounts.gif" alt="Settings Accounts with profiles and folders" width="1280" height="800" hidden />
+                </div>
               </figure>
               <figure class="carousel-slide">
-                <img src="images/screenshots/03-folder-rules.svg" alt="Folder assignment rules in Settings" width="1280" height="800" />
+                <div class="shot-frame">
+                  <div class="shot-mock" data-shot-mock>
+                    <div class="shot-mock-bar"><i></i><i></i><i></i><span>settings · folders</span></div>
+                    <div class="shot-mock-body single">
+                      <div class="shot-panel active">
+                        <div class="shot-label">folder rules</div>
+                        <div class="shot-row hilite"><strong>~/work/acme · folder-tree</strong><span>→ kwiats</span></div>
+                        <div class="shot-row"><strong>~/code/side · single-repo</strong><span>→ personal</span></div>
+                        <div class="shot-badge">GIF placeholder · 03-folder-rules.gif</div>
+                      </div>
+                    </div>
+                  </div>
+                  <img class="shot-media" src="images/screenshots/03-folder-rules.gif" alt="Folder assignment rules in Settings" width="1280" height="800" hidden />
+                </div>
               </figure>
             </div>
           </div>
@@ -1008,14 +1182,26 @@
       var captions = ["Menu bar", "Settings · Accounts", "Folder rules"];
       var index = 0;
 
+      function revealMedia(img) {
+        var mock = img.parentElement && img.parentElement.querySelector("[data-shot-mock]");
+        if (mock) mock.remove();
+        img.hidden = false;
+      }
+
+      root.querySelectorAll(".shot-media").forEach(function (img) {
+        img.addEventListener("load", function () { revealMedia(img); });
+        img.addEventListener("error", function () { img.remove(); });
+        if (img.complete && img.naturalWidth > 0) revealMedia(img);
+      });
+
       function go(i) {
         index = (i + slides.length) % slides.length;
         track.style.transform = "translateX(" + (-index * 100) + "%)";
         if (caption) caption.textContent = captions[index] || "";
         slides.forEach(function (slide, si) {
           slide.setAttribute("aria-hidden", si === index ? "false" : "true");
-          var img = slide.querySelector("img");
-          if (img) img.tabIndex = si === index ? 0 : -1;
+          var img = slide.querySelector(".shot-media");
+          if (img && !img.hidden) img.tabIndex = si === index ? 0 : -1;
         });
         Array.prototype.forEach.call(dots.children, function (dot, di) {
           dot.setAttribute("aria-current", di === index ? "true" : "false");
