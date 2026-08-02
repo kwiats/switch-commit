@@ -28,6 +28,10 @@ public struct SafeFileWriter {
         )
 
         if fileManager.fileExists(atPath: standardizedTarget.path) {
+            let existing = try? String(contentsOf: standardizedTarget, encoding: .utf8)
+            if existing == content {
+                return
+            }
             try backupExistingFile(at: standardizedTarget)
         }
 
@@ -57,11 +61,10 @@ public struct SafeFileWriter {
         let timestamp = ISO8601DateFormatter()
             .string(from: Date())
             .replacingOccurrences(of: ":", with: "-")
-        let backupURL = backupDirectory
-            .appendingPathComponent("\(timestamp)-\(targetURL.lastPathComponent)")
-        if fileManager.fileExists(atPath: backupURL.path) {
-            try fileManager.removeItem(at: backupURL)
-        }
+        // UUID keeps concurrent CLI/app reapply backups from colliding on second-resolution timestamps.
+        let backupURL = backupDirectory.appendingPathComponent(
+            "\(timestamp)-\(UUID().uuidString)-\(targetURL.lastPathComponent)"
+        )
         try fileManager.copyItem(at: targetURL, to: backupURL)
     }
 }

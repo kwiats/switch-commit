@@ -51,7 +51,7 @@ The app is designed to manage only these paths:
 ~/.ssh/git-account-switcher.conf
 ```
 
-When existing files must be touched, the core file writer creates backups before replacement and rejects writes outside configured managed roots.
+When existing files must be touched, the core file writer creates backups before replacement and rejects writes outside configured managed roots. Identical rewrites skip the backup and write, and backup filenames include a UUID so concurrent reapply cannot collide.
 
 Switching the global profile from the menu writes the selected Git identity to:
 
