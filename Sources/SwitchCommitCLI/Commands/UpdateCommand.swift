@@ -49,7 +49,19 @@ struct UpdateCommand: ParsableCommand {
             try installer.install(from: snapshot.enclosureURL, expectedVersion: snapshot.latestVersion)
             try installer.repairCLISymlink()
             let installed = CLIVersion.current()
-            let done = "Installed Switch Commit \(installed). CLI repaired at /usr/local/bin/switch-commit."
+            var done = "Installed Switch Commit \(installed). CLI repaired at /usr/local/bin/switch-commit."
+            do {
+                if try MenuBarAppRelauncher().relaunchIfRunning() {
+                    done += " Menu bar app restarted."
+                }
+            } catch {
+                let warning =
+                    " Could not restart Switch Commit automatically; quit and reopen the app to load the update. (\(error.localizedDescription))"
+                done += warning
+                if !options.json {
+                    fputs("warning:\(warning)\n", stderr)
+                }
+            }
             if options.json {
                 print(CLIOutput.jsonMessage(done))
             } else {

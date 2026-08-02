@@ -42,6 +42,9 @@ final class SwitchCommitApp: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         print("SwitchCommitApp did finish launching")
+        updateChecker.successfulUpdateCycleHandler = { [weak self] in
+            self?.viewModel.syncCLIAfterSuccessfulUpdateCheck()
+        }
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         item.button?.image = NSImage(systemSymbolName: "person.crop.circle.badge.checkmark", accessibilityDescription: "Switch Commit")
         updateStatusItemPresentation(item)

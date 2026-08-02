@@ -7,8 +7,8 @@ Local-only macOS menu bar tool for switching Git identities globally and per fol
 - No telemetry.
 - No analytics.
 - No broad automatic product network calls.
-- Menu bar update checks contact the public Switch Commit release channel only after the user clicks `Check for Updates`.
-- The `switch-commit` CLI may contact that same public channel on a 12-hour cache to print an update notice, and always on `switch-commit update` (download + install app + repair CLI).
+- Menu bar update checks contact the public Switch Commit release channel only after the user clicks `Check for Updates` (and then sync/repair the CLI symlink to the app bundle).
+- The `switch-commit` CLI may contact that same public channel on a 12-hour cache to print an update notice, and always on `switch-commit update` (download + install app + repair CLI + restart a running menu bar app when possible).
 - No secrets in JSON profile files.
 - Managed writes are constrained to app-owned config files.
 - `~/.gitconfig` receives explicit include lines for managed Git config files and may have conflicting unmanaged `url.*.insteadOf` keys removed after backup when they oppose the active profile.
@@ -22,9 +22,9 @@ Local-only macOS menu bar tool for switching Git identities globally and per fol
 
 Switch Commit uses a public release channel for update metadata and signed app artifacts. The source repository can remain private because the app never downloads updates from the private repository and never embeds GitHub tokens.
 
-The menu bar app checks for updates only when the user clicks `Check for Updates` in Settings. Update artifacts must be signed before publication, and Sparkle verifies the downloaded update before installation.
+The menu bar app checks for updates only when the user clicks `Check for Updates` in Settings. Update artifacts must be signed before publication, and Sparkle verifies the downloaded update before installation. After a successful check (an update was installed, or the app is already up to date), Switch Commit also repairs `/usr/local/bin/switch-commit` so it points at the CLI bundled inside the updated app (macOS may prompt for administrator privileges).
 
-The CLI reads `https://kwiats.github.io/switch-commit/appcast.xml` (cached for 12 hours) so any `switch-commit` command can print when a newer release exists. Run `switch-commit update` to refresh live, download the DMG (SHA-256 verified when the companion `.sha256` asset exists), install `Switch Commit.app` into `/Applications`, and repair `/usr/local/bin/switch-commit`.
+The CLI reads `https://kwiats.github.io/switch-commit/appcast.xml` (cached for 12 hours) so any `switch-commit` command can print when a newer release exists. Run `switch-commit update` to refresh live, download the DMG (SHA-256 verified when the companion `.sha256` asset exists), install `Switch Commit.app` into `/Applications`, repair `/usr/local/bin/switch-commit`, and restart a running Switch Commit menu bar app when possible.
 
 ### Local GitHub Discovery
 
@@ -358,7 +358,7 @@ switch-commit doctor --path ~/Dev/acme --json
 
 #### `update`
 
-Check the public release channel live, download the latest DMG when newer than this CLI, install `Switch Commit.app` into `/Applications` (may prompt for admin), and repair `/usr/local/bin/switch-commit`.
+Check the public release channel live, download the latest DMG when newer than this CLI, install `Switch Commit.app` into `/Applications` (may prompt for admin), repair `/usr/local/bin/switch-commit`, and restart a running menu bar app when possible.
 
 ```bash
 switch-commit update
