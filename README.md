@@ -24,6 +24,14 @@ export POLAR_CHECKOUT_URL='https://buy.polar.sh/your-checkout-link'
 node Scripts/site-landing/sync-landing.mjs
 ```
 
+**Polar Checkout Link → Success URL** (after payment):
+
+```text
+https://kwiats.github.io/switch-commit/thanks.html
+```
+
+Optional with session id: `https://kwiats.github.io/switch-commit/thanks.html?checkout_id={CHECKOUT_ID}`
+
 ## Safety Contract
 
 - No telemetry.
