@@ -3259,6 +3259,57 @@ let tests: [(String, () throws -> Void)] = [
         try expect(appSource.contains("accessibilityDescription: \"Switch Commit\""), "status item should use Switch Commit in app chrome")
         try expect(windowSource.contains("createdWindow.title = \"Switch Commit Settings\""), "settings window header should use Switch Commit")
     }),
+    ("settings navigation avoids NavigationSplitView blanking Updates", {
+        let settingsURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("Sources/SwitchCommitApp/SettingsView.swift")
+        let windowURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("Sources/SwitchCommitApp/SettingsWindowController.swift")
+        let smokeURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("Sources/SwitchCommitApp/SettingsNavigationSmoke.swift")
+        let appURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+            .appendingPathComponent("Sources/SwitchCommitApp/SwitchCommitApp.swift")
+        let settingsSource = try String(contentsOf: settingsURL, encoding: .utf8)
+        let windowSource = try String(contentsOf: windowURL, encoding: .utf8)
+        let smokeSource = try String(contentsOf: smokeURL, encoding: .utf8)
+        let appSource = try String(contentsOf: appURL, encoding: .utf8)
+
+        try expect(
+            !settingsSource.contains("NavigationSplitView"),
+            "Settings must not use NavigationSplitView; it blanks the window when selecting Updates"
+        )
+        try expect(
+            !settingsSource.contains("NavigationLink(value:"),
+            "Settings sidebar must not use NavigationLink values inside a hosted split view"
+        )
+        try expect(
+            settingsSource.contains("HStack(spacing: 0)"),
+            "Settings should use an explicit HStack sidebar + detail chrome"
+        )
+        try expect(
+            settingsSource.contains(".listStyle(.sidebar)"),
+            "Settings section list should use sidebar list style"
+        )
+        try expect(
+            settingsSource.contains("accessibilityIdentifier(\"settings.tab.\\(tab.rawValue)\")"),
+            "Updates tab needs a stable accessibility identifier for smoke coverage"
+        )
+        try expect(
+            settingsSource.contains("accessibilityIdentifier(\"settings.detail.updates\")"),
+            "Updates detail needs a stable accessibility identifier for smoke coverage"
+        )
+        try expect(
+            windowSource.contains("window.contentViewController = hostingController"),
+            "Settings window must reinstall hosting content on each show for recovery"
+        )
+        try expect(
+            smokeSource.contains("SettingsNavigationSmoke"),
+            "App target must include a Settings navigation smoke harness"
+        )
+        try expect(
+            appSource.contains("--smoke-settings-navigation"),
+            "App entrypoint must expose --smoke-settings-navigation for end-to-end Settings tab checks"
+        )
+    }),
     ("run local diagnostics requests settings presentation", {
         try MainActor.assumeIsolated {
             let viewModel = AppViewModel(profiles: [])

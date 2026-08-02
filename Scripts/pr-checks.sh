@@ -7,3 +7,6 @@ swift run SwitchCommitCoreTestRunner
 
 echo "==> Building package"
 swift build
+
+echo "==> Settings navigation smoke (launches app UI)"
+Scripts/smoke-settings-navigation.sh
