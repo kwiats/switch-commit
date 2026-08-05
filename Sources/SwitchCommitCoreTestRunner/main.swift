@@ -4487,6 +4487,14 @@ let tests: [(String, () throws -> Void)] = [
                 throw TestFailure.expectationFailed("expected global context")
             }
         }
+    }),
+    ("noop keychain store never persists secrets", {
+        let store = NoOpKeychainStore()
+        let id = KeychainCredentialIdentifier(profileId: "p1", purpose: "https")
+        try store.save("secret", for: id)
+        let readValue = try store.read(id)
+        try expect(readValue == nil, "noop must not return secrets")
+        try store.delete(id)
     })
 ]
 

@@ -1,5 +1,4 @@
 import Foundation
-import Security
 
 public struct KeychainCredentialIdentifier: Equatable, Hashable, Sendable {
     public let rawValue: String
@@ -36,6 +35,21 @@ public final class InMemoryKeychainStore: KeychainStoring {
         values.removeValue(forKey: identifier)
     }
 }
+
+public final class NoOpKeychainStore: KeychainStoring {
+    public init() {}
+
+    public func save(_ value: String, for identifier: KeychainCredentialIdentifier) throws {}
+
+    public func read(_ identifier: KeychainCredentialIdentifier) throws -> String? {
+        nil
+    }
+
+    public func delete(_ identifier: KeychainCredentialIdentifier) throws {}
+}
+
+#if canImport(Security)
+import Security
 
 public final class SystemKeychainStore: KeychainStoring {
     public init() {}
@@ -86,3 +100,4 @@ public final class SystemKeychainStore: KeychainStoring {
         }
     }
 }
+#endif

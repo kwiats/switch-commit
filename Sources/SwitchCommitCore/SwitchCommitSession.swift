@@ -202,9 +202,14 @@ public final class SwitchCommitSession {
 
     public static func live() throws -> SwitchCommitSession {
         let homeDirectory = FileManager.default.homeDirectoryForCurrentUser
+        #if canImport(Security)
+        let keychainStore: KeychainStoring = SystemKeychainStore()
+        #else
+        let keychainStore: KeychainStoring = NoOpKeychainStore()
+        #endif
         let session = try SwitchCommitSession(
             profileStore: ProfileStore(fileURL: SwitchCommitPaths.defaultProfilesURL(homeDirectory: homeDirectory)),
-            keychainStore: SystemKeychainStore(),
+            keychainStore: keychainStore,
             gitConfigInstaller: ManagedGitConfigInstaller(homeDirectory: homeDirectory),
             homeDirectory: homeDirectory
         )
