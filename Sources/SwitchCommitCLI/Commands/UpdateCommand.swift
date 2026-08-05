@@ -5,7 +5,8 @@ import SwitchCommitCore
 struct UpdateCommand: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "update",
-        abstract: "Check the public release channel and install the latest Switch Commit app + CLI."
+        abstract: "Check the public release channel and install the latest Switch Commit app + CLI. "
+            + "Installs the app DMG on macOS, or replaces the running CLI binary on Linux/Windows."
     )
 
     @OptionGroup
@@ -72,11 +73,45 @@ struct UpdateCommand: ParsableCommand {
             CLIRuntime.terminate(for: error, json: options.json)
         }
         #else
-        CLIRuntime.terminate(
-            code: .failure,
-            message: "Portable binary update is not wired yet for this platform.",
-            json: options.json
-        )
+        do {
+            let installer = CLIBinaryInstaller()
+            let os = CLIReleaseAsset.currentOS()
+            let arch = CLIReleaseAsset.currentArch()
+            let assetURL = CLIReleaseAsset.downloadURL(
+                version: snapshot.latestVersion,
+                os: os,
+                arch: arch
+            )
+
+            let temporaryRoot = FileManager.default.temporaryDirectory
+                .appendingPathComponent("switch-commit-cli-update-\(UUID().uuidString)", isDirectory: true)
+            try FileManager.default.createDirectory(at: temporaryRoot, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: temporaryRoot) }
+
+            let downloadedBinary = temporaryRoot.appendingPathComponent(CLIReleaseAsset.fileName(os: os, arch: arch))
+            do {
+                try installer.download(assetURL, to: downloadedBinary)
+            } catch {
+                throw CLIBinaryInstallerError.assetMissing
+            }
+
+            // A missing .sha256 file is not fatal; a present-but-mismatched one is.
+            if let expectedHex = installer.readSHA256SumFile(at: CLIReleaseAsset.sha256URL(for: assetURL)) {
+                try installer.verifySHA256(fileURL: downloadedBinary, expectedHex: expectedHex)
+            }
+
+            let runningExecutable = try installer.resolveRunningExecutable()
+            try installer.replaceExecutable(at: runningExecutable, with: downloadedBinary)
+
+            let done = "Installed switch-commit \(snapshot.latestVersion) at \(runningExecutable.path)."
+            if options.json {
+                print(CLIOutput.jsonMessage(done))
+            } else {
+                print(done)
+            }
+        } catch {
+            CLIRuntime.terminate(for: error, json: options.json)
+        }
         #endif
     }
 }

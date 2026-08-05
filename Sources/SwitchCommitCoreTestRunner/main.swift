@@ -4527,6 +4527,23 @@ let tests: [(String, () throws -> Void)] = [
                 == "https://github.com/kwiats/git-account-switcher/releases/download/v1.2.3/switch-commit-linux-x86_64",
             "download url"
         )
+    }),
+    ("cli binary installer replaces destination atomically", {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("sc-bin-\(UUID().uuidString)", isDirectory: true)
+        try fm.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: root) }
+
+        let destination = root.appendingPathComponent("switch-commit")
+        try "old".write(to: destination, atomically: true, encoding: .utf8)
+        let source = root.appendingPathComponent("new-bin")
+        try "new".write(to: source, atomically: true, encoding: .utf8)
+
+        let installer = CLIBinaryInstaller(fileManager: fm)
+        try installer.replaceExecutable(at: destination, with: source)
+
+        let body = try String(contentsOf: destination, encoding: .utf8)
+        try expect(body == "new", "replaced content")
     })
 ]
 
