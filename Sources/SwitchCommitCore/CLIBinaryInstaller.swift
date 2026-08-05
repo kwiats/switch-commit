@@ -1,5 +1,5 @@
+import Crypto
 import Foundation
-import CryptoKit
 
 /// Downloads and installs `switch-commit` CLI portable binaries published on the
 /// public GitHub release channel (used on Linux/Windows where there is no app DMG).
