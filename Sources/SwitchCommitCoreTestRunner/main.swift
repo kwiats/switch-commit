@@ -4499,6 +4499,34 @@ let tests: [(String, () throws -> Void)] = [
     ("process launch path finds absolute commands", {
         let url = ProcessLaunchPath.executableURL(for: "/bin/sh", environment: ["PATH": ""])
         try expect(url?.path == "/bin/sh", "absolute path")
+    }),
+    ("cli release asset names are stable per platform", {
+        try expect(
+            CLIReleaseAsset.fileName(os: .linux, arch: .x86_64) == "switch-commit-linux-x86_64",
+            "linux amd64"
+        )
+        try expect(
+            CLIReleaseAsset.fileName(os: .windows, arch: .x86_64) == "switch-commit-windows-x86_64.exe",
+            "windows amd64"
+        )
+        try expect(
+            CLIReleaseAsset.fileName(os: .linux, arch: .arm64) == "switch-commit-linux-arm64",
+            "linux arm64"
+        )
+    }),
+    ("cli release asset url uses github download path", {
+        // Real origin: git@github.com:kwiats/git-account-switcher.git
+        let url = CLIReleaseAsset.downloadURL(
+            version: "1.2.3",
+            os: .linux,
+            arch: .x86_64,
+            repository: "kwiats/git-account-switcher"
+        )
+        try expect(
+            url.absoluteString
+                == "https://github.com/kwiats/git-account-switcher/releases/download/v1.2.3/switch-commit-linux-x86_64",
+            "download url"
+        )
     })
 ]
 
