@@ -422,6 +422,10 @@ The CLI follows the same safety contract as the app:
 - `doctor` runs local Git and config checks only; it does not probe hosts over the network;
 - managed writes stay under app-owned paths; user `~/.gitconfig` and `~/.ssh/config` are never replaced wholesale (conflicting unmanaged `insteadOf` keys in `~/.gitconfig` may be removed after backup).
 
+### Agent skill / plugin
+
+Coding agents (Claude Code, Codex) can load a Switch Commit skill that knows safe CLI usage — inspect identity, switch profiles, and manage folder rules (not create/edit/delete profiles or `update`). See [agent-plugins/switch-commit/README.md](agent-plugins/switch-commit/README.md).
+
 ## Development
 
 ```bash

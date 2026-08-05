@@ -5,6 +5,7 @@
 | Need | Where |
 |---|---|
 | How Switch Commit works, safety contract, CLI reference | [README.md](README.md) |
+| Agent skill / plugin for Claude Code or Codex | [agent-plugins/switch-commit/README.md](agent-plugins/switch-commit/README.md) |
 | Bug reports and feature requests | [GitHub Issues](https://github.com/kwiats/switch-commit/issues) |
 | Contributing / development setup | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | Security vulnerabilities | [SECURITY.md](SECURITY.md) (private reporting only) |
