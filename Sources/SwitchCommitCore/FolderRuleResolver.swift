@@ -26,7 +26,7 @@ public enum FolderRuleResolver: Sendable {
         var trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed == "~" {
             trimmed = homeDirectory.path
-        } else if trimmed.hasPrefix("~/") {
+        } else if trimmed.hasPrefix("~/") || trimmed.hasPrefix("~\\") {
             trimmed = homeDirectory.appendingPathComponent(String(trimmed.dropFirst(2))).path
         } else if !(trimmed as NSString).isAbsolutePath {
             trimmed = currentDirectory.appendingPathComponent(trimmed).path
@@ -77,12 +77,16 @@ public enum FolderRuleResolver: Sendable {
         return FolderRuleResolution(kind: .global, rule: nil, profile: active)
     }
 
+    public static func pathMatches(_ path: String, rulePath: String, mode: FolderRuleMatchMode) -> Bool {
+        matches(path: path, rulePath: rulePath, mode: mode)
+    }
+
     private static func matches(path: String, rulePath: String, mode: FolderRuleMatchMode) -> Bool {
         switch mode {
         case .singleRepo:
             return path == rulePath
         case .folderTree:
-            return path == rulePath || path.hasPrefix(rulePath + "/")
+            return ManagedPath.isEqualOrDescendantPath(path, of: rulePath)
         }
     }
 }

@@ -6,9 +6,9 @@ public enum FolderPathNormalizer {
         let expanded: String
         if trimmed == "~" {
             expanded = FileManager.default.homeDirectoryForCurrentUser.path
-        } else if trimmed.hasPrefix("~/") {
-            let home = FileManager.default.homeDirectoryForCurrentUser.path
-            expanded = home + String(trimmed.dropFirst(1))
+        } else if trimmed.hasPrefix("~/") || trimmed.hasPrefix("~\\") {
+            expanded = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent(String(trimmed.dropFirst(2))).path
         } else {
             expanded = trimmed
         }

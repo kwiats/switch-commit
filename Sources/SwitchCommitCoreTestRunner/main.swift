@@ -782,6 +782,20 @@ let tests: [(String, () throws -> Void)] = [
             "relative path with trailing slash should resolve and strip slash"
         )
     }),
+    ("folder rule tree match uses path components not raw slash suffix", {
+        let home = URL(fileURLWithPath: "/Users/demo")
+        let rulePath = FolderRuleResolver.normalize("/Users/demo/work", homeDirectory: home)
+        let child = FolderRuleResolver.normalize("/Users/demo/work/repo", homeDirectory: home)
+        let outside = FolderRuleResolver.normalize("/Users/demo/work-other", homeDirectory: home)
+        try expect(
+            FolderRuleResolver.pathMatches(child, rulePath: rulePath, mode: .folderTree),
+            "child matches tree"
+        )
+        try expect(
+            !FolderRuleResolver.pathMatches(outside, rulePath: rulePath, mode: .folderTree),
+            "sibling prefix must not match"
+        )
+    }),
     ("profile settings manager resolves relative folder rule paths to absolute gitdir patterns", {
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -1126,6 +1140,17 @@ let tests: [(String, () throws -> Void)] = [
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         let paths = SSHKeyDiscovery(homeDirectory: temporaryDirectory).discoverKeyPaths()
         try expect(paths.isEmpty, "missing .ssh should yield empty list")
+    }),
+    ("managed path treats backslash and slash children as under root", {
+        let root = URL(fileURLWithPath: "/tmp/switch-commit-root", isDirectory: true)
+        let childSlash = URL(fileURLWithPath: "/tmp/switch-commit-root/a/b", isDirectory: false)
+        let childMixed = root.appendingPathComponent("a").appendingPathComponent("b")
+        try expect(ManagedPath.isEqualOrDescendant(childSlash, of: root), "slash child")
+        try expect(ManagedPath.isEqualOrDescendant(childMixed, of: root), "appended child")
+        try expect(
+            !ManagedPath.isEqualOrDescendant(URL(fileURLWithPath: "/tmp/switch-commit-root-evil/x"), of: root),
+            "prefix sibling"
+        )
     }),
     ("safe file writer constrains writes and creates backups", {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
