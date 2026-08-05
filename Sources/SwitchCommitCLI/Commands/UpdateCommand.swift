@@ -44,6 +44,7 @@ struct UpdateCommand: ParsableCommand {
             print("Downloading \(snapshot.enclosureURL.absoluteString) …")
         }
 
+        #if os(macOS)
         do {
             let installer = AppReleaseInstaller()
             try installer.install(from: snapshot.enclosureURL, expectedVersion: snapshot.latestVersion)
@@ -70,9 +71,17 @@ struct UpdateCommand: ParsableCommand {
         } catch {
             CLIRuntime.terminate(for: error, json: options.json)
         }
+        #else
+        CLIRuntime.terminate(
+            code: .failure,
+            message: "Portable binary update is not wired yet for this platform.",
+            json: options.json
+        )
+        #endif
     }
 }
 
+#if os(macOS)
 struct AppReleaseInstaller {
     private let fileManager: FileManager
 
@@ -314,3 +323,4 @@ private enum AppReleaseInstallError: LocalizedError {
         }
     }
 }
+#endif

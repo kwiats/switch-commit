@@ -1,3 +1,4 @@
+#if os(macOS)
 import Foundation
 
 public struct MenuBarAppRelauncher: Sendable {
@@ -98,3 +99,4 @@ private struct UncheckedSendableCommandRunner: @unchecked Sendable {
         self.value = value
     }
 }
+#endif
