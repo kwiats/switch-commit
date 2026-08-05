@@ -16,13 +16,66 @@ public protocol CommandRunning: AnyObject {
     func run(_ command: String, arguments: [String], workingDirectory: URL?) throws -> CommandResult
 }
 
+public enum ProcessLaunchPath {
+    /// Resolves `command` to an executable URL. Absolute/relative paths used as-is;
+    /// bare names search PATH (and on Unix may use `/usr/bin/env` as last resort only if present).
+    public static func executableURL(
+        for command: String,
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        fileManager: FileManager = .default
+    ) -> URL? {
+        if command.contains("/") || command.contains("\\") {
+            return URL(fileURLWithPath: command)
+        }
+        let pathEnv = environment["PATH"] ?? ""
+        #if os(Windows)
+        let separator: Character = ";"
+        let extensions = ["", ".exe", ".cmd", ".bat"]
+        #else
+        let separator: Character = ":"
+        let extensions = [""]
+        #endif
+        for directory in pathEnv.split(separator: separator) {
+            for ext in extensions {
+                let candidate = URL(fileURLWithPath: String(directory))
+                    .appendingPathComponent(command + ext)
+                if fileManager.isExecutableFile(atPath: candidate.path)
+                    || fileManager.fileExists(atPath: candidate.path) {
+                    return candidate
+                }
+            }
+        }
+        #if !os(Windows)
+        let env = URL(fileURLWithPath: "/usr/bin/env")
+        if fileManager.fileExists(atPath: env.path) {
+            return env // caller must pass [command]+args when using env
+        }
+        #endif
+        return nil
+    }
+}
+
 public final class ProcessCommandRunner: CommandRunning {
     public init() {}
 
     public func run(_ command: String, arguments: [String], workingDirectory: URL?) throws -> CommandResult {
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = [command] + arguments
+        if command.contains("/") || command.contains("\\") {
+            process.executableURL = URL(fileURLWithPath: command)
+            process.arguments = arguments
+        } else if let resolved = ProcessLaunchPath.executableURL(for: command) {
+            if resolved.path == "/usr/bin/env" {
+                process.executableURL = resolved
+                process.arguments = [command] + arguments
+            } else {
+                process.executableURL = resolved
+                process.arguments = arguments
+            }
+        } else {
+            throw NSError(domain: "SwitchCommit", code: 127, userInfo: [
+                NSLocalizedDescriptionKey: "Command not found in PATH: \(command)"
+            ])
+        }
         process.currentDirectoryURL = workingDirectory
 
         let stdout = Pipe()

@@ -4495,6 +4495,10 @@ let tests: [(String, () throws -> Void)] = [
         let readValue = try store.read(id)
         try expect(readValue == nil, "noop must not return secrets")
         try store.delete(id)
+    }),
+    ("process launch path finds absolute commands", {
+        let url = ProcessLaunchPath.executableURL(for: "/bin/sh", environment: ["PATH": ""])
+        try expect(url?.path == "/bin/sh", "absolute path")
     })
 ]
 
