@@ -1,7 +1,9 @@
 import ArgumentParser
 import SwitchCommitCore
 
-#if canImport(Darwin)
+#if os(Windows)
+import ucrt
+#elseif canImport(Darwin)
 import Darwin
 #else
 import Glibc
@@ -56,6 +58,6 @@ struct DeleteCommand: ParsableCommand {
     }
 
     private var isInteractiveSession: Bool {
-        isatty(STDIN_FILENO) != 0
+        CLITerminal.isStandardInputTTY
     }
 }

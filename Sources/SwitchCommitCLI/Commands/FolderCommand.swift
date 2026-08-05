@@ -2,7 +2,9 @@ import ArgumentParser
 import Foundation
 import SwitchCommitCore
 
-#if canImport(Darwin)
+#if os(Windows)
+import ucrt
+#elseif canImport(Darwin)
 import Darwin
 #else
 import Glibc
@@ -139,7 +141,10 @@ struct FolderCommand: ParsableCommand {
         mutating func run() throws {
             do {
                 let session = try CLIRuntime.session()
-                let pathReference = reference.hasPrefix("~") || reference.contains("/") || reference == "."
+                let pathReference = reference.hasPrefix("~")
+                    || reference.contains("/")
+                    || reference.contains("\\")
+                    || reference == "."
                 let rule: FolderRule?
                 if pathReference {
                     let homeDirectory = FileManager.default.homeDirectoryForCurrentUser
@@ -162,7 +167,7 @@ struct FolderCommand: ParsableCommand {
                 }
 
                 if !yes {
-                    guard !options.json, isatty(STDIN_FILENO) != 0 else {
+                    guard !options.json, CLITerminal.isStandardInputTTY else {
                         CLIRuntime.terminate(
                             code: .usage,
                             message: "Pass --yes to remove a folder rule without an interactive confirmation.",
