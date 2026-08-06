@@ -1,6 +1,15 @@
 import Crypto
 import Foundation
 
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+@preconcurrency import Glibc
+#endif
+#if os(Windows)
+import WinSDK
+#endif
+
 /// Downloads and installs `switch-commit` CLI portable binaries published on the
 /// public GitHub release channel (used on Linux/Windows where there is no app DMG).
 public struct CLIBinaryInstaller {
@@ -58,23 +67,114 @@ public struct CLIBinaryInstaller {
 
     /// Resolves the currently running executable, following one level of symlink
     /// (mirrors `CLIVersion`'s handling of `/usr/local/bin` stubs).
-    public func resolveRunningExecutable(argument0: String? = CommandLine.arguments.first) throws -> URL {
-        guard let argument0 else {
+    ///
+    /// Prefers an OS-native lookup of the running process's own executable path
+    /// (`/proc/self/exe` on Linux, `_NSGetExecutablePath` on macOS,
+    /// `GetModuleFileNameW` on Windows), because that is authoritative
+    /// regardless of how the binary was invoked — including a bare
+    /// `switch-commit` launched via `PATH`, where `argument0` alone is not a
+    /// valid filesystem path. Falls back to resolving `argument0` (used as-is
+    /// when it contains a path separator, or searched for on `PATH` via
+    /// `ProcessLaunchPath` when it is a bare name) when the native lookup is
+    /// unavailable, or explicitly disabled — as tests do, to exercise the
+    /// `PATH`-search fallback in isolation.
+    public func resolveRunningExecutable(
+        argument0: String? = CommandLine.arguments.first,
+        nativeExecutablePath: String? = CLIBinaryInstaller.nativeExecutablePath()
+    ) throws -> URL {
+        var candidate: URL?
+
+        if let nativeExecutablePath, fileManager.fileExists(atPath: nativeExecutablePath) {
+            candidate = URL(fileURLWithPath: nativeExecutablePath).standardizedFileURL
+        }
+
+        if candidate == nil, let argument0, !argument0.isEmpty {
+            if argument0.contains("/") || argument0.contains("\\") {
+                candidate = URL(fileURLWithPath: argument0).standardizedFileURL
+            } else if let resolved = ProcessLaunchPath.executableURL(for: argument0, fileManager: fileManager),
+                      resolved.path != "/usr/bin/env" {
+                // `ProcessLaunchPath` falls back to `/usr/bin/env` as a generic process-spawning
+                // sentinel when `argument0` isn't found on PATH; that's meaningless here, where we
+                // need the actual on-disk executable to replace, so treat it as "not found".
+                candidate = resolved.standardizedFileURL
+            }
+        }
+
+        guard let candidate else {
             throw CLIBinaryInstallerError.cannotLocateRunningExecutable
         }
-        let url = URL(fileURLWithPath: argument0).standardizedFileURL
-        let resolved: URL
-        if let destination = try? fileManager.destinationOfSymbolicLink(atPath: url.path) {
-            resolved = URL(fileURLWithPath: destination, relativeTo: url.deletingLastPathComponent())
-                .standardizedFileURL
-        } else {
-            resolved = url
-        }
+
+        let resolved = resolveSymlink(candidate)
         guard fileManager.fileExists(atPath: resolved.path) else {
             throw CLIBinaryInstallerError.cannotLocateRunningExecutable
         }
         return resolved
     }
+
+    private func resolveSymlink(_ url: URL) -> URL {
+        if let destination = try? fileManager.destinationOfSymbolicLink(atPath: url.path) {
+            return URL(fileURLWithPath: destination, relativeTo: url.deletingLastPathComponent())
+                .standardizedFileURL
+        }
+        return url
+    }
+
+    /// Best-effort OS-native lookup of the currently running process's own
+    /// executable path. `nil` when unsupported/unavailable, in which case
+    /// callers fall back to `argument0`-based resolution.
+    public static func nativeExecutablePath() -> String? {
+        #if os(Linux)
+        return linuxProcSelfExecutablePath()
+        #elseif os(Windows)
+        return windowsModuleFileNamePath()
+        #elseif canImport(Darwin)
+        return darwinExecutablePath()
+        #else
+        return nil
+        #endif
+    }
+
+    #if os(Linux)
+    private static func linuxProcSelfExecutablePath() -> String? {
+        var buffer = [Int8](repeating: 0, count: 4096)
+        let length = readlink("/proc/self/exe", &buffer, buffer.count)
+        guard length > 0, length < buffer.count else {
+            return nil
+        }
+        return buffer.withUnsafeBufferPointer { pointer in
+            pointer.baseAddress.map { String(cString: $0) }
+        }
+    }
+    #endif
+
+    #if canImport(Darwin)
+    private static func darwinExecutablePath() -> String? {
+        var size: UInt32 = 0
+        _NSGetExecutablePath(nil, &size)
+        guard size > 0 else {
+            return nil
+        }
+        var buffer = [Int8](repeating: 0, count: Int(size))
+        guard _NSGetExecutablePath(&buffer, &size) == 0 else {
+            return nil
+        }
+        return buffer.withUnsafeBufferPointer { pointer in
+            pointer.baseAddress.map { String(cString: $0) }
+        }
+    }
+    #endif
+
+    #if os(Windows)
+    private static func windowsModuleFileNamePath() -> String? {
+        let capacity = Int(MAX_PATH) + 1
+        var buffer = [WCHAR](repeating: 0, count: capacity)
+        let length = GetModuleFileNameW(nil, &buffer, DWORD(capacity))
+        guard length > 0, Int(length) < capacity else {
+            return nil
+        }
+        return String(decodingCString: buffer, as: UTF16.self)
+    }
+    #endif
 
     /// Atomically replaces `destination` with `source`, keeping a `.bak` copy until the
     /// swap succeeds so a failure never leaves the CLI without a working executable.

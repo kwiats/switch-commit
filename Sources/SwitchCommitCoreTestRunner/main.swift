@@ -4544,6 +4544,34 @@ let tests: [(String, () throws -> Void)] = [
 
         let body = try String(contentsOf: destination, encoding: .utf8)
         try expect(body == "new", "replaced content")
+    }),
+    ("cli binary installer resolves the running executable via native OS lookup by default", {
+        let installer = CLIBinaryInstaller()
+        let resolved = try installer.resolveRunningExecutable()
+        try expect(
+            FileManager.default.fileExists(atPath: resolved.path),
+            "default resolution should find an existing executable"
+        )
+    }),
+    ("cli binary installer resolves a bare running executable name via PATH", {
+        let installer = CLIBinaryInstaller()
+        // Disabling the native OS lookup exercises the PATH-search fallback used for a
+        // bare argv[0] such as `switch-commit`, launched via PATH with no directory component.
+        let resolved = try installer.resolveRunningExecutable(argument0: "sh", nativeExecutablePath: nil)
+        try expect(resolved.path.hasSuffix("/sh"), "expected PATH-resolved 'sh', got \(resolved.path)")
+        try expect(
+            FileManager.default.fileExists(atPath: resolved.path),
+            "PATH-resolved executable should exist on disk"
+        )
+    }),
+    ("cli binary installer resolveRunningExecutable throws when nothing can be located", {
+        let installer = CLIBinaryInstaller()
+        try expectThrowsAny({
+            _ = try installer.resolveRunningExecutable(
+                argument0: "definitely-not-a-real-command-xyz",
+                nativeExecutablePath: nil
+            )
+        }, "unresolvable bare command with no native path should throw")
     })
 ]
 
