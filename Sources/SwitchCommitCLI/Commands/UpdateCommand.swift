@@ -42,11 +42,13 @@ struct UpdateCommand: ParsableCommand {
             print(CLIOutput.jsonMessage("Update available: \(snapshot.latestVersion)"))
         } else {
             print("Update available: \(current) → \(snapshot.latestVersion)")
-            print("Downloading \(snapshot.enclosureURL.absoluteString) …")
         }
 
         #if os(macOS)
         do {
+            if !options.json {
+                print("Downloading \(snapshot.enclosureURL.absoluteString) …")
+            }
             let installer = AppReleaseInstaller()
             try installer.install(from: snapshot.enclosureURL, expectedVersion: snapshot.latestVersion)
             try installer.repairCLISymlink()
@@ -82,6 +84,9 @@ struct UpdateCommand: ParsableCommand {
                 os: os,
                 arch: arch
             )
+            if !options.json {
+                print("Downloading \(assetURL.absoluteString) …")
+            }
 
             let temporaryRoot = FileManager.default.temporaryDirectory
                 .appendingPathComponent("switch-commit-cli-update-\(UUID().uuidString)", isDirectory: true)
