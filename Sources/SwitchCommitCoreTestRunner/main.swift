@@ -4515,17 +4515,20 @@ let tests: [(String, () throws -> Void)] = [
         )
     }),
     ("cli release asset url uses github download path", {
-        // Real origin: git@github.com:kwiats/git-account-switcher.git
         let url = CLIReleaseAsset.downloadURL(
             version: "1.2.3",
             os: .linux,
             arch: .x86_64,
-            repository: "kwiats/git-account-switcher"
+            repository: "kwiats/switch-commit"
         )
         try expect(
             url.absoluteString
-                == "https://github.com/kwiats/git-account-switcher/releases/download/v1.2.3/switch-commit-linux-x86_64",
+                == "https://github.com/kwiats/switch-commit/releases/download/v1.2.3/switch-commit-linux-x86_64",
             "download url"
+        )
+        try expect(
+            CLIReleaseAsset.defaultRepository == "kwiats/switch-commit",
+            "default release repository"
         )
     }),
     ("cli binary installer replaces destination atomically", {

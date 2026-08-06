@@ -204,18 +204,18 @@ Switch Commit ships a `switch-commit` command-line tool that shares the same pro
 1. **DMG installer package:** Open the release DMG and run `Install Switch Commit.pkg`. This installs the app to `/Applications` and places a launcher at `/usr/local/bin/switch-commit` that runs the bundled CLI inside the app bundle.
 2. **Settings → General → Install CLI:** After copying the app to Applications, open Settings and click **Install CLI** (or **Reinstall CLI**). This creates a symlink from `/usr/local/bin/switch-commit` to `Switch Commit.app/Contents/MacOS/switch-commit`. macOS may prompt for administrator privileges when `/usr/local/bin` is not writable.
 
-**Linux / Windows** — download the portable CLI binary from [GitHub Releases](https://github.com/kwiats/git-account-switcher/releases) and put it on your `PATH`:
+**Linux / Windows** — download the portable CLI binary from [GitHub Releases](https://github.com/kwiats/switch-commit/releases) and put it on your `PATH`:
 
 ```bash
 # Linux (x86_64)
-curl -LO https://github.com/kwiats/git-account-switcher/releases/latest/download/switch-commit-linux-x86_64
+curl -LO https://github.com/kwiats/switch-commit/releases/latest/download/switch-commit-linux-x86_64
 chmod +x switch-commit-linux-x86_64
 sudo mv switch-commit-linux-x86_64 /usr/local/bin/switch-commit
 ```
 
 ```powershell
 # Windows (x86_64), PowerShell
-Invoke-WebRequest -Uri "https://github.com/kwiats/git-account-switcher/releases/latest/download/switch-commit-windows-x86_64.exe" -OutFile switch-commit.exe
+Invoke-WebRequest -Uri "https://github.com/kwiats/switch-commit/releases/latest/download/switch-commit-windows-x86_64.exe" -OutFile switch-commit.exe
 ```
 
 Asset names follow `Sources/SwitchCommitCore/CLIReleaseAsset.swift`: `switch-commit-linux-x86_64`, `switch-commit-windows-x86_64.exe` (each with a companion `.sha256` file). Once installed, `switch-commit update` keeps the binary current in place.

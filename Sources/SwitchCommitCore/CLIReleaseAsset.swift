@@ -12,8 +12,8 @@ public enum CLIReleaseArch: String, Sendable {
 }
 
 public enum CLIReleaseAsset: Sendable {
-    /// GitHub `owner/repo` for release assets (matches `origin`).
-    public static let defaultRepository = "kwiats/git-account-switcher"
+    /// GitHub `owner/repo` for release assets (public Releases host).
+    public static let defaultRepository = "kwiats/switch-commit"
 
     public static func currentOS() -> CLIReleaseOS {
         #if os(Windows)
