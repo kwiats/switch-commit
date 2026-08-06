@@ -463,7 +463,7 @@ git tag v0.2.0
 git push origin v0.2.0
 ```
 
-The tag workflow builds the DMG, creates a GitHub Release on `kwiats/switch-commit` from the matching `## [X.Y.Z]` section in root `CHANGELOG.md` (required), uploads that markdown as a Sparkle notes asset, regenerates `site/appcast.xml`, writes `site/version.txt`, and syncs `site/index.html` changelog (from `CHANGELOG.md`) + download CTA. Missing changelog entries fail the publish step. A separate `Sync landing` workflow remains for manual re-sync via `workflow_dispatch` or manually published releases. GitHub Pages deploys from `site/` via Actions. The app reads update metadata from:
+The tag workflow builds the DMG, creates a GitHub Release on `kwiats/switch-commit` from the matching `## [X.Y.Z]` section in root `CHANGELOG.md` (required), uploads that markdown as a Sparkle notes asset, regenerates `site/appcast.xml`, writes `site/version.txt`, syncs `site/index.html` changelog (from `CHANGELOG.md`) + download CTA, and uploads the DMG to Polar File Downloads when Polar secrets are configured. Missing changelog entries fail the publish step. A separate `Sync landing` workflow remains for manual re-sync via `workflow_dispatch` or manually published releases. GitHub Pages deploys from `site/` via Actions. The app reads update metadata from:
 
 ```text
 https://kwiats.github.io/switch-commit/appcast.xml

@@ -1131,6 +1131,13 @@
         <h2>Changelog</h2>
         <div class="changelog-entries">
           <article class="changelog-entry">
+            <div class="changelog-meta">// v0.4.0 · 6 Aug 2026</div>
+            <div class="changelog-body"><h3>Highlights</h3>
+<ul><li>Landing offers <strong>Buy &amp; Download</strong> via Polar (Merchant of Record) at a <strong>$1</strong> launch price (compare-at <strong>$2.50</strong>), with a free secondary link to the public GitHub Releases DMG (soft paywall).</li><li>After payment, Polar File Downloads deliver the DMG; each version tag can upload the new DMG and refresh the Polar downloadables benefit via CI (<code>Scripts/polar-sync-dmg.mjs</code>).</li><li>Post-checkout thank-you page at <code>thanks.html</code> for the Polar Checkout Success URL.</li><li>Landing screenshot carousel uses styled CSS mocks until product GIFs are dropped into <code>site/images/screenshots/</code>.</li><li>Optional agent plugin under <code>agent-plugins/switch-commit/</code> teaches Claude Code and Codex safe CLI use (inspect identity, switch profiles, manage folder rules — not create/edit/delete profiles or <code>update</code>).</li></ul>
+<h3>Documentation</h3>
+<ul><li>README documents the Polar soft-paywall operator secrets/variables and Checkout Success URL.</li><li>SUPPORT pricing points at the live landing Buy flow instead of “checkout not wired yet.”</li></ul></div>
+          </article>
+          <article class="changelog-entry">
             <div class="changelog-meta">// v0.3.9 · 2 Aug 2026</div>
             <div class="changelog-body"><h3>Documentation</h3>
 <ul><li>Adds community and governance docs at the repo root: license, code of conduct, contributing guide, security policy, and support channels (paid product ~$2.50; community Issues for bugs).</li><li>Adds GitHub issue forms (bug, feature, custom) and a pull request template.</li><li>Consolidates historical release notes into root <code>CHANGELOG.md</code> as the single source of truth for Sparkle notes and the landing changelog (replacing <code>docs/release-notes/</code>).</li></ul></div>
@@ -1151,11 +1158,6 @@
             <div class="changelog-meta">// v0.3.6 · 1 Aug 2026</div>
             <div class="changelog-body"><h3>Highlights</h3>
 <ul><li>Switching profiles surgically removes unmanaged <code>url.*.insteadOf</code> keys in <code>~/.gitconfig</code> that reverse the active profile rewrite (after backup); <code>doctor</code> still warns about remaining conflicts outside that file.</li><li>SSH profiles no longer force <code>ssh -F ~/.ssh/config</code>, so a missing SSH config file no longer breaks Git push.</li><li><code>switch-commit update</code> checks the public appcast live, downloads the DMG (SHA-256 verified when available), installs the app, and repairs the CLI; other CLI commands can print a 12-hour cached update notice.</li><li>Settings uses a sidebar (<code>NavigationSplitView</code>) so section tabs are no longer clipped by the title bar.</li><li>Settings and the menu bar app reload folder rules from disk when opening Settings or becoming active, and before each Settings write, so <code>switch-commit folder add</code> / <code>folder remove</code> stay in sync and are not overwritten.</li></ul></div>
-          </article>
-          <article class="changelog-entry">
-            <div class="changelog-meta">// v0.3.5 · 1 Aug 2026</div>
-            <div class="changelog-body"><h3>Highlights</h3>
-<ul><li>Starting the app or any <code>switch-commit</code> CLI command rewrites managed Git config from the current profiles and folder rules, so generator updates such as <code>url.insteadOf</code> apply without a manual profile switch.</li><li><code>switch-commit folder add</code> can omit path, profile, and mode: it uses the current directory, the active global profile, and <code>single-repo</code> when <code>.git</code> is present (otherwise <code>folder-tree</code>).</li></ul></div>
           </article>
         </div>
       </div>

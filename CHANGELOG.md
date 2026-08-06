@@ -5,6 +5,21 @@ All notable changes to Switch Commit are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-08-06
+
+### Highlights
+
+- Landing offers **Buy & Download** via Polar (Merchant of Record) at a **$1** launch price (compare-at **$2.50**), with a free secondary link to the public GitHub Releases DMG (soft paywall).
+- After payment, Polar File Downloads deliver the DMG; each version tag can upload the new DMG and refresh the Polar downloadables benefit via CI (`Scripts/polar-sync-dmg.mjs`).
+- Post-checkout thank-you page at `thanks.html` for the Polar Checkout Success URL.
+- Landing screenshot carousel uses styled CSS mocks until product GIFs are dropped into `site/images/screenshots/`.
+- Optional agent plugin under `agent-plugins/switch-commit/` teaches Claude Code and Codex safe CLI use (inspect identity, switch profiles, manage folder rules — not create/edit/delete profiles or `update`).
+
+### Documentation
+
+- README documents the Polar soft-paywall operator secrets/variables and Checkout Success URL.
+- SUPPORT pricing points at the live landing Buy flow instead of “checkout not wired yet.”
+
 ## [0.3.9] - 2026-08-02
 
 ### Documentation
