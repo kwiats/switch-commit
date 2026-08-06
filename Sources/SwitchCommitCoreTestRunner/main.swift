@@ -4531,6 +4531,24 @@ let tests: [(String, () throws -> Void)] = [
             "default release repository"
         )
     }),
+    ("pure sha256 matches NIST vector for abc", {
+        let digest = PureSHA256.hexDigest(data: Data("abc".utf8))
+        try expect(
+            digest == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+            "NIST abc vector"
+        )
+    }),
+    ("cli binary installer sha256Hex matches pure implementation for empty data", {
+        let empty = Data()
+        let viaInstaller = CLIBinaryInstaller.sha256Hex(empty)
+        let viaPure = PureSHA256.hexDigest(data: empty)
+        // On macOS installer uses CryptoKit; both must equal the empty-string digest.
+        try expect(
+            viaInstaller == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "empty digest via installer"
+        )
+        try expect(viaPure == viaInstaller, "pure matches installer")
+    }),
     ("cli binary installer replaces destination atomically", {
         let fm = FileManager.default
         let root = fm.temporaryDirectory.appendingPathComponent("sc-bin-\(UUID().uuidString)", isDirectory: true)

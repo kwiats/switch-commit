@@ -26,6 +26,13 @@ echo "==> Staging directory: ${work_dir}"
 
 build_linux_binary_natively() {
   echo "==> Linux host detected: building switch-commit natively"
+  if command -v apt-get >/dev/null 2>&1; then
+    # Static Swift stdlib links need libcurl headers/libs on bare Ubuntu runners.
+    if ! pkg-config --exists libcurl 2>/dev/null && [[ "$(id -u)" -eq 0 || -n "${GITHUB_ACTIONS:-}" ]]; then
+      sudo apt-get update
+      sudo apt-get install -y --no-install-recommends libcurl4-openssl-dev
+    fi
+  fi
   (
     cd "${repo_root}"
     swift build -c release --product switch-commit --static-swift-stdlib --scratch-path "${work_dir}/.build-linux-smoke"

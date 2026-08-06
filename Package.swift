@@ -42,19 +42,10 @@ let package = Package(
         .executable(name: "switch-commit", targets: ["SwitchCommitCLI"])
     ] + macOSOnlyProducts,
     dependencies: [
-        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.8.2"),
-        // Provides `Crypto` for SHA-256 verification. On Apple platforms this compiles down to a
-        // thin re-export of CryptoKit; on Linux/Windows it supplies the real implementation, so
-        // `CLIBinaryInstaller` can `import Crypto` unconditionally across every supported OS.
-        .package(url: "https://github.com/apple/swift-crypto", from: "3.0.0")
+        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.8.2")
     ] + macOSOnlyDependencies,
     targets: [
-        .target(
-            name: "SwitchCommitCore",
-            dependencies: [
-                .product(name: "Crypto", package: "swift-crypto")
-            ]
-        ),
+        .target(name: "SwitchCommitCore"),
         .executableTarget(
             name: "SwitchCommitCLI",
             dependencies: [

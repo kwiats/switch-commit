@@ -1,6 +1,8 @@
-import Crypto
 import Foundation
 
+#if canImport(CryptoKit)
+import CryptoKit
+#endif
 #if canImport(Darwin)
 import Darwin
 #elseif canImport(Glibc)
@@ -57,12 +59,19 @@ public struct CLIBinaryInstaller {
     /// Throws `.checksumMismatch` when the computed SHA-256 of `fileURL` does not match `expectedHex`.
     public func verifySHA256(fileURL: URL, expectedHex: String) throws {
         let data = try Data(contentsOf: fileURL)
-        let digest = SHA256.hash(data: data)
-        let actual = digest.map { String(format: "%02x", $0) }.joined()
+        let actual = Self.sha256Hex(data)
         let expected = expectedHex.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard actual == expected else {
             throw CLIBinaryInstallerError.checksumMismatch
         }
+    }
+
+    public static func sha256Hex(_ data: Data) -> String {
+        #if canImport(CryptoKit)
+        SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        #else
+        PureSHA256.hexDigest(data: data)
+        #endif
     }
 
     /// Resolves the currently running executable, following one level of symlink
