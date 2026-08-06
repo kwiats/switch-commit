@@ -1,14 +1,6 @@
 import ArgumentParser
 import SwitchCommitCore
 
-#if os(Windows)
-import ucrt
-#elseif canImport(Darwin)
-import Darwin
-#else
-@preconcurrency import Glibc
-#endif
-
 struct DeleteCommand: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "delete",
@@ -39,7 +31,7 @@ struct DeleteCommand: ParsableCommand {
                 }
 
                 print("Delete profile '\(profile.id)'? [y/N]: ", terminator: "")
-                fflush(stdout)
+                CLITerminal.flushStandardOutput()
                 guard let response = readLine(), ["y", "yes"].contains(response.lowercased()) else {
                     print("Deletion cancelled.")
                     return

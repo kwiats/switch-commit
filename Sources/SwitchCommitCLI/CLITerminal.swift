@@ -40,4 +40,19 @@ enum CLITerminal {
     static var isInteractive: Bool {
         isStandardInputTTY && isStandardOutputTTY
     }
+
+    /// Flushes stdout so prompts appear before `readLine()` (portable across Darwin/Glibc/Windows).
+    static func flushStandardOutput() {
+        #if os(Windows)
+        // `stdout` is not consistently visible to Swift as a global on Windows CRT imports;
+        // flush all open C streams instead.
+        _ = fflush(nil)
+        #elseif canImport(Darwin)
+        fflush(Darwin.stdout)
+        #elseif canImport(Glibc)
+        fflush(Glibc.stdout)
+        #else
+        try? FileHandle.standardOutput.synchronize()
+        #endif
+    }
 }

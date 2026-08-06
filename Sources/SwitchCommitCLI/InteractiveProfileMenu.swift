@@ -238,14 +238,14 @@ extension InteractiveProfileMenu {
             print("")
             print(message)
         }
-        fflush(stdout)
+        CLITerminal.flushStandardOutput()
     }
 
     private mutating func confirm(_ prompt: String) throws -> Bool {
         terminal.restore()
         defer { try? terminal.enable() }
         print("\u{001B}[?25h\(prompt)", terminator: "")
-        fflush(stdout)
+        CLITerminal.flushStandardOutput()
         let response = readLine()?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return response == "y" || response == "yes"
     }
@@ -255,17 +255,17 @@ extension InteractiveProfileMenu {
         defer { try? terminal.enable() }
         print("\u{001B}[2J\u{001B}[H\u{001B}[?25hAdd profile (leave the name empty to cancel).")
         print("Display name: ", terminator: "")
-        fflush(stdout)
+        CLITerminal.flushStandardOutput()
         guard let displayName = readLine(), !displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return nil
         }
         print("Git author name: ", terminator: "")
-        fflush(stdout)
+        CLITerminal.flushStandardOutput()
         guard let gitUserName = readLine(), !gitUserName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return nil
         }
         print("Git author email: ", terminator: "")
-        fflush(stdout)
+        CLITerminal.flushStandardOutput()
         guard let gitUserEmail = readLine(), !gitUserEmail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             return nil
         }

@@ -2,14 +2,6 @@ import ArgumentParser
 @preconcurrency import Foundation
 import SwitchCommitCore
 
-#if os(Windows)
-import ucrt
-#elseif canImport(Darwin)
-import Darwin
-#else
-@preconcurrency import Glibc
-#endif
-
 struct FolderCommand: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "folder",
@@ -175,7 +167,7 @@ struct FolderCommand: ParsableCommand {
                         )
                     }
                     print("Remove folder rule '\(rule.path)'? [y/N]: ", terminator: "")
-                    fflush(stdout)
+                    CLITerminal.flushStandardOutput()
                     guard let response = readLine(), ["y", "yes"].contains(response.lowercased()) else {
                         print("Removal cancelled.")
                         return
