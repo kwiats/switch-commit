@@ -65,6 +65,7 @@ echo "==> Preparing ${release_dir}"
 mkdir -p "${release_dir}"
 asset_path="${release_dir}/${asset_name}"
 checksum_path="${asset_path}.sha256"
+version_path="${release_dir}/VERSION"
 
 cp "${bin_path}" "${asset_path}"
 chmod 755 "${asset_path}" 2>/dev/null || true
@@ -78,6 +79,11 @@ else
     exit 1
 fi
 
+# Sibling VERSION file so CLIVersion.current() can report a version on Linux/Windows,
+# where there is no app bundle Info.plist to read from.
+printf '%s\n' "${version}" > "${version_path}"
+
 echo "==> CLI release artifacts"
 printf '%s\n' "${asset_path}"
 printf '%s\n' "${checksum_path}"
+printf '%s\n' "${version_path}"

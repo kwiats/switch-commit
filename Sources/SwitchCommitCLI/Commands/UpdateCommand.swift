@@ -101,7 +101,11 @@ struct UpdateCommand: ParsableCommand {
             }
 
             let runningExecutable = try installer.resolveRunningExecutable()
-            try installer.replaceExecutable(at: runningExecutable, with: downloadedBinary)
+            try installer.replaceExecutable(
+                at: runningExecutable,
+                with: downloadedBinary,
+                version: snapshot.latestVersion
+            )
 
             let done = "Installed switch-commit \(snapshot.latestVersion) at \(runningExecutable.path)."
             if options.json {

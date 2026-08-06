@@ -4545,6 +4545,25 @@ let tests: [(String, () throws -> Void)] = [
         let body = try String(contentsOf: destination, encoding: .utf8)
         try expect(body == "new", "replaced content")
     }),
+    ("cli binary installer replaceExecutable writes a sibling VERSION file when given a version", {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("sc-bin-\(UUID().uuidString)", isDirectory: true)
+        try fm.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: root) }
+
+        let destination = root.appendingPathComponent("switch-commit")
+        try "old".write(to: destination, atomically: true, encoding: .utf8)
+        let source = root.appendingPathComponent("new-bin")
+        try "new".write(to: source, atomically: true, encoding: .utf8)
+
+        let installer = CLIBinaryInstaller(fileManager: fm)
+        try installer.replaceExecutable(at: destination, with: source, version: "1.4.0")
+
+        let versionFile = root.appendingPathComponent("VERSION")
+        let contents = try String(contentsOf: versionFile, encoding: .utf8)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        try expect(contents == "1.4.0", "VERSION file should contain the installed version")
+    }),
     ("cli binary installer resolves the running executable via native OS lookup by default", {
         let installer = CLIBinaryInstaller()
         let resolved = try installer.resolveRunningExecutable()
@@ -4572,6 +4591,43 @@ let tests: [(String, () throws -> Void)] = [
                 nativeExecutablePath: nil
             )
         }, "unresolvable bare command with no native path should throw")
+    }),
+    ("cli version reads a sibling VERSION file when no Info.plist or env override is present", {
+        let fileManager = FileManager.default
+        let temporaryDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("switch-commit-version-file-\(UUID().uuidString)")
+        let executable = temporaryDirectory.appendingPathComponent("switch-commit")
+        try fileManager.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? fileManager.removeItem(at: temporaryDirectory) }
+
+        try "old".write(to: executable, atomically: true, encoding: .utf8)
+        let versionFile = temporaryDirectory.appendingPathComponent("VERSION")
+        try "2.5.1\n".write(to: versionFile, atomically: true, encoding: .utf8)
+
+        try expect(
+            CLIVersion.current(executableURL: executable, environment: [:]) == "2.5.1",
+            "CLI version should read the trimmed contents of a sibling VERSION file"
+        )
+    }),
+    ("cli version prefers env override over a sibling VERSION file", {
+        let fileManager = FileManager.default
+        let temporaryDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("switch-commit-version-file-\(UUID().uuidString)")
+        let executable = temporaryDirectory.appendingPathComponent("switch-commit")
+        try fileManager.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? fileManager.removeItem(at: temporaryDirectory) }
+
+        try "old".write(to: executable, atomically: true, encoding: .utf8)
+        let versionFile = temporaryDirectory.appendingPathComponent("VERSION")
+        try "2.5.1\n".write(to: versionFile, atomically: true, encoding: .utf8)
+
+        try expect(
+            CLIVersion.current(
+                executableURL: executable,
+                environment: ["SWITCH_COMMIT_VERSION": "9.9.9"]
+            ) == "9.9.9",
+            "explicit env override should win over a sibling VERSION file"
+        )
     })
 ]
 

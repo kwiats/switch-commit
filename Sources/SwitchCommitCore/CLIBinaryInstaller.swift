@@ -178,7 +178,11 @@ public struct CLIBinaryInstaller {
 
     /// Atomically replaces `destination` with `source`, keeping a `.bak` copy until the
     /// swap succeeds so a failure never leaves the CLI without a working executable.
-    public func replaceExecutable(at destination: URL, with source: URL) throws {
+    ///
+    /// When `version` is provided, a sibling `VERSION` file is written next to `destination`
+    /// on success, so `CLIVersion.current()` can report the installed version on Linux/Windows
+    /// where there is no app bundle `Info.plist` to read from.
+    public func replaceExecutable(at destination: URL, with source: URL, version: String? = nil) throws {
         guard fileManager.fileExists(atPath: source.path) else {
             throw CLIBinaryInstallerError.assetMissing
         }
@@ -200,6 +204,9 @@ public struct CLIBinaryInstaller {
             if destinationExisted {
                 try? fileManager.removeItem(at: backup)
             }
+            if let version {
+                writeVersionFile(version, nextTo: destination)
+            }
         } catch {
             if destinationExisted {
                 try? fileManager.removeItem(at: destination)
@@ -207,6 +214,13 @@ public struct CLIBinaryInstaller {
             }
             throw error
         }
+    }
+
+    /// Best-effort write of a plain-text `VERSION` file next to `destination`. Failure here
+    /// (e.g. an unwritable directory) must not fail an otherwise-successful binary replace.
+    private func writeVersionFile(_ version: String, nextTo destination: URL) {
+        let versionFile = destination.deletingLastPathComponent().appendingPathComponent("VERSION")
+        try? version.write(to: versionFile, atomically: true, encoding: .utf8)
     }
 }
 
