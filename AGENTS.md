@@ -60,6 +60,12 @@ swift build
 
 This repository currently uses `SwitchCommitCoreTestRunner` because the available Command Line Tools installation does not expose XCTest or Swift Testing modules. Do not add XCTest-based tests unless the toolchain constraint has been verified again.
 
+When CLI-facing (`SwitchCommitCore`/`SwitchCommitCLI`) code changes, also run the Docker Linux smoke check locally when Docker is available (same check as the required `linux-cli-docker-smoke` PR job):
+
+```bash
+Scripts/docker/cli-linux-smoke.sh
+```
+
 ## Default Task Workflow
 
 Unless the user explicitly asks for a different flow, handle implementation tasks end to end:

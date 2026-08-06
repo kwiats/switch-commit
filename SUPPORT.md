@@ -12,6 +12,25 @@
 | Releases, installers, and release notes | [GitHub Releases](https://github.com/kwiats/switch-commit/releases), [CHANGELOG.md](CHANGELOG.md), and the [landing page](https://kwiats.github.io/switch-commit/) |
 | Community conduct concerns | [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) |
 
+## Platform Support
+
+The menu bar app is **macOS-only**. The `switch-commit` CLI also builds and
+runs on **Linux** and **Windows**, sharing the same managed config at
+`~/.config/git-account-switcher/`:
+
+- No menu bar app, tray icon, or Sparkle updater outside macOS.
+- HTTPS credentials rely on a Git credential helper (for example
+  [Git Credential Manager](https://github.com/git-ecosystem/git-credential-manager));
+  Switch Commit stores only a reference string outside the macOS Keychain.
+- SSH profiles need an OpenSSH-compatible `ssh` client on the host.
+- `switch-commit update` installs the app DMG on macOS, and self-replaces the
+  running CLI binary in place on Linux/Windows.
+- Linux behavior is verified end to end by `Scripts/docker/cli-linux-smoke.sh`
+  (also a required check on every pull request).
+
+See the README [Cross-Platform Notes](README.md#cross-platform-notes-linux--windows)
+section for details.
+
 ## Product and Pricing
 
 Switch Commit is a **paid** macOS product with an intended retail price of about

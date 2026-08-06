@@ -1,12 +1,6 @@
 import ArgumentParser
 import SwitchCommitCore
 
-#if canImport(Darwin)
-import Darwin
-#else
-import Glibc
-#endif
-
 struct CLIOptions: ParsableArguments {
     @Flag(name: .long, help: "Emit machine-readable JSON output.")
     var json = false
@@ -65,11 +59,7 @@ struct SwitchCommitCommand: ParsableCommand {
     }
 
     private var isInteractiveSession: Bool {
-        #if canImport(Darwin)
-        return Darwin.isatty(Darwin.STDIN_FILENO) != 0 && Darwin.isatty(Darwin.STDOUT_FILENO) != 0
-        #else
-        return Glibc.isatty(Glibc.STDIN_FILENO) != 0 && Glibc.isatty(Glibc.STDOUT_FILENO) != 0
-        #endif
+        CLITerminal.isInteractive
     }
 
     struct Version: ParsableCommand {

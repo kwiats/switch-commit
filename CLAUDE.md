@@ -36,6 +36,12 @@ swift build
 
 Do not assume `swift test` works here. The current project intentionally uses a local executable test runner because XCTest and Swift Testing are unavailable in the installed Command Line Tools environment.
 
+When CLI-facing (`SwitchCommitCore`/`SwitchCommitCLI`) code changes, also run the Docker Linux smoke check locally when Docker is available (same check as the required `linux-cli-docker-smoke` PR job):
+
+```bash
+Scripts/docker/cli-linux-smoke.sh
+```
+
 ## Default Task Workflow
 
 Unless the user explicitly asks for a different flow, handle implementation tasks end to end:

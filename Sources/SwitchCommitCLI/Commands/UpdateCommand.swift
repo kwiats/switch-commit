@@ -5,7 +5,8 @@ import SwitchCommitCore
 struct UpdateCommand: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "update",
-        abstract: "Check the public release channel and install the latest Switch Commit app + CLI."
+        abstract: "Check the public release channel and install the latest Switch Commit app + CLI. "
+            + "Installs the app DMG on macOS, or replaces the running CLI binary on Linux/Windows."
     )
 
     @OptionGroup
@@ -41,10 +42,13 @@ struct UpdateCommand: ParsableCommand {
             print(CLIOutput.jsonMessage("Update available: \(snapshot.latestVersion)"))
         } else {
             print("Update available: \(current) → \(snapshot.latestVersion)")
-            print("Downloading \(snapshot.enclosureURL.absoluteString) …")
         }
 
+        #if os(macOS)
         do {
+            if !options.json {
+                print("Downloading \(snapshot.enclosureURL.absoluteString) …")
+            }
             let installer = AppReleaseInstaller()
             try installer.install(from: snapshot.enclosureURL, expectedVersion: snapshot.latestVersion)
             try installer.repairCLISymlink()
@@ -70,9 +74,58 @@ struct UpdateCommand: ParsableCommand {
         } catch {
             CLIRuntime.terminate(for: error, json: options.json)
         }
+        #else
+        do {
+            let installer = CLIBinaryInstaller()
+            let os = CLIReleaseAsset.currentOS()
+            let arch = CLIReleaseAsset.currentArch()
+            let assetURL = CLIReleaseAsset.downloadURL(
+                version: snapshot.latestVersion,
+                os: os,
+                arch: arch
+            )
+            if !options.json {
+                print("Downloading \(assetURL.absoluteString) …")
+            }
+
+            let temporaryRoot = FileManager.default.temporaryDirectory
+                .appendingPathComponent("switch-commit-cli-update-\(UUID().uuidString)", isDirectory: true)
+            try FileManager.default.createDirectory(at: temporaryRoot, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: temporaryRoot) }
+
+            let downloadedBinary = temporaryRoot.appendingPathComponent(CLIReleaseAsset.fileName(os: os, arch: arch))
+            do {
+                try installer.download(assetURL, to: downloadedBinary)
+            } catch {
+                throw CLIBinaryInstallerError.assetMissing
+            }
+
+            // A missing .sha256 file is not fatal; a present-but-mismatched one is.
+            if let expectedHex = installer.readSHA256SumFile(at: CLIReleaseAsset.sha256URL(for: assetURL)) {
+                try installer.verifySHA256(fileURL: downloadedBinary, expectedHex: expectedHex)
+            }
+
+            let runningExecutable = try installer.resolveRunningExecutable()
+            try installer.replaceExecutable(
+                at: runningExecutable,
+                with: downloadedBinary,
+                version: snapshot.latestVersion
+            )
+
+            let done = "Installed switch-commit \(snapshot.latestVersion) at \(runningExecutable.path)."
+            if options.json {
+                print(CLIOutput.jsonMessage(done))
+            } else {
+                print(done)
+            }
+        } catch {
+            CLIRuntime.terminate(for: error, json: options.json)
+        }
+        #endif
     }
 }
 
+#if os(macOS)
 struct AppReleaseInstaller {
     private let fileManager: FileManager
 
@@ -314,3 +367,4 @@ private enum AppReleaseInstallError: LocalizedError {
         }
     }
 }
+#endif

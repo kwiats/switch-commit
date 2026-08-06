@@ -1,12 +1,6 @@
 import Foundation
 import SwitchCommitCore
 
-#if canImport(Darwin)
-import Darwin
-#else
-import Glibc
-#endif
-
 enum CLIRuntime {
     static func session() throws -> SwitchCommitSession {
         try SwitchCommitSession.live()
@@ -45,7 +39,7 @@ enum CLIRuntime {
     static func style(json: Bool, noColor: Bool) -> CLIOutput.Style {
         CLIOutput.Style.detect(
             noColorFlag: json || noColor,
-            isTTY: isatty(STDOUT_FILENO) != 0
+            isTTY: CLITerminal.isStandardOutputTTY
         )
     }
 

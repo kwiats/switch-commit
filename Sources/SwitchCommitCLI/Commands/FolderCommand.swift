@@ -1,12 +1,6 @@
 import ArgumentParser
-import Foundation
+@preconcurrency import Foundation
 import SwitchCommitCore
-
-#if canImport(Darwin)
-import Darwin
-#else
-import Glibc
-#endif
 
 struct FolderCommand: ParsableCommand {
     static let configuration = CommandConfiguration(
@@ -139,7 +133,10 @@ struct FolderCommand: ParsableCommand {
         mutating func run() throws {
             do {
                 let session = try CLIRuntime.session()
-                let pathReference = reference.hasPrefix("~") || reference.contains("/") || reference == "."
+                let pathReference = reference.hasPrefix("~")
+                    || reference.contains("/")
+                    || reference.contains("\\")
+                    || reference == "."
                 let rule: FolderRule?
                 if pathReference {
                     let homeDirectory = FileManager.default.homeDirectoryForCurrentUser
@@ -162,7 +159,7 @@ struct FolderCommand: ParsableCommand {
                 }
 
                 if !yes {
-                    guard !options.json, isatty(STDIN_FILENO) != 0 else {
+                    guard !options.json, CLITerminal.isStandardInputTTY else {
                         CLIRuntime.terminate(
                             code: .usage,
                             message: "Pass --yes to remove a folder rule without an interactive confirmation.",
@@ -170,7 +167,7 @@ struct FolderCommand: ParsableCommand {
                         )
                     }
                     print("Remove folder rule '\(rule.path)'? [y/N]: ", terminator: "")
-                    fflush(stdout)
+                    CLITerminal.flushStandardOutput()
                     guard let response = readLine(), ["y", "yes"].contains(response.lowercased()) else {
                         print("Removal cancelled.")
                         return

@@ -782,6 +782,20 @@ let tests: [(String, () throws -> Void)] = [
             "relative path with trailing slash should resolve and strip slash"
         )
     }),
+    ("folder rule tree match uses path components not raw slash suffix", {
+        let home = URL(fileURLWithPath: "/Users/demo")
+        let rulePath = FolderRuleResolver.normalize("/Users/demo/work", homeDirectory: home)
+        let child = FolderRuleResolver.normalize("/Users/demo/work/repo", homeDirectory: home)
+        let outside = FolderRuleResolver.normalize("/Users/demo/work-other", homeDirectory: home)
+        try expect(
+            FolderRuleResolver.pathMatches(child, rulePath: rulePath, mode: .folderTree),
+            "child matches tree"
+        )
+        try expect(
+            !FolderRuleResolver.pathMatches(outside, rulePath: rulePath, mode: .folderTree),
+            "sibling prefix must not match"
+        )
+    }),
     ("profile settings manager resolves relative folder rule paths to absolute gitdir patterns", {
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -1126,6 +1140,17 @@ let tests: [(String, () throws -> Void)] = [
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         let paths = SSHKeyDiscovery(homeDirectory: temporaryDirectory).discoverKeyPaths()
         try expect(paths.isEmpty, "missing .ssh should yield empty list")
+    }),
+    ("managed path treats backslash and slash children as under root", {
+        let root = URL(fileURLWithPath: "/tmp/switch-commit-root", isDirectory: true)
+        let childSlash = URL(fileURLWithPath: "/tmp/switch-commit-root/a/b", isDirectory: false)
+        let childMixed = root.appendingPathComponent("a").appendingPathComponent("b")
+        try expect(ManagedPath.isEqualOrDescendant(childSlash, of: root), "slash child")
+        try expect(ManagedPath.isEqualOrDescendant(childMixed, of: root), "appended child")
+        try expect(
+            !ManagedPath.isEqualOrDescendant(URL(fileURLWithPath: "/tmp/switch-commit-root-evil/x"), of: root),
+            "prefix sibling"
+        )
     }),
     ("safe file writer constrains writes and creates backups", {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -4462,6 +4487,168 @@ let tests: [(String, () throws -> Void)] = [
                 throw TestFailure.expectationFailed("expected global context")
             }
         }
+    }),
+    ("noop keychain store never persists secrets", {
+        let store = NoOpKeychainStore()
+        let id = KeychainCredentialIdentifier(profileId: "p1", purpose: "https")
+        try store.save("secret", for: id)
+        let readValue = try store.read(id)
+        try expect(readValue == nil, "noop must not return secrets")
+        try store.delete(id)
+    }),
+    ("process launch path finds absolute commands", {
+        let url = ProcessLaunchPath.executableURL(for: "/bin/sh", environment: ["PATH": ""])
+        try expect(url?.path == "/bin/sh", "absolute path")
+    }),
+    ("cli release asset names are stable per platform", {
+        try expect(
+            CLIReleaseAsset.fileName(os: .linux, arch: .x86_64) == "switch-commit-linux-x86_64",
+            "linux amd64"
+        )
+        try expect(
+            CLIReleaseAsset.fileName(os: .windows, arch: .x86_64) == "switch-commit-windows-x86_64.exe",
+            "windows amd64"
+        )
+        try expect(
+            CLIReleaseAsset.fileName(os: .linux, arch: .arm64) == "switch-commit-linux-arm64",
+            "linux arm64"
+        )
+    }),
+    ("cli release asset url uses github download path", {
+        let url = CLIReleaseAsset.downloadURL(
+            version: "1.2.3",
+            os: .linux,
+            arch: .x86_64,
+            repository: "kwiats/switch-commit"
+        )
+        try expect(
+            url.absoluteString
+                == "https://github.com/kwiats/switch-commit/releases/download/v1.2.3/switch-commit-linux-x86_64",
+            "download url"
+        )
+        try expect(
+            CLIReleaseAsset.defaultRepository == "kwiats/switch-commit",
+            "default release repository"
+        )
+    }),
+    ("pure sha256 matches NIST vector for abc", {
+        let digest = PureSHA256.hexDigest(data: Data("abc".utf8))
+        try expect(
+            digest == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+            "NIST abc vector"
+        )
+    }),
+    ("cli binary installer sha256Hex matches pure implementation for empty data", {
+        let empty = Data()
+        let viaInstaller = CLIBinaryInstaller.sha256Hex(empty)
+        let viaPure = PureSHA256.hexDigest(data: empty)
+        // On macOS installer uses CryptoKit; both must equal the empty-string digest.
+        try expect(
+            viaInstaller == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "empty digest via installer"
+        )
+        try expect(viaPure == viaInstaller, "pure matches installer")
+    }),
+    ("cli binary installer replaces destination atomically", {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("sc-bin-\(UUID().uuidString)", isDirectory: true)
+        try fm.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: root) }
+
+        let destination = root.appendingPathComponent("switch-commit")
+        try "old".write(to: destination, atomically: true, encoding: .utf8)
+        let source = root.appendingPathComponent("new-bin")
+        try "new".write(to: source, atomically: true, encoding: .utf8)
+
+        let installer = CLIBinaryInstaller(fileManager: fm)
+        try installer.replaceExecutable(at: destination, with: source)
+
+        let body = try String(contentsOf: destination, encoding: .utf8)
+        try expect(body == "new", "replaced content")
+    }),
+    ("cli binary installer replaceExecutable writes a sibling VERSION file when given a version", {
+        let fm = FileManager.default
+        let root = fm.temporaryDirectory.appendingPathComponent("sc-bin-\(UUID().uuidString)", isDirectory: true)
+        try fm.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? fm.removeItem(at: root) }
+
+        let destination = root.appendingPathComponent("switch-commit")
+        try "old".write(to: destination, atomically: true, encoding: .utf8)
+        let source = root.appendingPathComponent("new-bin")
+        try "new".write(to: source, atomically: true, encoding: .utf8)
+
+        let installer = CLIBinaryInstaller(fileManager: fm)
+        try installer.replaceExecutable(at: destination, with: source, version: "1.4.0")
+
+        let versionFile = root.appendingPathComponent("VERSION")
+        let contents = try String(contentsOf: versionFile, encoding: .utf8)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        try expect(contents == "1.4.0", "VERSION file should contain the installed version")
+    }),
+    ("cli binary installer resolves the running executable via native OS lookup by default", {
+        let installer = CLIBinaryInstaller()
+        let resolved = try installer.resolveRunningExecutable()
+        try expect(
+            FileManager.default.fileExists(atPath: resolved.path),
+            "default resolution should find an existing executable"
+        )
+    }),
+    ("cli binary installer resolves a bare running executable name via PATH", {
+        let installer = CLIBinaryInstaller()
+        // Disabling the native OS lookup exercises the PATH-search fallback used for a
+        // bare argv[0] such as `switch-commit`, launched via PATH with no directory component.
+        let resolved = try installer.resolveRunningExecutable(argument0: "sh", nativeExecutablePath: nil)
+        try expect(resolved.path.hasSuffix("/sh"), "expected PATH-resolved 'sh', got \(resolved.path)")
+        try expect(
+            FileManager.default.fileExists(atPath: resolved.path),
+            "PATH-resolved executable should exist on disk"
+        )
+    }),
+    ("cli binary installer resolveRunningExecutable throws when nothing can be located", {
+        let installer = CLIBinaryInstaller()
+        try expectThrowsAny({
+            _ = try installer.resolveRunningExecutable(
+                argument0: "definitely-not-a-real-command-xyz",
+                nativeExecutablePath: nil
+            )
+        }, "unresolvable bare command with no native path should throw")
+    }),
+    ("cli version reads a sibling VERSION file when no Info.plist or env override is present", {
+        let fileManager = FileManager.default
+        let temporaryDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("switch-commit-version-file-\(UUID().uuidString)")
+        let executable = temporaryDirectory.appendingPathComponent("switch-commit")
+        try fileManager.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? fileManager.removeItem(at: temporaryDirectory) }
+
+        try "old".write(to: executable, atomically: true, encoding: .utf8)
+        let versionFile = temporaryDirectory.appendingPathComponent("VERSION")
+        try "2.5.1\n".write(to: versionFile, atomically: true, encoding: .utf8)
+
+        try expect(
+            CLIVersion.current(executableURL: executable, environment: [:]) == "2.5.1",
+            "CLI version should read the trimmed contents of a sibling VERSION file"
+        )
+    }),
+    ("cli version prefers env override over a sibling VERSION file", {
+        let fileManager = FileManager.default
+        let temporaryDirectory = fileManager.temporaryDirectory
+            .appendingPathComponent("switch-commit-version-file-\(UUID().uuidString)")
+        let executable = temporaryDirectory.appendingPathComponent("switch-commit")
+        try fileManager.createDirectory(at: temporaryDirectory, withIntermediateDirectories: true)
+        defer { try? fileManager.removeItem(at: temporaryDirectory) }
+
+        try "old".write(to: executable, atomically: true, encoding: .utf8)
+        let versionFile = temporaryDirectory.appendingPathComponent("VERSION")
+        try "2.5.1\n".write(to: versionFile, atomically: true, encoding: .utf8)
+
+        try expect(
+            CLIVersion.current(
+                executableURL: executable,
+                environment: ["SWITCH_COMMIT_VERSION": "9.9.9"]
+            ) == "9.9.9",
+            "explicit env override should win over a sibling VERSION file"
+        )
     })
 ]
 

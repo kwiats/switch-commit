@@ -4,7 +4,7 @@ public enum CLIVersion {
     public static let developmentFallback = "0.3.0-dev"
 
     public static func current(
-        executableURL: URL = URL(fileURLWithPath: CommandLine.arguments[0]),
+        executableURL: URL = CLIVersion.defaultExecutableURL(),
         environment: [String: String] = ProcessInfo.processInfo.environment,
         fileManager: FileManager = .default
     ) -> String {
@@ -29,7 +29,35 @@ public enum CLIVersion {
             }
         }
 
+        // Portable Linux/Windows installs have no app bundle; `switch-commit update` and
+        // `Scripts/build-cli-release.sh` write a sibling `VERSION` file next to the binary.
+        if let version = versionFromCompanionFile(nearExecutable: resolvedExecutable) {
+            return version
+        }
+
         return developmentFallback
+    }
+
+    /// Default `executableURL` used when a caller (i.e. `switch-commit` itself) doesn't
+    /// override it. Bare `argument0` (e.g. a `switch-commit` invoked via `PATH`, as some
+    /// shells pass the literal typed command name rather than the resolved path) isn't a
+    /// valid filesystem path on its own, so this mirrors `CLIBinaryInstaller`'s preference
+    /// for an OS-native running-executable lookup, falling back to a `PATH` search of
+    /// `argument0` for bare names.
+    public static func defaultExecutableURL() -> URL {
+        if let native = CLIBinaryInstaller.nativeExecutablePath() {
+            return URL(fileURLWithPath: native)
+        }
+        guard let argument0 = CommandLine.arguments.first, !argument0.isEmpty else {
+            return URL(fileURLWithPath: "switch-commit")
+        }
+        if argument0.contains("/") || argument0.contains("\\") {
+            return URL(fileURLWithPath: argument0)
+        }
+        if let resolved = ProcessLaunchPath.executableURL(for: argument0), resolved.path != "/usr/bin/env" {
+            return resolved
+        }
+        return URL(fileURLWithPath: argument0)
     }
 
     private static func resolveExecutableURL(_ executableURL: URL, fileManager: FileManager) -> URL {
@@ -58,5 +86,16 @@ public enum CLIVersion {
             return nil
         }
         return version
+    }
+
+    private static func versionFromCompanionFile(nearExecutable executableURL: URL) -> String? {
+        let versionFile = executableURL.deletingLastPathComponent().appendingPathComponent("VERSION")
+        guard let data = try? Data(contentsOf: versionFile),
+              let text = String(data: data, encoding: .utf8)?
+                  .trimmingCharacters(in: .whitespacesAndNewlines),
+              !text.isEmpty else {
+            return nil
+        }
+        return text
     }
 }

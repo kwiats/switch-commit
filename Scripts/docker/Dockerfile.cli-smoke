@@ -1,0 +1,29 @@
+# Minimal Ubuntu image used to sanity-check that a Linux `switch-commit`
+# binary installs and behaves correctly end to end. The binary is built
+# separately (see Scripts/docker/cli-linux-smoke.sh) and copied in here so
+# this image never needs a Swift toolchain.
+FROM ubuntu:24.04
+
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        git \
+        openssh-client \
+        ca-certificates \
+        libcurl4t64 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Run as a normal (non-root) user so the smoke test exercises the same
+# `$HOME`-relative managed paths (`~/.config/git-account-switcher`,
+# `~/.gitconfig`) that real users hit, not a root-owned home directory.
+RUN useradd --create-home --shell /bin/bash smoke
+
+COPY switch-commit /usr/local/bin/switch-commit
+RUN chmod +x /usr/local/bin/switch-commit
+
+COPY smoke-commands.sh /usr/local/bin/smoke-commands.sh
+RUN chmod +x /usr/local/bin/smoke-commands.sh
+
+USER smoke
+WORKDIR /home/smoke
+
+ENTRYPOINT ["/usr/local/bin/smoke-commands.sh"]

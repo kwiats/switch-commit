@@ -184,16 +184,43 @@ Open Settings, choose `General`, and switch `Launch at Login` on or off. The app
 
 ## CLI
 
-Switch Commit ships a `switch-commit` command-line tool that shares the same profile store and managed Git/SSH config as the menu bar app.
+Switch Commit ships a `switch-commit` command-line tool that shares the same profile store and managed Git/SSH config as the menu bar app. The menu bar app itself is **macOS-only**; the CLI builds and runs on **macOS, Linux, and Windows**.
+
+### Cross-Platform Notes (Linux / Windows)
+
+- **No menu bar app.** Only the `switch-commit` CLI is available outside macOS — there is no background app, tray icon, or Sparkle updater.
+- **Config lives in the same place everywhere:** `~/.config/git-account-switcher/` (including on Windows, under the resolved user home directory). See [Managed Files](#managed-files).
+- **HTTPS credentials are not stored by Switch Commit outside macOS Keychain.** On Linux and Windows, `--https-credential-ref` is only a reference string; the actual credential must come from a Git credential helper such as [Git Credential Manager](https://github.com/git-ecosystem/git-credential-manager) or your platform's native helper (`git config --global credential.helper …`).
+- **SSH profiles require OpenSSH.** Install an `ssh`/`ssh-keygen`-compatible OpenSSH client (bundled on Linux and modern Windows, or via `winget install Microsoft.OpenSSH.Beta` / Git for Windows) so the managed `core.sshCommand` and **Test Connection** diagnostics work.
+- **`switch-commit update` behaves differently per OS:**
+  - macOS: downloads and installs the signed app DMG, repairs `/usr/local/bin/switch-commit`, and restarts a running menu bar app when possible.
+  - Linux / Windows: downloads the matching portable CLI binary from the public GitHub Release (SHA-256 verified when the companion `.sha256` asset exists) and atomically replaces the running executable in place — no app bundle involved.
+- **Verifying a Linux build end to end:** `Scripts/docker/cli-linux-smoke.sh` builds a release Linux binary (natively, or via a `swift:6.2` container on non-Linux hosts) and runs it inside a minimal Ubuntu container to exercise `add` / `folder add` / `status` / `doctor` / `delete` against a throwaway `$HOME`. This same check runs as a required CI job on every pull request.
 
 ### Install
 
-Two ways to put `switch-commit` on your PATH at `/usr/local/bin/switch-commit`:
+**macOS** — two ways to put `switch-commit` on your PATH at `/usr/local/bin/switch-commit`:
 
 1. **DMG installer package:** Open the release DMG and run `Install Switch Commit.pkg`. This installs the app to `/Applications` and places a launcher at `/usr/local/bin/switch-commit` that runs the bundled CLI inside the app bundle.
 2. **Settings → General → Install CLI:** After copying the app to Applications, open Settings and click **Install CLI** (or **Reinstall CLI**). This creates a symlink from `/usr/local/bin/switch-commit` to `Switch Commit.app/Contents/MacOS/switch-commit`. macOS may prompt for administrator privileges when `/usr/local/bin` is not writable.
 
-For local development:
+**Linux / Windows** — download the portable CLI binary from [GitHub Releases](https://github.com/kwiats/switch-commit/releases) and put it on your `PATH`:
+
+```bash
+# Linux (x86_64)
+curl -LO https://github.com/kwiats/switch-commit/releases/latest/download/switch-commit-linux-x86_64
+chmod +x switch-commit-linux-x86_64
+sudo mv switch-commit-linux-x86_64 /usr/local/bin/switch-commit
+```
+
+```powershell
+# Windows (x86_64), PowerShell
+Invoke-WebRequest -Uri "https://github.com/kwiats/switch-commit/releases/latest/download/switch-commit-windows-x86_64.exe" -OutFile switch-commit.exe
+```
+
+Asset names follow `Sources/SwitchCommitCore/CLIReleaseAsset.swift`: `switch-commit-linux-x86_64`, `switch-commit-windows-x86_64.exe` (each with a companion `.sha256` file). Once installed, `switch-commit update` keeps the binary current in place.
+
+For local development on any supported OS:
 
 ```bash
 swift build --product switch-commit
@@ -421,6 +448,7 @@ The CLI follows the same safety contract as the app:
 - profile JSON and CLI output show metadata and Keychain reference identifiers only — never tokens, passwords, or private key contents;
 - `doctor` runs local Git and config checks only; it does not probe hosts over the network;
 - managed writes stay under app-owned paths; user `~/.gitconfig` and `~/.ssh/config` are never replaced wholesale (conflicting unmanaged `insteadOf` keys in `~/.gitconfig` may be removed after backup).
+- On Linux and Windows, where there is no Keychain, `--https-credential-ref` values are stored as plain reference strings only — never resolved to a real secret by Switch Commit itself. Configure a Git credential helper (for example Git Credential Manager) so `git` can authenticate HTTPS remotes.
 
 ### Agent skill / plugin
 
@@ -435,6 +463,14 @@ swift build
 ```
 
 This repository currently uses a local test runner because the available Command Line Tools install does not expose XCTest or Swift Testing modules.
+
+To also verify the CLI builds and runs correctly on Linux (the same check a pull request's required `linux-cli-docker-smoke` CI job runs):
+
+```bash
+Scripts/docker/cli-linux-smoke.sh
+```
+
+This requires Docker; it builds a release Linux `switch-commit` binary and exercises it end to end inside a minimal Ubuntu container.
 
 ## Release Build
 
@@ -463,7 +499,9 @@ git tag v0.2.0
 git push origin v0.2.0
 ```
 
-The tag workflow builds the DMG, creates a GitHub Release on `kwiats/switch-commit` from the matching `## [X.Y.Z]` section in root `CHANGELOG.md` (required), uploads that markdown as a Sparkle notes asset, regenerates `site/appcast.xml`, writes `site/version.txt`, and syncs `site/index.html` changelog (from `CHANGELOG.md`) + download CTA. Missing changelog entries fail the publish step. A separate `Sync landing` workflow remains for manual re-sync via `workflow_dispatch` or manually published releases. GitHub Pages deploys from `site/` via Actions. The app reads update metadata from:
+The tag workflow builds the DMG, creates a GitHub Release on `kwiats/switch-commit` from the matching `## [X.Y.Z]` section in root `CHANGELOG.md` (required), uploads that markdown as a Sparkle notes asset, regenerates `site/appcast.xml`, writes `site/version.txt`, and syncs `site/index.html` changelog (from `CHANGELOG.md`) + download CTA. Missing changelog entries fail the publish step. A separate `Sync landing` workflow remains for manual re-sync via `workflow_dispatch` or manually published releases. GitHub Pages deploys from `site/` via Actions.
+
+Once the macOS job publishes the Release, two more jobs run in the same workflow and upload portable CLI binaries to that same Release via `Scripts/build-cli-release.sh` + `gh release upload --clobber`: a required `publish-linux-cli` job (`switch-commit-linux-x86_64` + `.sha256`) and an experimental, `continue-on-error` `publish-windows-cli` job (`switch-commit-windows-x86_64.exe` + `.sha256`). Neither job touches the macOS DMG, Polar sync, or landing-site steps. The app reads update metadata from:
 
 ```text
 https://kwiats.github.io/switch-commit/appcast.xml

@@ -1,12 +1,6 @@
 import ArgumentParser
 import SwitchCommitCore
 
-#if canImport(Darwin)
-import Darwin
-#else
-import Glibc
-#endif
-
 struct DeleteCommand: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "delete",
@@ -37,7 +31,7 @@ struct DeleteCommand: ParsableCommand {
                 }
 
                 print("Delete profile '\(profile.id)'? [y/N]: ", terminator: "")
-                fflush(stdout)
+                CLITerminal.flushStandardOutput()
                 guard let response = readLine(), ["y", "yes"].contains(response.lowercased()) else {
                     print("Deletion cancelled.")
                     return
@@ -56,6 +50,6 @@ struct DeleteCommand: ParsableCommand {
     }
 
     private var isInteractiveSession: Bool {
-        isatty(STDIN_FILENO) != 0
+        CLITerminal.isStandardInputTTY
     }
 }

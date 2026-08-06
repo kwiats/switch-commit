@@ -40,7 +40,7 @@ public struct SafeFileWriter {
 
     private func isAllowed(_ targetURL: URL) -> Bool {
         allowedRoots.contains { root in
-            targetURL.path == root.path || targetURL.path.hasPrefix(root.path + "/")
+            ManagedPath.isEqualOrDescendant(targetURL, of: root)
         }
     }
 
@@ -52,7 +52,7 @@ public struct SafeFileWriter {
         let resolvedTarget = resolvedParent.appendingPathComponent(targetURL.lastPathComponent)
         return allowedRoots.contains { root in
             let resolvedRoot = root.resolvingSymlinksInPath().standardizedFileURL
-            return resolvedTarget.path == resolvedRoot.path || resolvedTarget.path.hasPrefix(resolvedRoot.path + "/")
+            return ManagedPath.isEqualOrDescendant(resolvedTarget, of: resolvedRoot)
         }
     }
 
