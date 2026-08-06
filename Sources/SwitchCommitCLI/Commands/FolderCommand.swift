@@ -1,5 +1,5 @@
 import ArgumentParser
-import Foundation
+@preconcurrency import Foundation
 import SwitchCommitCore
 
 #if os(Windows)
@@ -7,7 +7,7 @@ import ucrt
 #elseif canImport(Darwin)
 import Darwin
 #else
-import Glibc
+@preconcurrency import Glibc
 #endif
 
 struct FolderCommand: ParsableCommand {

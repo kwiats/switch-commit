@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 public protocol ReleaseChannelFetching {
     func fetchAppcastXML(from url: URL) throws -> String

@@ -6,7 +6,7 @@ import ucrt
 #elseif canImport(Darwin)
 import Darwin
 #else
-import Glibc
+@preconcurrency import Glibc
 #endif
 
 struct DeleteCommand: ParsableCommand {

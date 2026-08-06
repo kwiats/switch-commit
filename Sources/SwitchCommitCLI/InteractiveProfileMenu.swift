@@ -1,11 +1,11 @@
-import Foundation
+@preconcurrency import Foundation
 import SwitchCommitCore
 
 #if !os(Windows)
 #if canImport(Darwin)
 import Darwin
 #else
-import Glibc
+@preconcurrency import Glibc
 #endif
 #endif
 
