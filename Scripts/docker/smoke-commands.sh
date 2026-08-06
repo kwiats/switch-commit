@@ -3,8 +3,9 @@
 # Runs inside the Ubuntu image built from Dockerfile.cli-smoke, as the
 # non-root "smoke" user, against a throwaway $HOME.
 #
-# Exercises: version, add, folder add, status, doctor, delete — and asserts
-# the managed profiles.json and ~/.gitconfig include wiring were written.
+# Exercises: version, add, list, use, folder list, folder add, status, doctor,
+# delete — and asserts the managed profiles.json and ~/.gitconfig include
+# wiring were written.
 
 set -euo pipefail
 
@@ -30,6 +31,12 @@ switch-commit add \
 
 echo "==> switch-commit list"
 switch-commit list
+
+echo "==> switch-commit use"
+switch-commit use "${profile_name}"
+
+echo "==> switch-commit folder list"
+switch-commit folder list
 
 mkdir -p "${repo_dir}"
 git init --quiet "${repo_dir}"
